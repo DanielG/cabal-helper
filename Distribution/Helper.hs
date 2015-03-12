@@ -47,7 +47,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.State.Strict
 import Control.Monad.Reader
-import Control.Exception
+import Control.Exception as E
 import Data.Monoid
 import Data.List
 import Data.Default
@@ -182,7 +182,7 @@ getSomeConfigState = ask >>= \(progs, distdir) -> do
   res <- liftIO $ do
     exe  <- findLibexecExe "cabal-helper-wrapper"
     out <- readProcess exe (distdir:args) ""
-    evaluate (read out) `catch` \(SomeException _) ->
+    evaluate (read out) `E.catch` \(SomeException _) ->
       error $ concat ["getSomeConfigState", ": ", exe, " "
                      , intercalate " " (map show $ distdir:args)
                      , " (read failed)"]
