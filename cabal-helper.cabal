@@ -1,5 +1,5 @@
 name:                cabal-helper
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            Simple interface to Cabal's configuration state used by ghc-mod
 description:
     @cabal-helper@ provides a library which wraps the internal use of executables
@@ -9,8 +9,8 @@ description:
     @cabal-helper@ uses a wrapper executable to compile the actual cabal-helper
     executable at runtime while linking against an arbitrary version of
     Cabal. This runtime-compiled helper executable is then used to extract
-    various bits and peices from Cabal on disk state (dist/setup-config) written
-    by it's configure command.
+    various bits and peices from Cabal\'s on disk state (dist/setup-config)
+    written by it's configure command.
 
     In addition to this the wrapper executable also supports installing any
     version of Cabal from hackage in case it cannot be found in any available
@@ -31,6 +31,7 @@ maintainer:          dxld@darkboxed.org
 category:            Distribution
 build-type:          Simple
 cabal-version:       >=1.10
+extra-source-files:  CabalHelper/Main.hs
 
 source-repository head
   type:     git
@@ -48,12 +49,15 @@ library
                      , mtl
                      , process
 
-
 Executable cabal-helper-wrapper
   Default-Language:    Haskell2010
   Other-Extensions:    TemplateHaskell
   Main-Is:             CabalHelper/Wrapper.hs
   Other-Modules:       Paths_cabal_helper
+                       CabalHelper.Types
+                       CabalHelper.Common
+                       CabalHelper.GuessGhc
+                       CabalHelper.Data
   GHC-Options:         -Wall
   X-Install-Target:    $libexecdir
   Build-Depends:       base >= 4.5 && < 5

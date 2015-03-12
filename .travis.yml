@@ -13,6 +13,12 @@ install:
 script:
   - touch ChangeLog # Create ChangeLog if we're not on the release branch
   - cabal check
+
+  - cabal sdist
+  - export SRC_TGZ="$PWD/dist/$(cabal info . | awk '{print $2 ".tar.gz";exit}')"
+  - rm -rf /tmp/cabal-helper* && cd /tmp
+  - tar -xf $SRC_TGZ && cd cabal-helper*/
+
   - if [ -n "$(ghc --version | awk '{ print $8 }' | sed -n '/^7.8/p')" ]; then export WERROR="--ghc-option=-Werror"; fi
   - cabal configure --enable-tests $WERROR
   - cabal build

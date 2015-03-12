@@ -32,6 +32,11 @@ module Distribution.Helper (
   , ghcSrcOptions
   , ghcPkgOptions
 
+  -- * Result types
+  , ChModuleName(..)
+  , ChComponentName(..)
+  , ChEntrypoint(..)
+
   -- * Managing @dist/@
   , reconfigure
   , writeAutogenFiles
