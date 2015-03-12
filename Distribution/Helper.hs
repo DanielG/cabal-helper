@@ -202,7 +202,7 @@ writeAutogenFiles :: MonadIO m
                   -> m ()
 writeAutogenFiles distdir = liftIO $ do
   exe  <- findLibexecExe "cabal-helper-wrapper"
-  callProcess exe [distdir, "write-autogen-files"]
+  callProcess' exe [distdir, "write-autogen-files"]
 
 -- | This exception is thrown by all 'runQuery' functions if the internal
 -- wrapper executable cannot be found. You may catch this and present the user
@@ -275,4 +275,11 @@ getExecutablePath' =
     getExecutablePath
 #else
     getProgName
+#endif
+
+callProcess' exe args =
+#if MIN_VERSION_process(1,2,0)
+    callProcess exe args
+#else
+    void $ readProcess exe args ""
 #endif
