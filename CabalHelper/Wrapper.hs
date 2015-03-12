@@ -236,7 +236,7 @@ compile Options {..} Compile {..} = do
           , "-optP-DCABAL_MAJOR=" ++ show mj
           , "-optP-DCABAL_MINOR=" ++ show mi
           ],
-          maybeToList $ ("-package-db="++) <$> packageDb,
+          maybeToList $ ("-package-conf="++) <$> packageDb,
           map ("-i"++) $ cabalHelperSourceDir:maybeToList cabalSourceDir,
           concatMap (\p -> ["-package", p]) packageDeps,
           [ "--make",  cabalHelperSourceDir </> "CabalHelper/Main.hs" ]
@@ -353,7 +353,7 @@ listCabalVersions opts = listCabalVersions' opts Nothing
 -- TODO: Include sandbox? Probably only relevant for build-type:custom projects.
 listCabalVersions' :: Options -> Maybe FilePath -> IO [Version]
 listCabalVersions' Options {..} mdb = do
-  let mdbopt = ("--package-db="++) <$> mdb
+  let mdbopt = ("--package-conf="++) <$> mdb
       opts = ["list", "--simple-output", "Cabal"] ++ maybeToList mdbopt
 
   catMaybes . map (fmap snd . parsePkgId . fromString) . words
