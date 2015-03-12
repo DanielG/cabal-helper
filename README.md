@@ -20,7 +20,7 @@ Furthermore the wrapper supports one special case namely reading a state
 file for Cabal itself. This is needed as Cabal compiles it's Setup.hs using
 itself and not using any version of Cabal installed in any package database.
 
-Currently `cabal-helper` supports @Cabal >= 1.16@.
+Currently `cabal-helper` supports `Cabal >= 1.16`.
 
 ## IRC
 
