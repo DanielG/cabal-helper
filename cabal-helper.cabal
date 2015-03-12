@@ -2,11 +2,11 @@ name:                cabal-helper
 version:             0.1.0.0
 synopsis:            Simple interface to Cabal's configuration state used by ghc-mod
 description:
-    CabalHelper provides a library which wraps the internal use of executables
+    @cabal-helper@ provides a library which wraps the internal use of executables
     to lift the restrictions imposed by linking against versions of GHC before
     @7.10@.
 
-    CabalHelper uses a wrapper executable to compile the actual cabal-helper
+    @cabal-helper@ uses a wrapper executable to compile the actual cabal-helper
     executable at runtime while linking against an arbitrary version of
     Cabal. This runtime-compiled helper executable is then used to extract
     various bits and peices from Cabal on disk state (dist/setup-config) written
@@ -22,7 +22,7 @@ description:
     file for Cabal itself. This is needed as Cabal compiles it's Setup.hs using
     itself and not using any version of Cabal installed in any package database.
 
-    Currently CabalHelper supports @Cabal >= 1.16@.
+    Currently @cabal-helper@ supports @Cabal >= 1.16@.
 
 license:             AGPL-3
 license-file:        LICENSE
