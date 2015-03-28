@@ -43,6 +43,7 @@ import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(..),
                                            componentBuildInfo,
                                            externalPackageDeps,
                                            withComponentsLBI,
+                                           withLibLBI,
                                            inplacePackageId)
 
 import Distribution.Simple.GHC (componentGhcOptions)
@@ -88,7 +89,7 @@ usage = do
      ++"DIST_DIR ( version\n"
      ++"         | print-lbi\n"
      ++"         | write-autogen-files\n"
-     ++"         | ghc-options [--with-inplace]\n"
+     ++"         | ghc-options     [--with-inplace]\n"
      ++"         | ghc-src-options [--with-inplace]\n"
      ++"         | ghc-pkg-options [--with-inplace]\n"
      ++"         | entrypoints\n"
@@ -124,11 +125,8 @@ main = do
 
   let
       -- a =<< b $$ c   ==  (a =<< b) $$ c
-      -- a <$$> b $$ c  ==  a <$$> (b $$ c)
       infixr 2 $$
       ($$) = ($)
-      infixr 1 <$$>
-      (<$$>) = (<$>)
 
       collectCmdOptions :: [String] -> [[String]]
       collectCmdOptions =
@@ -157,30 +155,31 @@ main = do
       initialBuildSteps distdir pd lbi v
       return Nothing
 
-    "ghc-options":flags ->
-      Just . GmCabalHelperStrings <$$> componentsMap lbi v distdir $$
-      \c clbi bi -> let
+    "ghc-options":flags -> do
+      res <- componentsMap lbi v distdir $ \c clbi bi -> let
            outdir = componentOutDir lbi c
            (clbi', adopts) = case flags of
                                ["--with-inplace"] -> (clbi, mempty)
-                               [] -> removeInplaceDeps pd clbi
-           opts = componentGhcOptions v lbi bi clbi' outdir
-           in
-              renderGhcOptions' lbi v $ opts `mappend` adopts
+                               [] -> removeInplaceDeps v lbi pd clbi
 
-    "ghc-src-options":flags ->
-      Just . GmCabalHelperStrings <$$> componentsMap lbi v distdir $$
-      \c clbi bi -> let
+
+           opts = componentGhcOptions v lbi bi clbi' outdir
+         in renderGhcOptions' lbi v (opts `mappend` adopts)
+      return $ Just $ ChResponseStrings (res ++ [(ChSetupHsName, [])])
+
+    "ghc-src-options":flags -> do
+      res <- componentsMap lbi v distdir $ \c clbi bi -> let
            outdir = componentOutDir lbi c
            (clbi', adopts) = case flags of
                                ["--with-inplace"] -> (clbi, mempty)
-                               [] -> removeInplaceDeps pd clbi
+                               [] -> removeInplaceDeps v lbi pd clbi
            opts = componentGhcOptions v lbi bi clbi' outdir
            comp = compiler lbi
 
            opts' = mempty {
                -- Not really needed but "unexpected package db stack: []"
                ghcOptPackageDBs      = [GlobalPackageDB],
+
                ghcOptCppOptions      = ghcOptCppOptions opts,
                ghcOptCppIncludePath  = ghcOptCppIncludePath opts,
                ghcOptCppIncludes     = ghcOptCppIncludes opts,
@@ -188,17 +187,16 @@ main = do
                ghcOptSourcePathClear = ghcOptSourcePathClear opts,
                ghcOptSourcePath      = ghcOptSourcePath opts
               }
-            in
-              renderGhcOptions' lbi v $ opts `mappend` adopts
+         in renderGhcOptions' lbi v $ opts `mappend` adopts
+      return $ Just $ ChResponseStrings (res ++ [(ChSetupHsName, [])])
 
-    "ghc-pkg-options":flags ->
-      Just . GmCabalHelperStrings <$$> componentsMap lbi v distdir $$
-      \c clbi bi -> let
+    "ghc-pkg-options":flags -> do
+      res <- componentsMap lbi v distdir $ \c clbi bi -> let
            comp = compiler lbi
            outdir = componentOutDir lbi c
            (clbi', adopts) = case flags of
                                ["--with-inplace"] -> (clbi, mempty)
-                               [] -> removeInplaceDeps pd clbi
+                               [] -> removeInplaceDeps v lbi pd clbi
            opts = componentGhcOptions v lbi bi clbi' outdir
 
            opts' = mempty {
@@ -206,23 +204,23 @@ main = do
                        ghcOptPackages   = ghcOptPackages opts,
                        ghcOptHideAllPackages = ghcOptHideAllPackages opts
                    }
-           in
-             renderGhcOptions' lbi v $ opts' `mappend` adopts
+         in renderGhcOptions' lbi v $ opts' `mappend` adopts
+      return $ Just $ ChResponseStrings (res ++ [(ChSetupHsName, [])])
 
     "entrypoints":[] -> do
       eps <- componentsMap lbi v distdir $ \c clbi bi ->
                return $ componentEntrypoints c
       -- MUST append Setup component at the end otherwise CabalHelper gets
       -- confused
-      let eps' = eps ++ [(GmSetupHsName, Right [GmModuleName "Setup"])]
-      return $ Just $ GmCabalHelperEntrypoints eps'
+      let eps' = eps ++ [(ChSetupHsName, ChSetupEntrypoint)]
+      return $ Just $ ChResponseEntrypoints eps'
 
-    "source-dirs":[] ->
-      Just . GmCabalHelperStrings <$$> componentsMap lbi v distdir $$
-      \c clbi bi -> return $ hsSourceDirs bi
+    "source-dirs":[] -> do
+      res <- componentsMap lbi v distdir $$ \_ _ bi -> return $ hsSourceDirs bi
+      return $ Just $ ChResponseStrings (res ++ [(ChSetupHsName, [])])
 
     "print-lbi":[] ->
-      return $ Just $ GmCabalHelperLbi $ show lbi
+      return $ Just $ ChResponseLbi $ show lbi
 
     cmd:_ | not (cmd `elem` commands) ->
             errMsg ("Unknown command: " ++ cmd) >> usage >> exitFailure
@@ -236,6 +234,15 @@ getLibrary pd = unsafePerformIO $ do
   withLib pd (writeIORef lr)
   readIORef lr
 
+getLibraryClbi pd lbi = unsafePerformIO $ do
+  lr <- newIORef (error "getLibraryClbi: empty IORef")
+
+  withLibLBI pd lbi $ \ lib clbi ->
+      writeIORef lr (lib,clbi)
+
+  readIORef lr
+
+
 componentsMap :: LocalBuildInfo
               -> Verbosity
               -> FilePath
@@ -243,7 +250,7 @@ componentsMap :: LocalBuildInfo
                   -> ComponentLocalBuildInfo
                   -> BuildInfo
                   -> IO a)
-              -> IO [(GmComponentName, a)]
+              -> IO [(ChComponentName, a)]
 componentsMap lbi v distdir f = do
     let pd = localPkgDescr lbi
 
@@ -255,13 +262,14 @@ componentsMap lbi v distdir f = do
 
         l' <- readIORef lr
         r <- f c clbi bi
-        writeIORef lr $ (componentNameToGm name, r):l'
+        writeIORef lr $ (componentNameToCh name, r):l'
+
     reverse <$> readIORef lr
 
-componentNameToGm CLibName = GmLibName
-componentNameToGm (CExeName n) = GmExeName n
-componentNameToGm (CTestName n) = GmTestName n
-componentNameToGm (CBenchName n) = GmBenchName n
+componentNameToCh CLibName = ChLibName
+componentNameToCh (CExeName n) = ChExeName n
+componentNameToCh (CTestName n) = ChTestName n
+componentNameToCh (CBenchName n) = ChBenchName n
 
 componentNameFromComponent (CLib Library {}) = CLibName
 componentNameFromComponent (CExe Executable {..}) = CExeName exeName
@@ -277,24 +285,26 @@ componentOutDir lbi (CTest TestSuite { testInterface = TestSuiteLibV09 _ _, ..})
 componentOutDir lbi (CBench Benchmark { benchmarkInterface = BenchmarkExeV10 _ _, ..})=
     exeOutDir lbi benchmarkName
 
-gmModuleName :: C.ModuleName -> GmModuleName
-gmModuleName = GmModuleName . intercalate "." . components
+gmModuleName :: C.ModuleName -> ChModuleName
+gmModuleName = ChModuleName . intercalate "." . components
 
-componentEntrypoints :: Component -> Either FilePath [GmModuleName]
+componentEntrypoints :: Component -> ChEntrypoint
 componentEntrypoints (CLib Library {..})
-    = Right $ map gmModuleName $ exposedModules ++ (otherModules libBuildInfo)
+    = ChLibEntrypoint
+        (map gmModuleName exposedModules)
+        (map gmModuleName $ otherModules libBuildInfo)
 componentEntrypoints (CExe Executable {..})
-    = Left modulePath
-componentEntrypoints (CTest TestSuite { testInterface = TestSuiteExeV10 _ fp })
-    = Left fp
-componentEntrypoints (CTest TestSuite { testInterface = TestSuiteLibV09 _ mn })
-    = Right [gmModuleName mn]
+    = ChExeEntrypoint modulePath (map gmModuleName $ otherModules buildInfo)
+componentEntrypoints (CTest TestSuite { testInterface = TestSuiteExeV10 _ fp, ..})
+    = ChExeEntrypoint fp (map gmModuleName $ otherModules testBuildInfo)
+componentEntrypoints (CTest TestSuite { testInterface = TestSuiteLibV09 _ mn, ..})
+    = ChLibEntrypoint [gmModuleName mn] (map gmModuleName $ otherModules testBuildInfo)
 componentEntrypoints (CTest TestSuite {})
-    = Right []
-componentEntrypoints (CBench Benchmark { benchmarkInterface = BenchmarkExeV10 _  fp})
-    = Left fp
+    = ChLibEntrypoint [] []
+componentEntrypoints (CBench Benchmark { benchmarkInterface = BenchmarkExeV10 _  fp, ..})
+    = ChExeEntrypoint fp (map gmModuleName $ otherModules benchmarkBuildInfo)
 componentEntrypoints (CBench Benchmark {})
-    = Left []
+    = ChLibEntrypoint [] []
 
 exeOutDir :: LocalBuildInfo -> String -> FilePath
 exeOutDir lbi exeName =
@@ -309,26 +319,24 @@ exeOutDir lbi exeName =
   in targetDir
 
 
-removeInplaceDeps :: PackageDescription
+removeInplaceDeps :: Verbosity
+                  -> LocalBuildInfo
+                  -> PackageDescription
                   -> ComponentLocalBuildInfo
                   -> (ComponentLocalBuildInfo, GhcOptions)
-removeInplaceDeps pd clbi = let
+removeInplaceDeps v lbi pd clbi = let
+    (lib, libclbi) = getLibraryClbi pd lbi
+    libbi = libBuildInfo lib
+    liboutdir = componentOutDir lbi (CLib lib)
+    libopts = (componentGhcOptions v lbi libbi libclbi liboutdir) {
+                                    ghcOptPackageDBs = []
+                                  }
+
     (ideps, deps) = partition isInplaceDep (componentPackageDeps clbi)
     hasIdeps = not $ null ideps
     clbi' = clbi { componentPackageDeps = deps }
-    lib = getLibrary pd
-    src_dirs = hsSourceDirs (libBuildInfo lib)
-    adopts = mempty {
-               ghcOptSourcePath      =
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
-                   toNubListR src_dirs
-#else
-                   src_dirs
-#endif
 
-             }
-
-  in (clbi', if hasIdeps then adopts else mempty)
+  in (clbi', if hasIdeps then libopts else mempty)
 
  where
    isInplaceDep :: (InstalledPackageId, PackageId) -> Bool

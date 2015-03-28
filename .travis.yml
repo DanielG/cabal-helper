@@ -22,4 +22,5 @@ script:
   - if [ -n "$(ghc --version | awk '{ print $8 }' | sed -n '/^7.8/p')" ]; then export WERROR="--ghc-option=-Werror"; fi
   - cabal configure --enable-tests $WERROR
   - cabal build
+  - ./dist/build/cabal-helper-wrapper/cabal-helper-wrapper dist
 #  - cabal test

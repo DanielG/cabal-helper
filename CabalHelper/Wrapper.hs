@@ -237,14 +237,14 @@ compile Options {..} Compile {..} = do
           , "-optP-DCABAL_MINOR=" ++ show mi
           ],
           maybeToList $ ("-package-conf="++) <$> packageDb,
-          map ("-i"++) $ cabalHelperSourceDir:maybeToList cabalSourceDir,
+          map ("-i"++) $ ".":maybeToList cabalSourceDir,
           concatMap (\p -> ["-package", p]) packageDeps,
-          [ "--make",  cabalHelperSourceDir </> "CabalHelper/Main.hs" ]
+          [ "--make",  "CabalHelper/Main.hs" ]
          ]
 
     -- TODO: touch exe after, ghc doesn't do that if the input files didn't
     -- actually change
-    rv <- callProcessStderr' Nothing ghcProgram ghc_opts
+    rv <- callProcessStderr' (Just cabalHelperSourceDir) ghcProgram ghc_opts
     return $ case rv of
                ExitSuccess -> Right exe
                e@(ExitFailure _) -> Left e

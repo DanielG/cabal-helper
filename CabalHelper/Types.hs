@@ -14,27 +14,35 @@
 -- You should have received a copy of the GNU Affero General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+{-# LANGUAGE DeriveGeneric, DefaultSignatures #-}
 module CabalHelper.Types where
 
+import GHC.Generics
+
 newtype ChModuleName = ChModuleName String
-    deriving (Eq, Ord, Read, Show)
+    deriving (Eq, Ord, Read, Show, Generic)
 
 data ChComponentName = ChSetupHsName
                      | ChLibName
                      | ChExeName String
                      | ChTestName String
                      | ChBenchName String
-  deriving (Eq, Ord, Read, Show)
+  deriving (Eq, Ord, Read, Show, Generic)
 
-data Response
-    = ResponseStrings    [(ChComponentName, [String])]
-    | ResponseEntrypoints [(ChComponentName, ChEntrypoint)]
-    | ResponseLbi String
-  deriving (Eq, Ord, Read, Show)
+data ChResponse
+    = ChResponseStrings    [(ChComponentName, [String])]
+    | ChResponseEntrypoints [(ChComponentName, ChEntrypoint)]
+    | ChResponseLbi String
+  deriving (Eq, Ord, Read, Show, Generic)
 
-data ChEntrypoint = ChExeEntrypoint { chMainIs         :: FilePath
+data ChEntrypoint = ChSetupEntrypoint -- ^ Almost like 'ChExeEntrypoint' but
+                                      -- @main-is@ could either be @"Setup.hs"@
+                                      -- or @"Setup.lhs"@. Since we don't know
+                                      -- where the source directory is you have
+                                      -- to find these files.
+                  | ChLibEntrypoint { chExposedModules :: [ChModuleName]
                                     , chOtherModules   :: [ChModuleName]
                                     }
-                  | ChLibentrypoint { chExposedModules :: [ChModuleName]
+                  | ChExeEntrypoint { chMainIs         :: FilePath
                                     , chOtherModules   :: [ChModuleName]
-                                    } deriving (Eq, Ord, Read, Show)
+                                    } deriving (Eq, Ord, Read, Show, Generic)

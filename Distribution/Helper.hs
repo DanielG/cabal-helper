@@ -14,15 +14,16 @@
 -- You should have received a copy of the GNU Affero General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-{-# LANGUAGE CPP, FlexibleContexts, ConstraintKinds, DeriveDataTypeable #-}
+{-# LANGUAGE CPP, FlexibleContexts, ConstraintKinds #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, DeriveDataTypeable, DeriveGeneric #-}
+
 module Distribution.Helper (
     Programs(..)
 
   -- * Running Queries
   , Query
   , runQuery
-  , runKQuery
-  , runKQuery_
+  , runQuery'
 
   -- * Queries against Cabal\'s on disk state
 
@@ -62,6 +63,7 @@ import System.FilePath
 import System.Directory
 import System.Process
 import Text.Printf
+import GHC.Generics
 
 import Paths_cabal_helper (getLibexecDir)
 import CabalHelper.Types
@@ -71,7 +73,7 @@ data Programs = Programs {
       cabalProgram  :: FilePath,
       ghcProgram    :: FilePath,
       ghcPkgProgram :: FilePath
-    }
+    } deriving (Eq, Ord, Show, Read, Generic, Typeable)
 
 instance Default Programs where
     def = Programs "cabal" "ghc" "ghc-pkg"
@@ -89,6 +91,7 @@ data SomeLocalBuildInfo = SomeLocalBuildInfo {
 -- running all possible queries against it at once is cheap.
 newtype Query m a = Query { unQuery :: StateT (Maybe SomeLocalBuildInfo)
                                          (ReaderT (Programs, FilePath) m) a }
+    deriving (Functor, Applicative, Monad)
 
 type MonadQuery m = ( MonadIO m
                     , MonadState (Maybe SomeLocalBuildInfo) m
@@ -99,25 +102,17 @@ run r s action = flip runReaderT r (flip evalStateT s (unQuery action))
 -- | @runQuery query distdir@. Run a 'Query'. @distdir@ is where Cabal's
 -- @setup-config@ file is located.
 runQuery :: Monad m
-         => Query m a
-         -> FilePath -- ^ Path to @dist/@
+         => FilePath -- ^ Path to @dist/@
+         -> Query m a
          -> m a
-runQuery action fp = run (def, fp) Nothing action
+runQuery fp action = run (def, fp) Nothing action
 
--- | Run a 'Query' as an Arrow by wrapping it in a 'Kleisli' constructor.
-runKQuery :: Monad m
-          => Kleisli (Query m) a b
-          -> FilePath -- ^ Path to @dist/@
-          -> a
-          -> m b
-runKQuery (Kleisli action) fp a = run (def, fp) Nothing (action a)
-
--- | Same as 'runKQuery' but pass unit as input to the arrow.
-runKQuery_ :: Monad m
-           => Kleisli (Query m) () b
-           -> FilePath -- ^ Path to @dist/@
-           -> m b
-runKQuery_ (Kleisli action) fp = run (def, fp) Nothing (action ())
+runQuery' :: Monad m
+         => Programs
+         -> FilePath -- ^ Path to @dist/@
+         -> Query m a
+         -> m a
+runQuery' progs fp action = run (progs, fp) Nothing action
 
 getSlbi :: MonadQuery m => m SomeLocalBuildInfo
 getSlbi = do
@@ -192,11 +187,11 @@ getSomeConfigState = ask >>= \(progs, distdir) -> do
                      , intercalate " " (map show $ distdir:args)
                      , " (read failed)"]
 
-  let [ Just (ResponseEntrypoints eps),
-        Just (ResponseStrings srcDirs),
-        Just (ResponseStrings ghcOpts),
-        Just (ResponseStrings ghcSrcOpts),
-        Just (ResponseStrings ghcPkgOpts) ] = res
+  let [ Just (ChResponseEntrypoints eps),
+        Just (ChResponseStrings srcDirs),
+        Just (ChResponseStrings ghcOpts),
+        Just (ChResponseStrings ghcSrcOpts),
+        Just (ChResponseStrings ghcPkgOpts) ] = res
 
   return $ SomeLocalBuildInfo eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts
 
