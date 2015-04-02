@@ -38,6 +38,9 @@ module Distribution.Helper (
   , ChComponentName(..)
   , ChEntrypoint(..)
 
+  -- * General information
+  , buildPlatform
+
   -- * Managing @dist/@
   , reconfigure
   , writeAutogenFiles
@@ -203,6 +206,11 @@ writeAutogenFiles :: MonadIO m
 writeAutogenFiles distdir = liftIO $ do
   exe  <- findLibexecExe "cabal-helper-wrapper"
   void $ readProcess exe [distdir, "write-autogen-files"] ""
+
+buildPlatform :: IO String
+buildPlatform = do
+  exe  <- findLibexecExe "cabal-helper-wrapper"
+  dropWhileEnd isSpace <$> readProcess exe ["print-build-platform"] ""
 
 -- | This exception is thrown by all 'runQuery' functions if the internal
 -- wrapper executable cannot be found. You may catch this and present the user
