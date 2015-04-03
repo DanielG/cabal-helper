@@ -9,6 +9,8 @@ install:
   - echo $PATH
   - which cabal
   - cabal install -j --only-dependencies --enable-tests
+  - if [ -n "$(ghc --version | awk '{ print $8 }' | sed -n '/^7.4/p')" ]; then cabal install Cabal --constraint "Cabal == 1.16.*"; fi
+
 
 script:
   - touch ChangeLog # Create ChangeLog if we're not on the release branch

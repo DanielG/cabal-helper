@@ -57,6 +57,7 @@ import Control.Monad.IO.Class
 import Control.Monad.State.Strict
 import Control.Monad.Reader
 import Control.Exception as E
+import Data.Char
 import Data.Monoid
 import Data.List
 import Data.Default
@@ -211,6 +212,10 @@ buildPlatform :: IO String
 buildPlatform = do
   exe  <- findLibexecExe "cabal-helper-wrapper"
   dropWhileEnd isSpace <$> readProcess exe ["print-build-platform"] ""
+ where
+   -- dropWhileEnd is not provided prior to base 4.5.0.0.
+   dropWhileEnd :: (a -> Bool) -> [a] -> [a]
+   dropWhileEnd p = foldr (\x xs -> if p x && null xs then [] else x : xs) []
 
 -- | This exception is thrown by all 'runQuery' functions if the internal
 -- wrapper executable cannot be found. You may catch this and present the user
