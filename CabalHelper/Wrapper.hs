@@ -119,17 +119,23 @@ main = handlePanic $ do
 \Could not read Cabal's persistent setup configuration header\n\
 \- Check first line of: %s\n\
 \- Maybe try: $ cabal configure" cfgf
-
-        Just (hdrCabalVersion, _hdrCompilerVersion) -> do
-          eexe <- compileHelper opts hdrCabalVersion distdir
-          case eexe of
-              Left e -> exitWith e
-              Right exe ->
-                case args' of
-                  "print-exe":_ -> putStrLn exe
-                  _ -> do
-                    (_,_,_,h) <- createProcess $ proc exe args
-                    exitWith =<< waitForProcess h
+        Just (hdrCabalVersion, (_compilerName, hdrCompilerVersion)) -> do
+          ghcVer <- ghcVersion opts
+          if not $ ghcVer `sameMajorVersionAs` hdrCompilerVersion
+            then panic $ printf "\
+\GHC major version changed! (was %s, now %s)\n\
+\- Reconfigure the project: $ cabal clean && cabal configure\
+\ " (showVersion hdrCompilerVersion) (showVersion ghcVer)
+            else do
+              eexe <- compileHelper opts hdrCabalVersion distdir
+              case eexe of
+                  Left e -> exitWith e
+                  Right exe ->
+                    case args' of
+                      "print-exe":_ -> putStrLn exe
+                      _ -> do
+                        (_,_,_,h) <- createProcess $ proc exe args
+                        exitWith =<< waitForProcess h
 
 appDataDir :: IO FilePath
 appDataDir = (</> "cabal-helper") <$> getAppUserDataDirectory "ghc-mod"
@@ -179,7 +185,7 @@ compileHelper opts cabalVer distdir = withHelperSources $ \chdir -> do
    compileSandbox :: FilePath -> IO (Either ExitCode FilePath)
    compileSandbox chdir = do
        db <- installCabal opts cabalVer `E.catch`
-             \(SomeException _) -> errorInstallCabal cabalVer
+             \(SomeException _) -> errorInstallCabal cabalVer distdir
        compileWithPkg chdir (Just db)
 
    compileWithCabalTree chdir ver srcDir =
@@ -190,26 +196,37 @@ compileHelper opts cabalVer distdir = withHelperSources $ \chdir -> do
 
    cabalPkgId v = "Cabal-" ++ showVersion v
 
--- errorNoCabal :: Version -> a
--- errorNoCabal cabalVer = panic $ printf "\
--- \No appropriate Cabal package found, wanted version %s.\n"
---  where
---    sver = showVersion cabalVer
-
-errorInstallCabal :: Version -> a
-errorInstallCabal cabalVer = panic $ printf "\
+errorInstallCabal :: Version -> FilePath -> a
+errorInstallCabal cabalVer distdir = panic $ printf "\
 \Installing Cabal version %s failed.\n\
 \\n\
-\You have two choices now:\n\
-\- Either you install this version of Cabal in your global/user package-db\n\
-\  somehow\n\
+\You have the following choices to fix this:\n\
 \\n\
-\- Or you can see if you can update your cabal-install to use a different\n\
-\  version of the Cabal library that we can build with:\n\
-\    $ cabal install cabal-install --constraint 'Cabal > %s'\n\
+\- The easiest way to try and fix this is just reconfigure the project and try\n\
+\  again:\n\
+\        $ cabal clean && cabal configure\n\
 \\n\
-\To check the version cabal-install is currently using try:\n\
-\    $ cabal --version\n" sver sver
+\- If that fails you can try to install the version of Cabal mentioned above\n\
+\  into your global/user package-db somehow, you'll probably have to fix\n\
+\  something otherwise it wouldn't have failed above:\n\
+\        $ cabal install Cabal --constraint 'Cabal == %s'\n\
+\\n\
+\- If you're using `Build-Type: Simple`:\n\
+\  - You can see if you can reinstall your cabal-install executable while\n\
+\    having it linked to a version of Cabal that's available in you\n\
+\    package-dbs or can be built automatically:\n\
+\        $ ghc-pkg list | grep Cabal  # find an available Cabal version\n\
+\        $ cabal install cabal-install --constraint 'Cabal == $the_found_version'\n\
+\    Afterwards you'll have to reconfigure your project:\n\
+\        $ cabal clean && cabal configure\n\
+\\n\
+\- If you're using `Build-Type: Custom`:\n\
+\  - Have cabal-install rebuild your Setup.hs executable with a version of the\n\
+\    Cabal library that you have available in your global/user package-db:\n\
+\        $ cabal clean && cabal configure\n\
+\    You might also have to install some version of the Cabal to do this:\n\
+\        $ cabal install Cabal\n\
+\\n" sver (distdir </> "setup-config") sver sver
  where
    sver = showVersion cabalVer
 
@@ -283,6 +300,7 @@ processFailedException fn exe args rv =
 installCabal :: Options -> Version -> IO FilePath
 installCabal opts ver = do
   appdir <- appDataDir
+  let sver = showVersion ver
   hPutStr stderr $ printf "\
 \cabal-helper-wrapper: Installing a private copy of Cabal, this might take a\n\
 \while but will only happen once per Cabal version.\n\
@@ -290,10 +308,11 @@ installCabal opts ver = do
 \If anything goes horribly wrong just delete this directory and try again:\n\
 \    %s\n\
 \\n\
-\If you want to avoid this automatic installation altogether install version\n\
-\%s of Cabal manually (into your user or global package-db):\n\
+\If you want to avoid this automatic installation altogether install\n\
+\version %s of Cabal manually (into your user or global package-db):\n\
 \    $ cabal install Cabal-%s\n\
-\..." appdir (showVersion ver) (showVersion ver)
+\\n\
+\Building Cabal-%s..." appdir sver sver sver
 
   db <- createPkgDb opts ver
   callProcessStderr (Just "/") (cabalProgram opts) $ concat
@@ -310,7 +329,7 @@ installCabal opts ver = do
             else []
         , [ "install", "Cabal-"++showVersion ver ]
       ]
-  hPutStrLn stderr "Done"
+  hPutStrLn stderr "done"
   return db
 
 ghcVersion :: Options -> IO Version
