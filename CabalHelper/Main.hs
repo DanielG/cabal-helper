@@ -92,6 +92,7 @@ usage = do
      ++"         | ghc-options     [--with-inplace]\n"
      ++"         | ghc-src-options [--with-inplace]\n"
      ++"         | ghc-pkg-options [--with-inplace]\n"
+     ++"         | ghc-lang-options [--with-inplace]\n"
      ++"         | entrypoints\n"
      ++"         | source-dirs\n"
      ++"         ) ...\n"
@@ -103,6 +104,7 @@ commands = [ "print-bli"
            , "ghc-options"
            , "ghc-src-options"
            , "ghc-pkg-options"
+           , "ghc-lang-options"
            , "entrypoints"
            , "source-dirs"]
 
@@ -178,7 +180,7 @@ main = do
 
            opts' = mempty {
                -- Not really needed but "unexpected package db stack: []"
-               ghcOptPackageDBs      = [GlobalPackageDB],
+               ghcOptPackageDBs      = [GlobalPackageDB, UserPackageDB],
 
                ghcOptCppOptions      = ghcOptCppOptions opts,
                ghcOptCppIncludePath  = ghcOptCppIncludePath opts,
@@ -203,6 +205,25 @@ main = do
                        ghcOptPackageDBs = ghcOptPackageDBs opts,
                        ghcOptPackages   = ghcOptPackages opts,
                        ghcOptHideAllPackages = ghcOptHideAllPackages opts
+                   }
+         in renderGhcOptions' lbi v $ opts' `mappend` adopts
+      return $ Just $ ChResponseStrings (res ++ [(ChSetupHsName, [])])
+
+    "ghc-lang-options":flags -> do
+      res <- componentsMap lbi v distdir $ \c clbi bi -> let
+           comp = compiler lbi
+           outdir = componentOutDir lbi c
+           (clbi', adopts) = case flags of
+                               ["--with-inplace"] -> (clbi, mempty)
+                               [] -> removeInplaceDeps v lbi pd clbi
+           opts = componentGhcOptions v lbi bi clbi' outdir
+
+           opts' = mempty {
+                       ghcOptPackageDBs      = [GlobalPackageDB, UserPackageDB],
+
+                       ghcOptLanguage = ghcOptLanguage opts,
+                       ghcOptExtensions = ghcOptExtensions opts,
+                       ghcOptExtensionMap = ghcOptExtensionMap opts
                    }
          in renderGhcOptions' lbi v $ opts' `mappend` adopts
       return $ Just $ ChResponseStrings (res ++ [(ChSetupHsName, [])])

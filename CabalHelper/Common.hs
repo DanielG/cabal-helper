@@ -63,19 +63,17 @@ align n an str = let
 
 -- | @getCabalConfigHeader "dist/setup-config"@ returns the cabal version and
 -- compiler version
-getCabalConfigHeader :: FilePath -> IO (Maybe (Version, Version))
+getCabalConfigHeader :: FilePath -> IO (Maybe (Version, (ByteString, Version)))
 getCabalConfigHeader file = bracket (openFile file ReadMode) hClose $ \h -> do
   parseHeader <$> BS.hGetLine h
 
-parseHeader :: ByteString -> Maybe (Version, Version)
+parseHeader :: ByteString -> Maybe (Version, (ByteString, Version))
 parseHeader header = case BS8.words header of
   ["Saved", "package", "config", "for", _pkgId ,
    "written", "by", cabalId,
    "using", compId]
-    -> liftM2 (,) (ver cabalId) (ver compId)
+    -> liftM2 (,) (snd <$> parsePkgId cabalId) (parsePkgId compId)
   _ -> Nothing
- where
-   ver i = snd <$> parsePkgId i
 
 parsePkgId :: ByteString -> Maybe (ByteString, Version)
 parsePkgId bs =
@@ -86,11 +84,11 @@ parsePkgId bs =
 parseVer :: String -> Version
 parseVer vers = runReadP parseVersion vers
 
--- majorVer :: Version -> Version
--- majorVer (Version b _) = Version (take 2 b) []
+majorVer :: Version -> Version
+majorVer (Version b _) = Version (take 2 b) []
 
--- sameMajorVersion :: Version -> Version -> Bool
--- sameMajorVersion a b = majorVer a == majorVer b
+sameMajorVersionAs :: Version -> Version -> Bool
+sameMajorVersionAs a b = majorVer a == majorVer b
 
 runReadP :: ReadP t -> String -> t
 runReadP p i = case filter ((=="") . snd) $ readP_to_S p i of

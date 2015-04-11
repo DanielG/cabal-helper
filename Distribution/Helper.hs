@@ -32,6 +32,7 @@ module Distribution.Helper (
   , ghcOptions
   , ghcSrcOptions
   , ghcPkgOptions
+  , ghcLangOptions
 
   -- * Result types
   , ChModuleName(..)
@@ -87,7 +88,8 @@ data SomeLocalBuildInfo = SomeLocalBuildInfo {
       slbiSourceDirs    :: [(ChComponentName, [String])],
       slbiGhcOptions    :: [(ChComponentName, [String])],
       slbiGhcSrcOptions :: [(ChComponentName, [String])],
-      slbiGhcPkgOptions :: [(ChComponentName, [String])]
+      slbiGhcPkgOptions :: [(ChComponentName, [String])],
+      slbiGhcLangOptions :: [(ChComponentName, [String])]
     } deriving (Eq, Ord, Read, Show)
 
 -- | Caches helper executable result so it doesn't have to be run more than once
@@ -146,11 +148,15 @@ ghcSrcOptions :: MonadIO m => Query m [(ChComponentName, [String])]
 -- access any home modules.
 ghcPkgOptions :: MonadIO m => Query m [(ChComponentName, [String])]
 
+-- | Only language related options, i.e. @-XSomeExtension@
+ghcLangOptions :: MonadIO m => Query m [(ChComponentName, [String])]
+
 entrypoints   = Query $ slbiEntrypoints   `liftM` getSlbi
 sourceDirs    = Query $ slbiSourceDirs    `liftM` getSlbi
 ghcOptions    = Query $ slbiGhcOptions    `liftM` getSlbi
 ghcSrcOptions = Query $ slbiGhcSrcOptions `liftM` getSlbi
 ghcPkgOptions = Query $ slbiGhcPkgOptions `liftM` getSlbi
+ghcLangOptions = Query $ slbiGhcLangOptions `liftM` getSlbi
 
 -- | Run @cabal configure@
 reconfigure :: MonadIO m
@@ -181,6 +187,7 @@ getSomeConfigState = ask >>= \(progs, distdir) -> do
              , "ghc-options"
              , "ghc-src-options"
              , "ghc-pkg-options"
+             , "ghc-lang-options"
              ] ++ progArgs
 
   res <- liftIO $ do
@@ -195,9 +202,11 @@ getSomeConfigState = ask >>= \(progs, distdir) -> do
         Just (ChResponseStrings srcDirs),
         Just (ChResponseStrings ghcOpts),
         Just (ChResponseStrings ghcSrcOpts),
-        Just (ChResponseStrings ghcPkgOpts) ] = res
+        Just (ChResponseStrings ghcPkgOpts),
+        Just (ChResponseStrings ghcLangOpts) ] = res
 
-  return $ SomeLocalBuildInfo eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts
+  return $ SomeLocalBuildInfo
+             eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcLangOpts
 
 -- | Create @cabal_macros.h@ and @Paths_\<pkg\>@ possibly other generated files
 -- in the usual place.
