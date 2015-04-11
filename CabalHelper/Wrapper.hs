@@ -199,15 +199,15 @@ compileHelper opts cabalVer distdir = withHelperSources $ \chdir -> do
 errorInstallCabal :: Version -> a
 errorInstallCabal cabalVer = panic $ printf "\
 \Installing Cabal version %s failed.\n\
-\n\
+\\n\
 \You have two choices now:\n\
 \- Either you install this version of Cabal in your globa/luser package-db\n\
 \  somehow\n\
-\n\
+\\n\
 \- Or you can see if you can update your cabal-install to use a different\n\
 \  version of the Cabal library that we can build with:\n\
 \    $ cabal install cabal-install --constraint 'Cabal > %s'\n\
-\n\
+\\n\
 \To check the version cabal-install is currently using try:\n\
 \    $ cabal --version\n" sver sver
  where
