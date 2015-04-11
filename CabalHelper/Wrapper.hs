@@ -201,7 +201,7 @@ errorInstallCabal cabalVer = panic $ printf "\
 \Installing Cabal version %s failed.\n\
 \\n\
 \You have two choices now:\n\
-\- Either you install this version of Cabal in your globa/luser package-db\n\
+\- Either you install this version of Cabal in your global/user package-db\n\
 \  somehow\n\
 \\n\
 \- Or you can see if you can update your cabal-install to use a different\n\
