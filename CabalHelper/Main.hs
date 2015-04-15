@@ -165,7 +165,7 @@ main = do
                                [] -> removeInplaceDeps v lbi pd clbi
 
 
-           opts = componentGhcOptions v lbi bi clbi' outdir
+           opts = componentGhcOptions normal lbi bi clbi' outdir
          in renderGhcOptions' lbi v (opts `mappend` adopts)
       return $ Just $ ChResponseStrings (res ++ [(ChSetupHsName, [])])
 
@@ -175,7 +175,7 @@ main = do
            (clbi', adopts) = case flags of
                                ["--with-inplace"] -> (clbi, mempty)
                                [] -> removeInplaceDeps v lbi pd clbi
-           opts = componentGhcOptions v lbi bi clbi' outdir
+           opts = componentGhcOptions normal lbi bi clbi' outdir
            comp = compiler lbi
 
            opts' = mempty {
@@ -199,7 +199,7 @@ main = do
            (clbi', adopts) = case flags of
                                ["--with-inplace"] -> (clbi, mempty)
                                [] -> removeInplaceDeps v lbi pd clbi
-           opts = componentGhcOptions v lbi bi clbi' outdir
+           opts = componentGhcOptions normal lbi bi clbi' outdir
 
            opts' = mempty {
                        ghcOptPackageDBs = ghcOptPackageDBs opts,
@@ -216,7 +216,7 @@ main = do
            (clbi', adopts) = case flags of
                                ["--with-inplace"] -> (clbi, mempty)
                                [] -> removeInplaceDeps v lbi pd clbi
-           opts = componentGhcOptions v lbi bi clbi' outdir
+           opts = componentGhcOptions normal lbi bi clbi' outdir
 
            opts' = mempty {
                        ghcOptPackageDBs      = [GlobalPackageDB, UserPackageDB],
@@ -349,7 +349,7 @@ removeInplaceDeps v lbi pd clbi = let
     (lib, libclbi) = getLibraryClbi pd lbi
     libbi = libBuildInfo lib
     liboutdir = componentOutDir lbi (CLib lib)
-    libopts = (componentGhcOptions v lbi libbi libclbi liboutdir) {
+    libopts = (componentGhcOptions normal lbi libbi libclbi liboutdir) {
                                     ghcOptPackageDBs = []
                                   }
 
