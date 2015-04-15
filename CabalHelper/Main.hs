@@ -57,7 +57,7 @@ import Distribution.Simple.Compiler (PackageDB(..))
 import Distribution.ModuleName (components)
 import qualified Distribution.ModuleName as C (ModuleName)
 import Distribution.Text (display)
-import Distribution.Verbosity (Verbosity, silent, deafening)
+import Distribution.Verbosity (Verbosity, silent, deafening, normal)
 
 #if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
 import Distribution.Utils.NubList
