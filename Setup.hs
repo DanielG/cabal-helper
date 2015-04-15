@@ -3,21 +3,52 @@
 import Distribution.Simple
 import Distribution.Simple.Setup
 import Distribution.Simple.Install
+import Distribution.Simple.Register
 import Distribution.Simple.InstallDirs as ID
 import Distribution.Simple.LocalBuildInfo
 import Distribution.PackageDescription
 
 import Control.Applicative
+import Control.Monad
 import Data.List
 import Data.Maybe
 import System.FilePath
 
 main :: IO ()
-main = defaultMainWithHooks $ simpleUserHooks { copyHook = xInstallTargetHook }
+main = defaultMainWithHooks $ simpleUserHooks {
+         instHook = inst,
+         copyHook = copy
+       }
 
-xInstallTargetHook ::
-    PackageDescription -> LocalBuildInfo -> UserHooks -> CopyFlags -> IO ()
-xInstallTargetHook pd lbi _uh cf = do
+-- mostly copypasta from 'defaultInstallHook'
+inst ::
+    PackageDescription -> LocalBuildInfo -> UserHooks -> InstallFlags -> IO ()
+inst pd lbi _uf ifl = do
+  let copyFlags = defaultCopyFlags {
+                      copyDistPref   = installDistPref ifl,
+                      copyDest       = toFlag NoCopyDest,
+                      copyVerbosity  = installVerbosity ifl
+                  }
+  xInstallTarget pd lbi (\pd' lbi' -> install pd' lbi' copyFlags)
+  let registerFlags = defaultRegisterFlags {
+                          regDistPref  = installDistPref ifl,
+                          regInPlace   = installInPlace ifl,
+                          regPackageDB = installPackageDB ifl,
+                          regVerbosity = installVerbosity ifl
+                      }
+  when (hasLibs pd) $ register pd lbi registerFlags
+
+copy :: PackageDescription -> LocalBuildInfo -> UserHooks -> CopyFlags -> IO ()
+copy pd lbi _uh cf =
+    xInstallTarget pd lbi (\pd' lbi' -> install pd' lbi' cf)
+
+
+
+xInstallTarget :: PackageDescription
+               -> LocalBuildInfo
+               -> (PackageDescription -> LocalBuildInfo -> IO ())
+               -> IO ()
+xInstallTarget pd lbi fn = do
   let (extended, regular) = partition (isJust . installTarget) (executables pd)
 
   let pd_regular = pd { executables = regular }
@@ -42,10 +73,9 @@ xInstallTargetHook pd lbi _uh cf = do
                    bindir = install_target''
                  }
                }
+    fn pd_extended lbi'
 
-    install pd_extended lbi' cf
-
-  install pd_regular lbi cf
+  fn pd_regular lbi
 
  where
    installTarget :: Executable -> Maybe PathTemplate
