@@ -63,6 +63,7 @@ import Data.Monoid
 import Data.List
 import Data.Default
 import Data.Typeable
+import Distribution.Simple.BuildPaths (exeExtension)
 import System.Environment
 import System.FilePath
 import System.Directory
@@ -241,7 +242,7 @@ findLibexecExe :: String -> IO FilePath
 findLibexecExe "cabal-helper-wrapper" = do
     libexecdir <- getLibexecDir
     let exeName = "cabal-helper-wrapper"
-        exe = libexecdir </> exeName
+        exe = libexecdir </> exeName <.> exeExtension
 
     exists <- doesFileExist exe
 
