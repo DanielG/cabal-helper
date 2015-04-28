@@ -219,7 +219,7 @@ errorInstallCabal cabalVer distdir = panic $ printf "\
 \        $ cabal clean && cabal configure\n\
 \    You might also have to install some version of the Cabal to do this:\n\
 \        $ cabal install Cabal\n\
-\\n" sver (distdir </> "setup-config") sver sver
+\\n" sver sver
  where
    sver = showVersion cabalVer
 
