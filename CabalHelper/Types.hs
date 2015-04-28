@@ -18,6 +18,7 @@
 module CabalHelper.Types where
 
 import GHC.Generics
+import Data.Version
 
 newtype ChModuleName = ChModuleName String
     deriving (Eq, Ord, Read, Show, Generic)
@@ -33,6 +34,7 @@ data ChResponse
     = ChResponseStrings    [(ChComponentName, [String])]
     | ChResponseEntrypoints [(ChComponentName, ChEntrypoint)]
     | ChResponseLbi String
+    | ChResponseVersion String Version
   deriving (Eq, Ord, Read, Show, Generic)
 
 data ChEntrypoint = ChSetupEntrypoint -- ^ Almost like 'ChExeEntrypoint' but

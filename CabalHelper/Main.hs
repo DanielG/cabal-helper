@@ -52,8 +52,9 @@ import Distribution.Simple.Program.GHC (GhcOptions(..), renderGhcOptions)
 import Distribution.Simple.Setup (ConfigFlags(..),Flag(..))
 import Distribution.Simple.Build (initialBuildSteps)
 import Distribution.Simple.BuildPaths (autogenModuleName, cppHeaderName, exeExtension)
-import Distribution.Simple.Compiler (PackageDB(..))
+import Distribution.Simple.Compiler (PackageDB(..), compilerId)
 
+import Distribution.Compiler (CompilerId(..))
 import Distribution.ModuleName (components)
 import qualified Distribution.ModuleName as C (ModuleName)
 import Distribution.Text (display)
@@ -89,6 +90,7 @@ usage = do
      ++"DIST_DIR ( version\n"
      ++"         | print-lbi\n"
      ++"         | write-autogen-files\n"
+     ++"         | compiler-version"
      ++"         | ghc-options     [--with-inplace]\n"
      ++"         | ghc-src-options [--with-inplace]\n"
      ++"         | ghc-pkg-options [--with-inplace]\n"
@@ -100,7 +102,7 @@ usage = do
 commands :: [String]
 commands = [ "print-bli"
            , "write-autogen-files"
-           , "component-from-file"
+           , "compiler-version"
            , "ghc-options"
            , "ghc-src-options"
            , "ghc-pkg-options"
@@ -156,6 +158,10 @@ main = do
        -- calls writeAutogenFiles
       initialBuildSteps distdir pd lbi v
       return Nothing
+
+    "compiler-version":[] -> do
+      let CompilerId comp ver = compilerId $ compiler lbi
+      return $ Just $ ChResponseVersion (show comp) ver
 
     "ghc-options":flags -> do
       res <- componentsMap lbi v distdir $ \c clbi bi -> let

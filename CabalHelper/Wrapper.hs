@@ -119,23 +119,16 @@ main = handlePanic $ do
 \Could not read Cabal's persistent setup configuration header\n\
 \- Check first line of: %s\n\
 \- Maybe try: $ cabal configure" cfgf
-        Just (hdrCabalVersion, (_compilerName, hdrCompilerVersion)) -> do
-          ghcVer <- ghcVersion opts
-          if not $ ghcVer `sameMajorVersionAs` hdrCompilerVersion
-            then panic $ printf "\
-\GHC major version changed! (was %s, now %s)\n\
-\- Reconfigure the project: $ cabal clean && cabal configure\
-\ " (showVersion hdrCompilerVersion) (showVersion ghcVer)
-            else do
-              eexe <- compileHelper opts hdrCabalVersion distdir
-              case eexe of
-                  Left e -> exitWith e
-                  Right exe ->
-                    case args' of
-                      "print-exe":_ -> putStrLn exe
-                      _ -> do
-                        (_,_,_,h) <- createProcess $ proc exe args
-                        exitWith =<< waitForProcess h
+        Just (hdrCabalVersion, _) -> do
+          eexe <- compileHelper opts hdrCabalVersion distdir
+          case eexe of
+              Left e -> exitWith e
+              Right exe ->
+                case args' of
+                  "print-exe":_ -> putStrLn exe
+                  _ -> do
+                    (_,_,_,h) <- createProcess $ proc exe args
+                    exitWith =<< waitForProcess h
 
 appDataDir :: IO FilePath
 appDataDir = (</> "cabal-helper") <$> getAppUserDataDirectory "ghc-mod"
