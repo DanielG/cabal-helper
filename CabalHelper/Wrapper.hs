@@ -190,7 +190,7 @@ compileHelper opts cabalVer distdir = withHelperSources $ \chdir -> do
    cabalPkgId v = "Cabal-" ++ showVersion v
 
 errorInstallCabal :: Version -> FilePath -> a
-errorInstallCabal cabalVer distdir = panic $ printf "\
+errorInstallCabal cabalVer _distdir = panic $ printf "\
 \Installing Cabal version %s failed.\n\
 \\n\
 \You have the following choices to fix this:\n\
