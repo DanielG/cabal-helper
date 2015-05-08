@@ -1,5 +1,5 @@
 name:                cabal-helper
-version:             0.3.3.0
+version:             0.3.4.0
 synopsis:            Simple interface to Cabal's configuration state used by ghc-mod
 description:
     @cabal-helper@ provides a library which wraps the internal use of executables
@@ -73,3 +73,13 @@ Executable cabal-helper-wrapper
                      , transformers
                      , template-haskell
                      , temporary
+
+
+Test-Suite spec
+  Default-Language:    Haskell2010
+  Type:                exitcode-stdio-1.0
+  Main-Is:             Spec.hs
+  Hs-Source-Dirs:      tests
+  GHC-Options:         -Wall
+  Build-Depends:       base >= 4.5 && < 5
+                     , cabal-helper
