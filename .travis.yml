@@ -25,4 +25,7 @@ script:
   - cabal configure --enable-tests $WERROR
   - cabal build
   - ./dist/build/cabal-helper-wrapper/cabal-helper-wrapper dist "compiler-version" "entrypoints" "source-dirs" "ghc-options" "ghc-src-options" "ghc-pkg-options" "ghc-lang-options"
-#  - cabal test
+  - cabal test
+  - cabal install --enable-tests -j1 .
+  - cat "dist/test/cabal-helper-"*
+  - ls -l dist/test/
