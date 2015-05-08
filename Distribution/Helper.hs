@@ -98,7 +98,7 @@ data SomeLocalBuildInfo = SomeLocalBuildInfo {
 -- running all possible queries against it at once is cheap.
 newtype Query m a = Query { unQuery :: StateT (Maybe SomeLocalBuildInfo)
                                          (ReaderT (Programs, FilePath) m) a }
-    deriving (Functor, Applicative, Monad)
+    deriving (Functor, Applicative, Monad, MonadIO)
 
 type MonadQuery m = ( MonadIO m
                     , MonadState (Maybe SomeLocalBuildInfo) m
