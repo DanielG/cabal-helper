@@ -94,6 +94,7 @@ usage = do
      ++"         | ghc-options     [--with-inplace]\n"
      ++"         | ghc-src-options [--with-inplace]\n"
      ++"         | ghc-pkg-options [--with-inplace]\n"
+     ++"         | ghc-merged-pkg-options [--with-inplace]\n"
      ++"         | ghc-lang-options [--with-inplace]\n"
      ++"         | entrypoints\n"
      ++"         | source-dirs\n"
@@ -126,6 +127,7 @@ main = do
   v <- maybe silent (const deafening) . lookup  "GHC_MOD_DEBUG" <$> getEnvironment
   lbi <- unsafeInterleaveIO $ getPersistBuildConfig distdir
   let pd = localPkgDescr lbi
+  let lvd = (lbi, v, distdir)
 
   let
       -- a =<< b $$ c   ==  (a =<< b) $$ c
@@ -173,18 +175,10 @@ main = do
 
            opts = componentGhcOptions normal lbi bi clbi' outdir
          in renderGhcOptions' lbi v (opts `mappend` adopts)
-      return $ Just $ ChResponseStrings (res ++ [(ChSetupHsName, [])])
+      return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
 
     "ghc-src-options":flags -> do
-      res <- componentsMap lbi v distdir $ \c clbi bi -> let
-           outdir = componentOutDir lbi c
-           (clbi', adopts) = case flags of
-                               ["--with-inplace"] -> (clbi, mempty)
-                               [] -> removeInplaceDeps v lbi pd clbi
-           opts = componentGhcOptions normal lbi bi clbi' outdir
-           comp = compiler lbi
-
-           opts' = mempty {
+      res <- componentOptions lvd flags $ \opts -> mempty {
                -- Not really needed but "unexpected package db stack: []"
                ghcOptPackageDBs      = [GlobalPackageDB, UserPackageDB],
 
@@ -195,44 +189,43 @@ main = do
                ghcOptSourcePathClear = ghcOptSourcePathClear opts,
                ghcOptSourcePath      = ghcOptSourcePath opts
               }
-         in renderGhcOptions' lbi v $ opts `mappend` adopts
-      return $ Just $ ChResponseStrings (res ++ [(ChSetupHsName, [])])
+      return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
 
     "ghc-pkg-options":flags -> do
-      res <- componentsMap lbi v distdir $ \c clbi bi -> let
-           comp = compiler lbi
-           outdir = componentOutDir lbi c
-           (clbi', adopts) = case flags of
-                               ["--with-inplace"] -> (clbi, mempty)
-                               [] -> removeInplaceDeps v lbi pd clbi
-           opts = componentGhcOptions normal lbi bi clbi' outdir
-
-           opts' = mempty {
+      res <- componentOptions lvd flags $ \opts -> mempty {
                        ghcOptPackageDBs = ghcOptPackageDBs opts,
                        ghcOptPackages   = ghcOptPackages opts,
                        ghcOptHideAllPackages = ghcOptHideAllPackages opts
                    }
-         in renderGhcOptions' lbi v $ opts' `mappend` adopts
-      return $ Just $ ChResponseStrings (res ++ [(ChSetupHsName, [])])
+      return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
+
+    "ghc-merged-pkg-options":flags -> do
+      let pd = localPkgDescr lbi
+      res <- mconcat . map snd <$> (componentsMap lbi v distdir $ \c clbi bi -> let
+        outdir = componentOutDir lbi c
+        opts = componentGhcOptions normal lbi bi clbi outdir
+        comp = compiler lbi
+        opts' = mempty {
+                       ghcOptPackageDBs = ghcOptPackageDBs opts,
+                       ghcOptPackages   = ghcOptPackages opts,
+                       ghcOptHideAllPackages = ghcOptHideAllPackages opts
+                   }
+
+         in return opts')
+
+      let res' = res { ghcOptPackageDBs = nub $ ghcOptPackageDBs res }
+
+      Just . ChResponseList <$> renderGhcOptions' lbi v res'
 
     "ghc-lang-options":flags -> do
-      res <- componentsMap lbi v distdir $ \c clbi bi -> let
-           comp = compiler lbi
-           outdir = componentOutDir lbi c
-           (clbi', adopts) = case flags of
-                               ["--with-inplace"] -> (clbi, mempty)
-                               [] -> removeInplaceDeps v lbi pd clbi
-           opts = componentGhcOptions normal lbi bi clbi' outdir
-
-           opts' = mempty {
+      res <- componentOptions lvd flags $ \opts -> mempty {
                        ghcOptPackageDBs      = [GlobalPackageDB, UserPackageDB],
 
                        ghcOptLanguage = ghcOptLanguage opts,
                        ghcOptExtensions = ghcOptExtensions opts,
                        ghcOptExtensionMap = ghcOptExtensionMap opts
                    }
-         in renderGhcOptions' lbi v $ opts' `mappend` adopts
-      return $ Just $ ChResponseStrings (res ++ [(ChSetupHsName, [])])
+      return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
 
     "entrypoints":[] -> do
       eps <- componentsMap lbi v distdir $ \c clbi bi ->
@@ -244,7 +237,7 @@ main = do
 
     "source-dirs":[] -> do
       res <- componentsMap lbi v distdir $$ \_ _ bi -> return $ hsSourceDirs bi
-      return $ Just $ ChResponseStrings (res ++ [(ChSetupHsName, [])])
+      return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
 
     "print-lbi":[] ->
       return $ Just $ ChResponseLbi $ show lbi
@@ -292,6 +285,20 @@ componentsMap lbi v distdir f = do
         writeIORef lr $ (componentNameToCh name, r):l'
 
     reverse <$> readIORef lr
+
+componentOptions (lbi, v, distdir) flags f = do
+  let pd = localPkgDescr lbi
+  componentsMap lbi v distdir $ \c clbi bi -> let
+           outdir = componentOutDir lbi c
+           (clbi', adopts) = case flags of
+                               ["--with-inplace"] -> (clbi, mempty)
+                               [] -> removeInplaceDeps v lbi pd clbi
+           opts = componentGhcOptions normal lbi bi clbi' outdir
+           comp = compiler lbi
+           opts' = f opts
+
+         in renderGhcOptions' lbi v $ opts' `mappend` adopts
+
 
 componentNameToCh CLibName = ChLibName
 componentNameToCh (CExeName n) = ChExeName n

@@ -32,6 +32,7 @@ module Distribution.Helper (
   , ghcOptions
   , ghcSrcOptions
   , ghcPkgOptions
+  , ghcMergedPkgOptions
   , ghcLangOptions
 
   -- * Result types
@@ -85,12 +86,13 @@ instance Default Programs where
     def = Programs "cabal" "ghc" "ghc-pkg"
 
 data SomeLocalBuildInfo = SomeLocalBuildInfo {
-      slbiEntrypoints   :: [(ChComponentName, ChEntrypoint)],
-      slbiSourceDirs    :: [(ChComponentName, [String])],
-      slbiGhcOptions    :: [(ChComponentName, [String])],
-      slbiGhcSrcOptions :: [(ChComponentName, [String])],
-      slbiGhcPkgOptions :: [(ChComponentName, [String])],
-      slbiGhcLangOptions :: [(ChComponentName, [String])]
+      slbiEntrypoints         :: [(ChComponentName, ChEntrypoint)],
+      slbiSourceDirs          :: [(ChComponentName, [String])],
+      slbiGhcOptions          :: [(ChComponentName, [String])],
+      slbiGhcSrcOptions       :: [(ChComponentName, [String])],
+      slbiGhcPkgOptions       :: [(ChComponentName, [String])],
+      slbiGhcMergedPkgOptions :: [String],
+      slbiGhcLangOptions      :: [(ChComponentName, [String])]
     } deriving (Eq, Ord, Read, Show)
 
 -- | Caches helper executable result so it doesn't have to be run more than once
@@ -149,15 +151,19 @@ ghcSrcOptions :: MonadIO m => Query m [(ChComponentName, [String])]
 -- access any home modules.
 ghcPkgOptions :: MonadIO m => Query m [(ChComponentName, [String])]
 
+-- | Like @ghcPkgOptions@ but for the whole package not just one component
+ghcMergedPkgOptions :: MonadIO m => Query m [String]
+
 -- | Only language related options, i.e. @-XSomeExtension@
 ghcLangOptions :: MonadIO m => Query m [(ChComponentName, [String])]
 
-entrypoints   = Query $ slbiEntrypoints   `liftM` getSlbi
-sourceDirs    = Query $ slbiSourceDirs    `liftM` getSlbi
-ghcOptions    = Query $ slbiGhcOptions    `liftM` getSlbi
-ghcSrcOptions = Query $ slbiGhcSrcOptions `liftM` getSlbi
-ghcPkgOptions = Query $ slbiGhcPkgOptions `liftM` getSlbi
-ghcLangOptions = Query $ slbiGhcLangOptions `liftM` getSlbi
+entrypoints         = Query $ slbiEntrypoints         `liftM` getSlbi
+sourceDirs          = Query $ slbiSourceDirs          `liftM` getSlbi
+ghcOptions          = Query $ slbiGhcOptions          `liftM` getSlbi
+ghcSrcOptions       = Query $ slbiGhcSrcOptions       `liftM` getSlbi
+ghcPkgOptions       = Query $ slbiGhcPkgOptions       `liftM` getSlbi
+ghcMergedPkgOptions = Query $ slbiGhcMergedPkgOptions `liftM` getSlbi
+ghcLangOptions      = Query $ slbiGhcLangOptions      `liftM` getSlbi
 
 -- | Run @cabal configure@
 reconfigure :: MonadIO m
@@ -188,6 +194,7 @@ getSomeConfigState = ask >>= \(progs, distdir) -> do
              , "ghc-options"
              , "ghc-src-options"
              , "ghc-pkg-options"
+             , "ghc-merged-pkg-options"
              , "ghc-lang-options"
              ] ++ progArgs
 
@@ -200,14 +207,15 @@ getSomeConfigState = ask >>= \(progs, distdir) -> do
                      , " (read failed)"]
 
   let [ Just (ChResponseEntrypoints eps),
-        Just (ChResponseStrings srcDirs),
-        Just (ChResponseStrings ghcOpts),
-        Just (ChResponseStrings ghcSrcOpts),
-        Just (ChResponseStrings ghcPkgOpts),
-        Just (ChResponseStrings ghcLangOpts) ] = res
+        Just (ChResponseCompList srcDirs),
+        Just (ChResponseCompList ghcOpts),
+        Just (ChResponseCompList ghcSrcOpts),
+        Just (ChResponseCompList ghcPkgOpts),
+        Just (ChResponseList     ghcMergedPkgOpts),
+        Just (ChResponseCompList ghcLangOpts) ] = res
 
   return $ SomeLocalBuildInfo
-             eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcLangOpts
+    eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts
 
 -- | Create @cabal_macros.h@ and @Paths_\<pkg\>@ possibly other generated files
 -- in the usual place.

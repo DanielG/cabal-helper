@@ -14,7 +14,7 @@
 -- You should have received a copy of the GNU Affero General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-{-# LANGUAGE DeriveGeneric, DefaultSignatures #-}
+{-# LANGUAGE DeriveGeneric, DeriveDataTypeable, DefaultSignatures #-}
 module CabalHelper.Types where
 
 import GHC.Generics
@@ -31,8 +31,9 @@ data ChComponentName = ChSetupHsName
   deriving (Eq, Ord, Read, Show, Generic)
 
 data ChResponse
-    = ChResponseStrings    [(ChComponentName, [String])]
+    = ChResponseCompList    [(ChComponentName, [String])]
     | ChResponseEntrypoints [(ChComponentName, ChEntrypoint)]
+    | ChResponseList        [String]
     | ChResponseLbi String
     | ChResponseVersion String Version
   deriving (Eq, Ord, Read, Show, Generic)
