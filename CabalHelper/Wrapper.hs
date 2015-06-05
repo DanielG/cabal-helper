@@ -148,6 +148,8 @@ compileHelper opts cabalVer distdir = withHelperSources $ \chdir -> do
    -- | Check if this version is globally available
    compileGlobal :: FilePath -> MaybeT IO (Either ExitCode FilePath)
    compileGlobal chdir = do
+      -- TODO: add option to let user specify custom package-db, relevant when
+      -- using a Cabal compiled from git!
        _ <- MaybeT $ find (== cabalVer) <$> listCabalVersions opts
        liftIO $ compileWithPkg chdir Nothing
 
@@ -295,8 +297,9 @@ installCabal opts ver = do
   appdir <- appDataDir
   let sver = showVersion ver
   hPutStr stderr $ printf "\
-\cabal-helper-wrapper: Installing a private copy of Cabal, this might take a\n\
-\while but will only happen once per Cabal version.\n\
+\cabal-helper-wrapper: Installing a private copy of Cabal because we couldn't\n\
+\find the right version in your global/user package-db, this might take a\n\
+\while but will only happen once per Cabal version you're using.\n\
 \\n\
 \If anything goes horribly wrong just delete this directory and try again:\n\
 \    %s\n\
