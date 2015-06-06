@@ -5,6 +5,7 @@ ghc:
   - 7.8
 
 install:
+  - export HOME=/tmp
   - cabal update
   - echo $PATH
   - which cabal
