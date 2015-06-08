@@ -73,6 +73,7 @@ Executable cabal-helper-wrapper
                      , transformers
                      , template-haskell
                      , temporary
+                     , utf8-string
 
 
 Test-Suite spec

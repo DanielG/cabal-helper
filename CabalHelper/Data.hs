@@ -20,6 +20,8 @@ module CabalHelper.Data where
 
 import Control.Monad
 import Data.Functor
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.UTF8 as UTF8
 import Language.Haskell.TH
 import System.FilePath
 import System.Directory
@@ -34,7 +36,7 @@ withHelperSources action = withSystemTempDirectory "caba-helper" $ \dir -> do
 
 sourceFiles :: [(FilePath, String)]
 sourceFiles =
-  [ ("Main.hs",   $(LitE . StringL <$> runIO (readFile "CabalHelper/Main.hs")))
-  , ("Common.hs", $(LitE . StringL <$> runIO (readFile "CabalHelper/Common.hs")))
-  , ("Types.hs",  $(LitE . StringL <$> runIO (readFile "CabalHelper/Types.hs")))
+  [ ("Main.hs",   $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "CabalHelper/Main.hs")))
+  , ("Common.hs", $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "CabalHelper/Common.hs")))
+  , ("Types.hs",  $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "CabalHelper/Types.hs")))
   ]
