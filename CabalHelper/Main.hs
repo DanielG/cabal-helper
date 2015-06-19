@@ -178,7 +178,7 @@ main = do
       return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
 
     "ghc-src-options":flags -> do
-      res <- componentOptions lvd flags $ \opts -> mempty {
+      res <- componentOptions lvd False flags $ \opts -> mempty {
                -- Not really needed but "unexpected package db stack: []"
                ghcOptPackageDBs      = [GlobalPackageDB, UserPackageDB],
 
@@ -192,7 +192,7 @@ main = do
       return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
 
     "ghc-pkg-options":flags -> do
-      res <- componentOptions lvd flags $ \opts -> mempty {
+      res <- componentOptions lvd True flags $ \opts -> mempty {
                        ghcOptPackageDBs = ghcOptPackageDBs opts,
                        ghcOptPackages   = ghcOptPackages opts,
                        ghcOptHideAllPackages = ghcOptHideAllPackages opts
@@ -218,7 +218,7 @@ main = do
       Just . ChResponseList <$> renderGhcOptions' lbi v res'
 
     "ghc-lang-options":flags -> do
-      res <- componentOptions lvd flags $ \opts -> mempty {
+      res <- componentOptions lvd False flags $ \opts -> mempty {
                        ghcOptPackageDBs      = [GlobalPackageDB, UserPackageDB],
 
                        ghcOptLanguage = ghcOptLanguage opts,
@@ -286,11 +286,12 @@ componentsMap lbi v distdir f = do
 
     reverse <$> readIORef lr
 
-componentOptions (lbi, v, distdir) flags f = do
+componentOptions (lbi, v, distdir) inplaceFlag flags f = do
   let pd = localPkgDescr lbi
   componentsMap lbi v distdir $ \c clbi bi -> let
            outdir = componentOutDir lbi c
            (clbi', adopts) = case flags of
+                               _ | not inplaceFlag -> (clbi, mempty)
                                ["--with-inplace"] -> (clbi, mempty)
                                [] -> removeInplaceDeps v lbi pd clbi
            opts = componentGhcOptions normal lbi bi clbi' outdir
