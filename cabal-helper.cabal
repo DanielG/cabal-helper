@@ -1,6 +1,6 @@
 name:                cabal-helper
 version:             0.3.5.0
-synopsis:            Simple interface to Cabal's configuration state used by ghc-mod
+synopsis:            Simple interface to some of Cabal's configuration state used by ghc-mod
 description:
     @cabal-helper@ provides a library which wraps the internal use of executables
     to lift the restrictions imposed by linking against versions of GHC before
