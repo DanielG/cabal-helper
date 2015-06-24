@@ -28,7 +28,7 @@ import System.Directory
 import System.IO.Temp
 
 withHelperSources :: (FilePath -> IO a) -> IO a
-withHelperSources action = withSystemTempDirectory "caba-helper" $ \dir -> do
+withHelperSources action = withSystemTempDirectory "cabal-helper" $ \dir -> do
     let chdir = dir </> "CabalHelper"
     createDirectory chdir
     forM_ sourceFiles $ \(fn, src) -> writeFile (chdir </> fn) src
