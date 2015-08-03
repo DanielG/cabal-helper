@@ -201,17 +201,11 @@ main = do
 
     "ghc-merged-pkg-options":flags -> do
       let pd = localPkgDescr lbi
-      res <- mconcat . map snd <$> (componentsMap lbi v distdir $ \c clbi bi -> let
-        outdir = componentOutDir lbi c
-        opts = componentGhcOptions normal lbi bi clbi outdir
-        comp = compiler lbi
-        opts' = mempty {
+      res <- mconcat . map snd <$> (componentOptions' lvd True flags (\_ _ o -> return o) $ \opts -> mempty {
                        ghcOptPackageDBs = ghcOptPackageDBs opts,
                        ghcOptPackages   = ghcOptPackages opts,
                        ghcOptHideAllPackages = ghcOptHideAllPackages opts
-                   }
-
-         in return opts')
+                   })
 
       let res' = res { ghcOptPackageDBs = nub $ ghcOptPackageDBs res }
 
@@ -286,7 +280,7 @@ componentsMap lbi v distdir f = do
 
     reverse <$> readIORef lr
 
-componentOptions (lbi, v, distdir) inplaceFlag flags f = do
+componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
   let pd = localPkgDescr lbi
   componentsMap lbi v distdir $ \c clbi bi -> let
            outdir = componentOutDir lbi c
@@ -295,11 +289,12 @@ componentOptions (lbi, v, distdir) inplaceFlag flags f = do
                                ["--with-inplace"] -> (clbi, mempty)
                                [] -> removeInplaceDeps v lbi pd clbi
            opts = componentGhcOptions normal lbi bi clbi' outdir
-           comp = compiler lbi
            opts' = f opts
 
-         in renderGhcOptions' lbi v $ opts' `mappend` adopts
+         in rf lbi v $ opts' `mappend` adopts
 
+componentOptions (lbi, v, distdir) inplaceFlag flags f =
+    componentOptions' (lbi, v, distdir) inplaceFlag flags renderGhcOptions' f
 
 componentNameToCh CLibName = ChLibName
 componentNameToCh (CExeName n) = ChExeName n
