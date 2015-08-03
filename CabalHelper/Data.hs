@@ -26,6 +26,7 @@ import Language.Haskell.TH
 import System.FilePath
 import System.Directory
 import System.IO.Temp
+import Prelude
 
 withHelperSources :: (FilePath -> IO a) -> IO a
 withHelperSources action = withSystemTempDirectory "cabal-helper" $ \dir -> do
