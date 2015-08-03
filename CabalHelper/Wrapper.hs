@@ -150,8 +150,9 @@ compileHelper opts cabalVer distdir = withHelperSources $ \chdir -> do
    compileGlobal chdir = do
       -- TODO: add option to let user specify custom package-db, relevant when
       -- using a Cabal compiled from git!
-       _ <- MaybeT $ find (== cabalVer) <$> listCabalVersions opts
-       liftIO $ compileWithPkg chdir Nothing
+
+       ver <- MaybeT $ find (sameMajorVersionAs cabalVer) . reverse . sort <$> listCabalVersions opts
+       liftIO $ compileWithPkg chdir Nothing ver
 
    -- | Check if we already compiled this version of cabal into a private
    -- package-db
@@ -160,9 +161,10 @@ compileHelper opts cabalVer distdir = withHelperSources $ \chdir -> do
        db_exists <- liftIO $ cabalPkgDbExists opts cabalVer
        case db_exists of
          False -> mzero
-         True -> liftIO $ do
-             db <- cabalPkgDb opts cabalVer
-             compileWithPkg chdir (Just db)
+         True -> do
+             db <- liftIO $ cabalPkgDb opts cabalVer
+             vers <- MaybeT $ find (sameMajorVersionAs cabalVer) . reverse . sort <$> listCabalVersions' opts (Just db)
+             liftIO $ compileWithPkg chdir (Just db) vers
 
    -- | See if we're in a cabal source tree
    compileCabalSource :: FilePath -> MaybeT IO (Either ExitCode FilePath)
@@ -181,13 +183,14 @@ compileHelper opts cabalVer distdir = withHelperSources $ \chdir -> do
    compileSandbox chdir = do
        db <- installCabal opts cabalVer `E.catch`
              \(SomeException _) -> errorInstallCabal cabalVer distdir
-       compileWithPkg chdir (Just db)
+       compileWithPkg chdir (Just db) cabalVer
+
 
    compileWithCabalTree chdir ver srcDir =
        compile opts $ Compile chdir (Just srcDir) Nothing ver []
 
-   compileWithPkg chdir mdb =
-       compile opts $ Compile chdir Nothing mdb cabalVer [cabalPkgId cabalVer]
+   compileWithPkg chdir mdb ver =
+       compile opts $ Compile chdir Nothing mdb ver [cabalPkgId ver]
 
    cabalPkgId v = "Cabal-" ++ showVersion v
 
@@ -221,9 +224,11 @@ errorInstallCabal cabalVer _distdir = panic $ printf "\
 \        $ cabal clean && cabal configure\n\
 \    You might also have to install some version of the Cabal to do this:\n\
 \        $ cabal install Cabal\n\
-\\n" sver sver
+\\n" sver sdep
  where
    sver = showVersion cabalVer
+   sdep = showVersion (majorVer cabalVer)++".*"
+
 
 data Compile = Compile {
       cabalHelperSourceDir :: FilePath,
@@ -265,7 +270,7 @@ exePath :: Version -> IO FilePath
 exePath cabalVersion = do
     outdir <- appDataDir
     return $ outdir </> "cabal-helper-" ++ showVersion version -- our ver
-                     ++ "-Cabal-" ++ showVersion cabalVersion
+                     ++ "-Cabal-" ++ showVersion (majorVer cabalVersion)
 
 cachedExe :: Version -> IO (Maybe FilePath)
 cachedExe cabalVersion = do
@@ -295,7 +300,7 @@ processFailedException fn exe args rv =
 installCabal :: Options -> Version -> IO FilePath
 installCabal opts ver = do
   appdir <- appDataDir
-  let sver = showVersion ver
+  let sdep = showVersion (majorVer ver)++".*"
   hPutStr stderr $ printf "\
 \cabal-helper-wrapper: Installing a private copy of Cabal because we couldn't\n\
 \find the right version in your global/user package-db, this might take a\n\
@@ -306,9 +311,9 @@ installCabal opts ver = do
 \\n\
 \If you want to avoid this automatic installation altogether install\n\
 \version %s of Cabal manually (into your user or global package-db):\n\
-\    $ cabal install Cabal-%s\n\
+\    $ cabal install Cabal --constraint \"Cabal == %s\"\n\
 \\n\
-\Building Cabal-%s..." appdir sver sver sver
+\Building Cabal %s...\n" appdir sdep sdep sdep
 
   db <- createPkgDb opts ver
   callProcessStderr (Just "/") (cabalProgram opts) $ concat
@@ -323,7 +328,8 @@ installCabal opts ver = do
         , if ghcPkgProgram opts /= ghcPkgProgram defaultOptions
             then [ "--with-ghc-pkg=" ++ ghcPkgProgram opts ]
             else []
-        , [ "install", "Cabal-"++showVersion ver ]
+        , [ "install", "Cabal", "--constraint"
+          , "Cabal == " ++ showVersion (majorVer ver) ++ ".*" ]
       ]
   hPutStrLn stderr "done"
   return db
@@ -350,7 +356,7 @@ cabalPkgDb :: Options -> Version -> IO FilePath
 cabalPkgDb opts ver = do
   appdir <- appDataDir
   ghcVer <- ghcVersion opts
-  return $ appdir </> "Cabal-" ++ showVersion ver ++ "-db-" ++ showVersion ghcVer
+  return $ appdir </> "Cabal-" ++ showVersion (majorVer ver) ++ "-db-" ++ showVersion ghcVer
 
 cabalPkgDbExists :: Options -> Version -> IO Bool
 cabalPkgDbExists opts ver = do
