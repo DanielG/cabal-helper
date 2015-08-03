@@ -90,7 +90,7 @@ usage = do
      ++"DIST_DIR ( version\n"
      ++"         | print-lbi\n"
      ++"         | write-autogen-files\n"
-     ++"         | compiler-version"
+     ++"         | compiler-version\n"
      ++"         | ghc-options     [--with-inplace]\n"
      ++"         | ghc-src-options [--with-inplace]\n"
      ++"         | ghc-pkg-options [--with-inplace]\n"
