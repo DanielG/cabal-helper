@@ -23,7 +23,7 @@ import Control.Exception as E
 import Control.Monad
 import Control.Monad.Trans.Maybe
 import Control.Monad.IO.Class
-import Data.Traversable (traverse)
+import Data.Traversable
 import Data.Char
 import Data.List
 import Data.Maybe
@@ -37,6 +37,7 @@ import System.FilePath
 import System.Process
 import System.Exit
 import System.IO
+import Prelude
 
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)

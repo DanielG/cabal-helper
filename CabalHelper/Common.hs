@@ -31,6 +31,7 @@ import System.Environment
 import System.IO
 import System.Exit
 import Text.ParserCombinators.ReadP
+import Prelude
 
 data Panic = Panic String deriving (Typeable, Show)
 instance Exception Panic
