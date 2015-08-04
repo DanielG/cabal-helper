@@ -302,6 +302,7 @@ compile distdir opts@Options {..} Compile {..} = do
                   , "-package", "filepath"
                   , "-package", "process"
                   , "-package", "bytestring"
+                  , "-package", "ghc-prim"
                   ]
              else [],
 
