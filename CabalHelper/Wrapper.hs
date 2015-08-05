@@ -118,7 +118,8 @@ main = handlePanic $ do
   opts <- guessProgramPaths opts'
   case args of
     [] -> usage
-    "--help":[] -> usage
+    "help":[] -> usage
+    "version":[] -> putStrLn $ showVersion version
     "print-appdatadir":[] -> putStrLn =<< appDataDir
     "print-build-platform":[] -> putStrLn $ display buildPlatform
     distdir:args' -> do
