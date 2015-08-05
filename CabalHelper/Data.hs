@@ -32,7 +32,8 @@ withHelperSources :: (FilePath -> IO a) -> IO a
 withHelperSources action = withSystemTempDirectory "cabal-helper" $ \dir -> do
     let chdir = dir </> "CabalHelper"
     createDirectory chdir
-    forM_ sourceFiles $ \(fn, src) -> writeFile (chdir </> fn) src
+    forM_ sourceFiles $ \(fn, src) ->
+        BS.writeFile (chdir </> fn) $ UTF8.fromString src
     action dir
 
 sourceFiles :: [(FilePath, String)]
