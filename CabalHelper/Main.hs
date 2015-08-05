@@ -96,6 +96,7 @@ usage = do
      ++"         | ghc-pkg-options [--with-inplace]\n"
      ++"         | ghc-merged-pkg-options [--with-inplace]\n"
      ++"         | ghc-lang-options [--with-inplace]\n"
+     ++"         | package-db-stack\n"
      ++"         | entrypoints\n"
      ++"         | source-dirs\n"
      ++"         ) ...\n"
@@ -108,6 +109,7 @@ commands = [ "print-bli"
            , "ghc-src-options"
            , "ghc-pkg-options"
            , "ghc-lang-options"
+           , "package-db-stack"
            , "entrypoints"
            , "source-dirs"]
 
@@ -220,6 +222,18 @@ main = do
                        ghcOptExtensionMap = ghcOptExtensionMap opts
                    }
       return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
+
+    "package-db-stack":[] -> do
+      let
+          pkgDbStr GlobalPackageDB = "G"
+          pkgDbStr UserPackageDB   = "U"
+          pkgDbStr (SpecificPackageDB s) = "S" ++ s
+
+      res <- map (\(c, opts) -> (c, map pkgDbStr $ ghcOptPackageDBs opts))
+         <$> componentOptions' lvd False [] (\_ _ x -> return x) id
+
+      -- TODO: Setup.hs has access to the sandbox as well: ghc-mod#478
+      return $ Just $ ChResponseCompList $ (res :: [(ChComponentName, [String])]) ++ [(ChSetupHsName, [])]
 
     "entrypoints":[] -> do
       eps <- componentsMap lbi v distdir $ \c clbi bi ->
