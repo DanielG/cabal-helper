@@ -229,11 +229,8 @@ main = do
           pkgDbStr UserPackageDB   = "U"
           pkgDbStr (SpecificPackageDB s) = "S" ++ s
 
-      res <- map (\(c, opts) -> (c, map pkgDbStr $ ghcOptPackageDBs opts))
-         <$> componentOptions' lvd False [] (\_ _ x -> return x) id
-
       -- TODO: Setup.hs has access to the sandbox as well: ghc-mod#478
-      return $ Just $ ChResponseCompList $ (res :: [(ChComponentName, [String])]) ++ [(ChSetupHsName, [])]
+      return $ Just $ ChResponseList $ map pkgDbStr $ withPackageDB lbi
 
     "entrypoints":[] -> do
       eps <- componentsMap lbi v distdir $ \c clbi bi ->
