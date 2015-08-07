@@ -43,6 +43,7 @@ library
   Other-Modules:       Paths_cabal_helper
                      , CabalHelper.Types
   default-language:    Haskell2010
+  GHC-Options:         -Wall
   Build-Depends:       base >= 4.5 && < 5
                      , Cabal >= 1.14 && < 1.23
                      , data-default

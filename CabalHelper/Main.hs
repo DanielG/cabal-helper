@@ -79,6 +79,7 @@ import System.IO
 import System.IO.Unsafe (unsafeInterleaveIO, unsafePerformIO)
 import Text.Printf
 
+import CabalHelper.Sandbox
 import CabalHelper.Common
 import CabalHelper.Types
 

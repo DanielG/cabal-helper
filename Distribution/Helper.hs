@@ -46,7 +46,7 @@ module Distribution.Helper (
   , buildPlatform
 
   -- * Stuff that cabal-install really should export
-  , getSandboxPkgDb
+  , Distribution.Helper.getSandboxPkgDb
 
   -- * Managing @dist/@
   , reconfigure
@@ -58,15 +58,12 @@ module Distribution.Helper (
   ) where
 
 import Control.Applicative
-import Control.Arrow
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.State.Strict
 import Control.Monad.Reader
 import Control.Exception as E
 import Data.Char
-import Data.Monoid
-import Data.Maybe
 import Data.List
 import Data.Default
 import Data.Version
@@ -80,10 +77,9 @@ import System.IO.Unsafe
 import Text.Printf
 import GHC.Generics
 
-import qualified Data.Traversable as T
-
 import Paths_cabal_helper (getLibexecDir)
 import CabalHelper.Types
+import CabalHelper.Sandbox
 
 -- | Paths or names of various programs we need.
 data Programs = Programs {
@@ -117,6 +113,8 @@ type MonadQuery m = ( MonadIO m
                     , MonadState (Maybe SomeLocalBuildInfo) m
                     , MonadReader (Programs, FilePath) m)
 
+run :: Monad m
+  => (Programs, FilePath) -> Maybe SomeLocalBuildInfo -> Query m a -> m a
 run r s action = flip runReaderT r (flip evalStateT s (unQuery action))
 
 -- | @runQuery query distdir@. Run a 'Query'. @distdir@ is where Cabal's
@@ -243,51 +241,19 @@ writeAutogenFiles distdir = liftIO $ do
   exe  <- findLibexecExe "cabal-helper-wrapper"
   void $ readProcess exe [distdir, "write-autogen-files"] ""
 
-
 -- | Get the path to the sandbox package-db in a project
 getSandboxPkgDb :: FilePath
-             -- ^ Path to the cabal package root directory (containing the
-             -- @cabal.sandbox.config@ file)
+             -- ^ Cabal build platform, i.e. @buildPlatform@
              -> Version
              -- ^ GHC version (@cProjectVersion@ is your friend)
              -> IO (Maybe FilePath)
-getSandboxPkgDb d ghcVer = do
-  mConf <- T.traverse readFile =<< mightExist (d </> "cabal.sandbox.config")
-  return $ fixPkgDbVer <$> (extractSandboxDbDir =<< mConf)
-
- where
-   fixPkgDbVer dir =
-       case takeFileName dir == ghcSandboxPkgDbDir ghcVer of
-         True -> dir
-         False -> takeDirectory dir </> ghcSandboxPkgDbDir ghcVer
-
-ghcSandboxPkgDbDir :: Version -> String
-ghcSandboxPkgDbDir ghcVer =
-   cabalBuildPlatform ++ "-ghc-" ++ showVersion ghcVer ++ "-packages.conf.d"
-
-cabalBuildPlatform :: String
--- The build platform isn't going to change at runtime, is it? ;)
-cabalBuildPlatform = unsafePerformIO $ buildPlatform
-
--- | Extract the sandbox package db directory from the cabal.sandbox.config
--- file. Exception is thrown if the sandbox config file is broken.
-extractSandboxDbDir :: String -> Maybe FilePath
-extractSandboxDbDir conf = extractValue <$> parse conf
-  where
-    key = "package-db:"
-    keyLen = length key
-
-    parse = listToMaybe . filter (key `isPrefixOf`) . lines
-    extractValue = Distribution.Helper.dropWhileEnd isSpace . dropWhile isSpace . drop keyLen
+getSandboxPkgDb =
+    CabalHelper.Sandbox.getSandboxPkgDb $ unsafePerformIO buildPlatform
 
 buildPlatform :: IO String
 buildPlatform = do
   exe  <- findLibexecExe "cabal-helper-wrapper"
-  dropWhileEnd isSpace <$> readProcess exe ["print-build-platform"] ""
- where
-   -- dropWhileEnd is not provided prior to base 4.5.0.0.
-   dropWhileEnd :: (a -> Bool) -> [a] -> [a]
-   dropWhileEnd p = foldr (\x xs -> if p x && null xs then [] else x : xs) []
+  CabalHelper.Sandbox.dropWhileEnd isSpace <$> readProcess exe ["print-build-platform"] ""
 
 -- | This exception is thrown by all 'runQuery' functions if the internal
 -- wrapper executable cannot be found. You may catch this and present the user
@@ -361,12 +327,3 @@ getExecutablePath' =
 #else
     getProgName
 #endif
-
-mightExist :: FilePath -> IO (Maybe FilePath)
-mightExist f = do
-  exists <- doesFileExist f
-  return $ if exists then (Just f) else (Nothing)
-
--- dropWhileEnd is not provided prior to base 4.5.0.0.
-dropWhileEnd :: (a -> Bool) -> [a] -> [a]
-dropWhileEnd p = foldr (\x xs -> if p x && null xs then [] else x : xs) []

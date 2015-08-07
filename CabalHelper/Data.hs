@@ -40,5 +40,6 @@ sourceFiles :: [(FilePath, String)]
 sourceFiles =
   [ ("Main.hs",   $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "CabalHelper/Main.hs")))
   , ("Common.hs", $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "CabalHelper/Common.hs")))
+  , ("Sandbox.hs",  $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "CabalHelper/Sandbox.hs")))
   , ("Types.hs",  $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "CabalHelper/Types.hs")))
   ]
