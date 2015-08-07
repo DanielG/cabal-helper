@@ -88,7 +88,7 @@ usage = do
  where
    usageMsg = ""
      ++"DIST_DIR ( version\n"
-     ++"         | print-lbi\n"
+     ++"         | print-lbi [--human]\n"
      ++"         | write-autogen-files\n"
      ++"         | compiler-version\n"
      ++"         | ghc-options     [--with-inplace]\n"
@@ -244,8 +244,10 @@ main = do
       res <- componentsMap lbi v distdir $$ \_ _ bi -> return $ hsSourceDirs bi
       return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
 
-    "print-lbi":[] ->
-      return $ Just $ ChResponseLbi $ show lbi
+    "print-lbi":flags ->
+      case flags of
+        ["--human"] -> print lbi >> return Nothing
+        [] -> return $ Just $ ChResponseLbi $ show lbi
 
     cmd:_ | not (cmd `elem` commands) ->
             errMsg ("Unknown command: " ++ cmd) >> usage >> exitFailure
