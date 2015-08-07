@@ -45,6 +45,9 @@ module Distribution.Helper (
   -- * General information
   , buildPlatform
 
+  -- * Stuff that cabal-install really should export
+  , getSandboxPkgDb
+
   -- * Managing @dist/@
   , reconfigure
   , writeAutogenFiles
@@ -63,16 +66,21 @@ import Control.Monad.Reader
 import Control.Exception as E
 import Data.Char
 import Data.Monoid
+import Data.Maybe
 import Data.List
 import Data.Default
+import Data.Version
 import Data.Typeable
 import Distribution.Simple.BuildPaths (exeExtension)
 import System.Environment
 import System.FilePath
 import System.Directory
 import System.Process
+import System.IO.Unsafe
 import Text.Printf
 import GHC.Generics
+
+import qualified Data.Traversable as T
 
 import Paths_cabal_helper (getLibexecDir)
 import CabalHelper.Types
@@ -235,6 +243,43 @@ writeAutogenFiles distdir = liftIO $ do
   exe  <- findLibexecExe "cabal-helper-wrapper"
   void $ readProcess exe [distdir, "write-autogen-files"] ""
 
+
+-- | Get the path to the sandbox package-db in a project
+getSandboxPkgDb :: FilePath
+             -- ^ Path to the cabal package root directory (containing the
+             -- @cabal.sandbox.config@ file)
+             -> Version
+             -- ^ GHC version (@cProjectVersion@ is your friend)
+             -> IO (Maybe FilePath)
+getSandboxPkgDb d ghcVer = do
+  mConf <- T.traverse readFile =<< mightExist (d </> "cabal.sandbox.config")
+  return $ fixPkgDbVer <$> (extractSandboxDbDir =<< mConf)
+
+ where
+   fixPkgDbVer dir =
+       case takeFileName dir == ghcSandboxPkgDbDir ghcVer of
+         True -> dir
+         False -> takeDirectory dir </> ghcSandboxPkgDbDir ghcVer
+
+ghcSandboxPkgDbDir :: Version -> String
+ghcSandboxPkgDbDir ghcVer =
+   cabalBuildPlatform ++ "-ghc-" ++ showVersion ghcVer ++ "-packages.conf.d"
+
+cabalBuildPlatform :: String
+-- The build platform isn't going to change at runtime, is it? ;)
+cabalBuildPlatform = unsafePerformIO $ buildPlatform
+
+-- | Extract the sandbox package db directory from the cabal.sandbox.config
+-- file. Exception is thrown if the sandbox config file is broken.
+extractSandboxDbDir :: String -> Maybe FilePath
+extractSandboxDbDir conf = extractValue <$> parse conf
+  where
+    key = "package-db:"
+    keyLen = length key
+
+    parse = listToMaybe . filter (key `isPrefixOf`) . lines
+    extractValue = Distribution.Helper.dropWhileEnd isSpace . dropWhile isSpace . drop keyLen
+
 buildPlatform :: IO String
 buildPlatform = do
   exe  <- findLibexecExe "cabal-helper-wrapper"
@@ -316,3 +361,12 @@ getExecutablePath' =
 #else
     getProgName
 #endif
+
+mightExist :: FilePath -> IO (Maybe FilePath)
+mightExist f = do
+  exists <- doesFileExist f
+  return $ if exists then (Just f) else (Nothing)
+
+-- dropWhileEnd is not provided prior to base 4.5.0.0.
+dropWhileEnd :: (a -> Bool) -> [a] -> [a]
+dropWhileEnd p = foldr (\x xs -> if p x && null xs then [] else x : xs) []
