@@ -373,6 +373,7 @@ installCabal opts ver = do
 \Building Cabal %s ...\n" appdir sver sver sver
 
   db <- createPkgDb opts ver
+  cabalInstallVer <- cabalInstallVersion opts
   cabal_opts <- return $ concat
       [
         [ "--package-db=clear"
@@ -381,6 +382,9 @@ installCabal opts ver = do
         , "--prefix=" ++ db </> "prefix"
         , "--with-ghc=" ++ ghcProgram opts
         ]
+        , if cabalInstallVer >= Version [1,20,0,0] []
+             then ["--no-require-sandbox"]
+             else []
         , if ghcPkgProgram opts /= ghcPkgProgram defaultOptions
             then [ "--with-ghc-pkg=" ++ ghcPkgProgram opts ]
             else []
@@ -401,6 +405,10 @@ ghcVersion Options {..} = do
 ghcPkgVersion :: Options -> IO Version
 ghcPkgVersion Options {..} = do
     parseVer . trim . dropWhile (not . isDigit) <$> readProcess ghcPkgProgram ["--version"] ""
+
+cabalInstallVersion :: Options -> IO Version
+cabalInstallVersion Options {..} = do
+    parseVer . trim <$> readProcess cabalProgram ["--numeric-version"] ""
 
 trim :: String -> String
 trim = dropWhileEnd isSpace
