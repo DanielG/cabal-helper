@@ -27,6 +27,7 @@ module Distribution.Helper (
 
   -- * Queries against Cabal\'s on disk state
 
+  , packageDbStack
   , entrypoints
   , sourceDirs
   , ghcOptions
@@ -38,6 +39,7 @@ module Distribution.Helper (
   -- * Result types
   , ChModuleName(..)
   , ChComponentName(..)
+  , ChPkgDb(..)
   , ChEntrypoint(..)
 
   -- * General information
@@ -86,6 +88,7 @@ instance Default Programs where
     def = Programs "cabal" "ghc" "ghc-pkg"
 
 data SomeLocalBuildInfo = SomeLocalBuildInfo {
+      slbiPackageDbStack      :: [ChPkgDb],
       slbiEntrypoints         :: [(ChComponentName, ChEntrypoint)],
       slbiSourceDirs          :: [(ChComponentName, [String])],
       slbiGhcOptions          :: [(ChComponentName, [String])],
@@ -133,6 +136,9 @@ getSlbi = do
             return slbi
     Just slbi -> return slbi
 
+-- | List of package databases to use.
+packageDbStack :: MonadIO m => Query m [ChPkgDb]
+
 -- | Modules or files Cabal would have the compiler build directly. Can be used
 -- to compute the home module closure for a component.
 entrypoints   :: MonadIO m => Query m [(ChComponentName, ChEntrypoint)]
@@ -157,6 +163,7 @@ ghcMergedPkgOptions :: MonadIO m => Query m [String]
 -- | Only language related options, i.e. @-XSomeExtension@
 ghcLangOptions :: MonadIO m => Query m [(ChComponentName, [String])]
 
+packageDbStack      = Query $ slbiPackageDbStack      `liftM` getSlbi
 entrypoints         = Query $ slbiEntrypoints         `liftM` getSlbi
 sourceDirs          = Query $ slbiSourceDirs          `liftM` getSlbi
 ghcOptions          = Query $ slbiGhcOptions          `liftM` getSlbi
@@ -189,7 +196,8 @@ getSomeConfigState = ask >>= \(progs, distdir) -> do
                  , "--with-cabal="   ++ cabalProgram progs
                  ]
 
-  let args = [ "entrypoints"
+  let args = [ "package-db-stack"
+             , "entrypoints"
              , "source-dirs"
              , "ghc-options"
              , "ghc-src-options"
@@ -206,7 +214,8 @@ getSomeConfigState = ask >>= \(progs, distdir) -> do
                      , intercalate " " (map show $ distdir:args)
                      , " (read failed)"]
 
-  let [ Just (ChResponseEntrypoints eps),
+  let [ Just (ChResponsePkgDbs pkgDbs),
+        Just (ChResponseEntrypoints eps),
         Just (ChResponseCompList srcDirs),
         Just (ChResponseCompList ghcOpts),
         Just (ChResponseCompList ghcSrcOpts),
@@ -215,7 +224,7 @@ getSomeConfigState = ask >>= \(progs, distdir) -> do
         Just (ChResponseCompList ghcLangOpts) ] = res
 
   return $ SomeLocalBuildInfo
-    eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts
+    pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts
 
 -- | Create @cabal_macros.h@ and @Paths_\<pkg\>@ possibly other generated files
 -- in the usual place.

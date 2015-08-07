@@ -225,12 +225,12 @@ main = do
 
     "package-db-stack":[] -> do
       let
-          pkgDbStr GlobalPackageDB = "G"
-          pkgDbStr UserPackageDB   = "U"
-          pkgDbStr (SpecificPackageDB s) = "S" ++ s
+          pkgDb GlobalPackageDB = ChPkgGlobal
+          pkgDb UserPackageDB   = ChPkgUser
+          pkgDb (SpecificPackageDB s) = ChPkgSpecific s
 
       -- TODO: Setup.hs has access to the sandbox as well: ghc-mod#478
-      return $ Just $ ChResponseList $ map pkgDbStr $ withPackageDB lbi
+      return $ Just $ ChResponsePkgDbs $ map pkgDb $ withPackageDB lbi
 
     "entrypoints":[] -> do
       eps <- componentsMap lbi v distdir $ \c clbi bi ->

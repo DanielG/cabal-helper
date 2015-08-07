@@ -34,6 +34,7 @@ data ChResponse
     = ChResponseCompList    [(ChComponentName, [String])]
     | ChResponseEntrypoints [(ChComponentName, ChEntrypoint)]
     | ChResponseList        [String]
+    | ChResponsePkgDbs      [ChPkgDb]
     | ChResponseLbi String
     | ChResponseVersion String Version
   deriving (Eq, Ord, Read, Show, Generic)
@@ -49,3 +50,8 @@ data ChEntrypoint = ChSetupEntrypoint -- ^ Almost like 'ChExeEntrypoint' but
                   | ChExeEntrypoint { chMainIs         :: FilePath
                                     , chOtherModules   :: [ChModuleName]
                                     } deriving (Eq, Ord, Read, Show, Generic)
+
+data ChPkgDb = ChPkgGlobal
+             | ChPkgUser
+             | ChPkgSpecific FilePath
+               deriving (Eq, Ord, Read, Show, Generic)
