@@ -118,7 +118,7 @@ main :: IO ()
 main = do
   args <- getArgs
 
-  distdir:args' <- case args of
+  projdir:distdir:args' <- case args of
                     [] -> usage >> exitFailure
                     _ -> return args
 

@@ -46,6 +46,7 @@ import Paths_cabal_helper (version)
 import CabalHelper.Data
 import CabalHelper.Common
 import CabalHelper.GuessGhc
+import CabalHelper.Sandbox (getSandboxPkgDb)
 
 usage :: IO ()
 usage = do
@@ -59,7 +60,7 @@ usage = do
 \  [--with-ghc=GHC_PATH]\n\
 \  [--with-ghc-pkg=GHC_PKG_PATH]\n\
 \  [--with-cabal=CABAL_PATH]\n\
-\  DIST_DIR ( print-exe | [CABAL_HELPER_ARGS...] ) )\n"
+\  PROJ_DIR DIST_DIR ( print-exe | [CABAL_HELPER_ARGS...] ) )\n"
 
 data Options = Options {
           verbose       :: Bool
@@ -122,7 +123,7 @@ main = handlePanic $ do
     "version":[] -> putStrLn $ showVersion version
     "print-appdatadir":[] -> putStrLn =<< appDataDir
     "print-build-platform":[] -> putStrLn $ display buildPlatform
-    distdir:args' -> do
+    projdir:distdir:args' -> do
       cfgf <- canonicalizePath (distdir </> "setup-config")
       mhdr <- getCabalConfigHeader cfgf
       case mhdr of
@@ -131,7 +132,7 @@ main = handlePanic $ do
 \- Check first line of: %s\n\
 \- Maybe try: $ cabal configure" cfgf
         Just (hdrCabalVersion, _) -> do
-          eexe <- compileHelper opts hdrCabalVersion distdir
+          eexe <- compileHelper opts hdrCabalVersion projdir distdir
           case eexe of
               Left e -> exitWith e
               Right exe ->
@@ -144,17 +145,18 @@ main = handlePanic $ do
 appDataDir :: IO FilePath
 appDataDir = (</> "cabal-helper") <$> getAppUserDataDirectory "ghc-mod"
 
-compileHelper :: Options -> Version -> FilePath -> IO (Either ExitCode FilePath)
-compileHelper opts cabalVer distdir = withHelperSources $ \chdir -> do
+compileHelper :: Options -> Version -> FilePath -> FilePath -> IO (Either ExitCode FilePath)
+compileHelper opts cabalVer projdir distdir = withHelperSources $ \chdir -> do
   run [ compileCabalSource chdir -- TODO: here ghc's caching fails and it always
                                  -- recompiles, probably because we write the
                                  -- sources to a tempdir and they always look
                                  -- newer than the Cabal sources, not sure if we
                                  -- can fix this
       , Right <$> MaybeT (cachedExe cabalVer)
+      , compileSandbox chdir
       , compileGlobal chdir
       , cachedCabalPkg chdir
-      , MaybeT (Just <$> compileSandbox chdir)
+      , MaybeT (Just <$> compilePrivatePkgDb chdir)
       ]
 
  where
@@ -175,6 +177,15 @@ compileHelper opts cabalVer distdir = withHelperSources $ \chdir -> do
        vLog opts $ logMsg ++ "user/global package-db"
        liftIO $ compileWithPkg chdir Nothing ver
 
+   -- | Check if this version is available in the project sandbox
+   compileSandbox :: FilePath -> MaybeT IO (Either ExitCode FilePath)
+   compileSandbox chdir = do
+       sandbox <- MaybeT $ getSandboxPkgDb projdir (display buildPlatform) =<< ghcVersion opts
+       ver <- MaybeT $ find (== cabalVer) <$> listCabalVersions' opts (Just sandbox)
+       vLog opts $ logMsg ++ "sandbox package-db"
+       liftIO $ compileWithPkg chdir (Just sandbox) ver
+
+
    -- | Check if we already compiled this version of cabal into a private
    -- package-db
    cachedCabalPkg :: FilePath -> MaybeT IO (Either ExitCode FilePath)
@@ -190,8 +201,7 @@ compileHelper opts cabalVer distdir = withHelperSources $ \chdir -> do
    -- | See if we're in a cabal source tree
    compileCabalSource :: FilePath -> MaybeT IO (Either ExitCode FilePath)
    compileCabalSource chdir = do
-       let couldBeSrcDir = takeDirectory distdir
-           cabalFile = couldBeSrcDir </> "Cabal.cabal"
+       let cabalFile = projdir </> "Cabal.cabal"
            isCabalMagicVer = cabalVer == Version [1,9999] []
        cabalSrc <- liftIO $ doesFileExist cabalFile
 
@@ -206,11 +216,11 @@ compileHelper opts cabalVer distdir = withHelperSources $ \chdir -> do
          True -> liftIO $ do
            ver <- cabalFileVersion <$> readFile cabalFile
            vLog opts $ "compiling helper with local Cabal source tree"
-           compileWithCabalTree chdir ver couldBeSrcDir
+           compileWithCabalTree chdir ver projdir
 
    -- | Compile the requested cabal version into an isolated package-db
-   compileSandbox :: FilePath -> IO (Either ExitCode FilePath)
-   compileSandbox chdir = do
+   compilePrivatePkgDb :: FilePath -> IO (Either ExitCode FilePath)
+   compilePrivatePkgDb chdir = do
        db <- installCabal opts cabalVer `E.catch`
              \(SomeException _) -> errorInstallCabal cabalVer distdir
        compileWithPkg chdir (Just db) cabalVer

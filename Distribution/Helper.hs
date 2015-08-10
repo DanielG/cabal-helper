@@ -106,31 +106,35 @@ data SomeLocalBuildInfo = SomeLocalBuildInfo {
 -- as reading in Cabal's @LocalBuildInfo@ datatype from disk is very slow but
 -- running all possible queries against it at once is cheap.
 newtype Query m a = Query { unQuery :: StateT (Maybe SomeLocalBuildInfo)
-                                         (ReaderT (Programs, FilePath) m) a }
+                                         (ReaderT (Programs, FilePath, FilePath) m) a }
     deriving (Functor, Applicative, Monad, MonadIO)
 
 type MonadQuery m = ( MonadIO m
                     , MonadState (Maybe SomeLocalBuildInfo) m
-                    , MonadReader (Programs, FilePath) m)
+                    , MonadReader (Programs, FilePath, FilePath) m)
 
 run :: Monad m
-  => (Programs, FilePath) -> Maybe SomeLocalBuildInfo -> Query m a -> m a
+  => (Programs, FilePath, FilePath) -> Maybe SomeLocalBuildInfo -> Query m a -> m a
 run r s action = flip runReaderT r (flip evalStateT s (unQuery action))
 
 -- | @runQuery query distdir@. Run a 'Query'. @distdir@ is where Cabal's
 -- @setup-config@ file is located.
 runQuery :: Monad m
-         => FilePath -- ^ Path to @dist/@
-         -> Query m a
-         -> m a
-runQuery fp action = run (def, fp) Nothing action
-
-runQuery' :: Monad m
-         => Programs
+         => FilePath -- ^ Path to project directory, i.e. the one containing the
+                     -- @project.cabal@ file
          -> FilePath -- ^ Path to @dist/@
          -> Query m a
          -> m a
-runQuery' progs fp action = run (progs, fp) Nothing action
+runQuery pd dd action = run (def, pd, dd) Nothing action
+
+runQuery' :: Monad m
+         => Programs
+         -> FilePath -- ^ Path to project directory, i.e. the one containing the
+                     -- @project.cabal@ file
+         -> FilePath -- ^ Path to @dist/@
+         -> Query m a
+         -> m a
+runQuery' progs pd dd action = run (progs, pd, dd) Nothing action
 
 getSlbi :: MonadQuery m => m SomeLocalBuildInfo
 getSlbi = do
@@ -196,7 +200,7 @@ reconfigure progs cabalOpts = do
     return ()
 
 getSomeConfigState :: MonadQuery m => m SomeLocalBuildInfo
-getSomeConfigState = ask >>= \(progs, distdir) -> do
+getSomeConfigState = ask >>= \(progs, projdir, distdir) -> do
   let progArgs = [ "--with-ghc="     ++ ghcProgram progs
                  , "--with-ghc-pkg=" ++ ghcPkgProgram progs
                  , "--with-cabal="   ++ cabalProgram progs
@@ -214,7 +218,7 @@ getSomeConfigState = ask >>= \(progs, distdir) -> do
 
   res <- liftIO $ do
     exe  <- findLibexecExe "cabal-helper-wrapper"
-    out <- readProcess exe (distdir:args) ""
+    out <- readProcess exe (projdir:distdir:args) ""
     evaluate (read out) `E.catch` \(SomeException _) ->
       error $ concat ["getSomeConfigState", ": ", exe, " "
                      , intercalate " " (map show $ distdir:args)
