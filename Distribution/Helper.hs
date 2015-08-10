@@ -243,7 +243,7 @@ writeAutogenFiles :: MonadIO m
                   -> m ()
 writeAutogenFiles distdir = liftIO $ do
   exe  <- findLibexecExe "cabal-helper-wrapper"
-  void $ readProcess exe [distdir, "write-autogen-files"] ""
+  void $ readProcess exe ["/nowhere/../..", distdir, "write-autogen-files"] ""
 
 -- | Get the path to the sandbox package-db in a project
 getSandboxPkgDb :: FilePath
