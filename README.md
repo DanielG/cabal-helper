@@ -1,14 +1,16 @@
 # cabal-helper
 
-`cabal-helper` provides a library which wraps the internal use of executables
-to lift the restrictions imposed by linking against versions of GHC before
-`7.10`.
+`cabal-helper` provides a library which wraps the internal use of
+anexecutable to lift the restrictions imposed by linking against versions of
+GHC before `7.10`. This has the pleasant side effect of isolating the user
+from having to deal with Cabal version changes manually as `cabal-helper`
+can simply recompile it's helper program automatically as needed.
 
 `cabal-helper` uses a wrapper executable to compile the actual cabal-helper
 executable at runtime while linking against an arbitrary version of
 Cabal. This runtime-compiled helper executable is then used to extract
-various bits and peices from Cabal on disk state (dist/setup-config) written
-by it's configure command.
+various bits and peices from Cabal's on disk state (dist/setup-config)
+written by it's configure command.
 
 In addition to this the wrapper executable also supports installing any
 version of Cabal from hackage in case it cannot be found in any available
@@ -20,7 +22,8 @@ Furthermore the wrapper supports one special case namely reading a state
 file for Cabal itself. This is needed as Cabal compiles it's Setup.hs using
 itself and not using any version of Cabal installed in any package database.
 
-Currently `cabal-helper` supports `Cabal >= 1.16`.
+`cabal-helper` can compile with `Cabal >= 1.14` but requires `Cabal >= 1.16`
+at runtime.
 
 ## IRC
 

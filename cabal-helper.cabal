@@ -2,9 +2,11 @@ name:                cabal-helper
 version:             0.3.9.0
 synopsis:            Simple interface to some of Cabal's configuration state used by ghc-mod
 description:
-    @cabal-helper@ provides a library which wraps the internal use of executables
-    to lift the restrictions imposed by linking against versions of GHC before
-    @7.10@.
+    @cabal-helper@ provides a library which wraps the internal use of
+    anexecutable to lift the restrictions imposed by linking against versions of
+    GHC before @7.10@. This has the pleasant side effect of isolating the user
+    from having to deal with Cabal version changes manually as @cabal-helper@
+    can simply recompile it's helper program automatically as needed.
     .
     @cabal-helper@ uses a wrapper executable to compile the actual cabal-helper
     executable at runtime while linking against an arbitrary version of
