@@ -351,16 +351,11 @@ componentEntrypoints (CBench Benchmark {})
     = ChLibEntrypoint [] []
 
 exeOutDir :: LocalBuildInfo -> String -> FilePath
-exeOutDir lbi exeName =
+exeOutDir lbi exeName' =
   ----- Copied from Distribution/Simple/GHC.hs:buildOrReplExe
-  -- exeNameReal, the name that GHC really uses (with .exe on Windows)
-  let exeNameReal = exeName <.>
-                    (if takeExtension exeName /= ('.':exeExtension)
-                       then exeExtension
-                       else "")
-
-      targetDir = (buildDir lbi) </> exeName
-  in targetDir
+  let targetDir = (buildDir lbi) </> exeName'
+      exeDir    = targetDir </> (exeName' ++ "-tmp")
+  in exeDir
 
 
 removeInplaceDeps :: Verbosity
