@@ -141,6 +141,7 @@ main = handlePanic $ do
                   _ -> do
                     (_,_,_,h) <- createProcess $ proc exe args
                     exitWith =<< waitForProcess h
+    _ -> error "invalid command line"
 
 appDataDir :: IO FilePath
 appDataDir = (</> "cabal-helper") <$> getAppUserDataDirectory "ghc-mod"
