@@ -1,6 +1,5 @@
 module CabalHelper.Sandbox where
 
-
 import Control.Applicative
 import Data.Char
 import Data.Maybe
@@ -8,6 +7,7 @@ import Data.List
 import Data.Version
 import System.FilePath
 import System.Directory
+import Prelude
 
 import qualified Data.Traversable as T
 

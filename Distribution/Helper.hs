@@ -76,6 +76,7 @@ import System.Process
 import System.IO.Unsafe
 import Text.Printf
 import GHC.Generics
+import Prelude
 
 import Paths_cabal_helper (getLibexecDir)
 import CabalHelper.Types

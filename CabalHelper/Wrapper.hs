@@ -381,7 +381,7 @@ installCabal opts ver = do
 \version %s of Cabal manually (into your user or global package-db):\n\
 \    $ cabal install Cabal --constraint \"Cabal == %s\"\n\
 \\n\
-\Building Cabal %s ...\n" appdir sver sver sver
+\Installing Cabal %s ...\n" appdir sver sver sver
 
   db <- createPkgDb opts ver
   cabalInstallVer <- cabalInstallVersion opts
