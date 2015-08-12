@@ -265,11 +265,15 @@ getSomeConfigState = ask >>= \(QueryEnv readProc progs projdir distdir) -> do
 -- in the usual place.
 writeAutogenFiles :: MonadIO m
                   => (FilePath -> [String] -> String -> IO String)
-                  -> FilePath -- ^ Path to the @dist/@ directory
+                  -> FilePath
+                  -- ^ Path to project directory, i.e. the one containing the
+                  -- @project.cabal@ file
+                  -> FilePath
+                  -- ^ Path to the @dist/@ directory
                   -> m ()
-writeAutogenFiles readProc distdir = liftIO $ do
+writeAutogenFiles readProc projdir distdir = liftIO $ do
   exe  <- findLibexecExe "cabal-helper-wrapper"
-  void $ readProc exe ["/nowhere/../..", distdir, "write-autogen-files"] ""
+  void $ readProc exe [projdir, distdir, "write-autogen-files"] ""
 
 -- | Get the path to the sandbox package-db in a project
 getSandboxPkgDb :: (FilePath -> [String] -> String -> IO String)

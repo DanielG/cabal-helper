@@ -159,8 +159,6 @@ main = do
   print =<< flip mapM cmds $$ \cmd -> do
   case cmd of
     "write-autogen-files":[] -> do
-      -- can't use @projdir@ here
-      let pd = localPkgDescr lbi
        -- calls writeAutogenFiles
       initialBuildSteps distdir pd lbi v
       return Nothing

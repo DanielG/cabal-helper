@@ -90,3 +90,4 @@ Test-Suite spec
                      , cabal-helper
                      , extra
                      , unix
+                     , process
