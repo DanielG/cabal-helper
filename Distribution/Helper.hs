@@ -24,6 +24,7 @@ module Distribution.Helper (
   , Query
   , runQuery
   , runQuery'
+  , runQuery''
 
   -- * Queries against Cabal\'s on disk state
 
@@ -107,16 +108,23 @@ data SomeLocalBuildInfo = SomeLocalBuildInfo {
 -- as reading in Cabal's @LocalBuildInfo@ datatype from disk is very slow but
 -- running all possible queries against it at once is cheap.
 newtype Query m a = Query { unQuery :: StateT (Maybe SomeLocalBuildInfo)
-                                         (ReaderT (Programs, FilePath, FilePath) m) a }
+                                         (ReaderT QueryEnv m) a }
     deriving (Functor, Applicative, Monad, MonadIO)
+
+data QueryEnv = QueryEnv {
+      _qeReadProcess :: FilePath -> [String] -> String -> IO String,
+      _qeProgs       :: Programs,
+      _qeProjectDir  :: FilePath,
+      _qeDistDir     :: FilePath
+    }
 
 type MonadQuery m = ( MonadIO m
                     , MonadState (Maybe SomeLocalBuildInfo) m
-                    , MonadReader (Programs, FilePath, FilePath) m)
+                    , MonadReader QueryEnv m)
 
 run :: Monad m
-  => (Programs, FilePath, FilePath) -> Maybe SomeLocalBuildInfo -> Query m a -> m a
-run r s action = flip runReaderT r (flip evalStateT s (unQuery action))
+  => QueryEnv -> Maybe SomeLocalBuildInfo -> Query m a -> m a
+run e s action = flip runReaderT e (flip evalStateT s (unQuery action))
 
 -- | @runQuery query distdir@. Run a 'Query'. @distdir@ is where Cabal's
 -- @setup-config@ file is located.
@@ -126,7 +134,7 @@ runQuery :: Monad m
          -> FilePath -- ^ Path to @dist/@
          -> Query m a
          -> m a
-runQuery pd dd action = run (def, pd, dd) Nothing action
+runQuery pd dd action = run (QueryEnv readProcess def pd dd) Nothing action
 
 runQuery' :: Monad m
          => Programs
@@ -135,7 +143,22 @@ runQuery' :: Monad m
          -> FilePath -- ^ Path to @dist/@
          -> Query m a
          -> m a
-runQuery' progs pd dd action = run (progs, pd, dd) Nothing action
+runQuery' progs pd dd action =
+    run (QueryEnv readProcess progs pd dd) Nothing action
+
+runQuery'' :: Monad m
+         => (FilePath -> [String] -> String -> IO String)
+         -- ^ How to start the cabal-helper process. Useful if you need to
+         -- capture stderr output from the helper.
+         -> Programs
+         -> FilePath -- ^ Path to project directory, i.e. the one containing the
+                     -- @project.cabal@ file
+         -> FilePath -- ^ Path to @dist/@
+         -> Query m a
+         -> m a
+runQuery'' readProc progs pd dd action =
+    run (QueryEnv readProc progs pd dd) Nothing action
+
 
 getSlbi :: MonadQuery m => m SomeLocalBuildInfo
 getSlbi = do
@@ -185,10 +208,11 @@ ghcLangOptions      = Query $ slbiGhcLangOptions      `liftM` getSlbi
 
 -- | Run @cabal configure@
 reconfigure :: MonadIO m
-            => Programs -- ^ Program paths
+            => (FilePath -> [String] -> String -> IO String)
+            -> Programs -- ^ Program paths
             -> [String] -- ^ Command line arguments to be passed to @cabal@
             -> m ()
-reconfigure progs cabalOpts = do
+reconfigure readProc progs cabalOpts = do
     let progOpts =
             [ "--with-ghc=" ++ ghcProgram progs ]
             -- Only pass ghc-pkg if it was actually set otherwise we
@@ -197,11 +221,11 @@ reconfigure progs cabalOpts = do
                  then [ "--with-ghc-pkg=" ++ ghcPkgProgram progs ]
                  else []
             ++ cabalOpts
-    _ <- liftIO $ readProcess (cabalProgram progs) ("configure":progOpts) ""
+    _ <- liftIO $ readProc (cabalProgram progs) ("configure":progOpts) ""
     return ()
 
 getSomeConfigState :: MonadQuery m => m SomeLocalBuildInfo
-getSomeConfigState = ask >>= \(progs, projdir, distdir) -> do
+getSomeConfigState = ask >>= \(QueryEnv readProc progs projdir distdir) -> do
   let progArgs = [ "--with-ghc="     ++ ghcProgram progs
                  , "--with-ghc-pkg=" ++ ghcPkgProgram progs
                  , "--with-cabal="   ++ cabalProgram progs
@@ -219,7 +243,7 @@ getSomeConfigState = ask >>= \(progs, projdir, distdir) -> do
 
   res <- liftIO $ do
     exe  <- findLibexecExe "cabal-helper-wrapper"
-    out <- readProcess exe (projdir:distdir:args) ""
+    out <- readProc exe (projdir:distdir:args) ""
     evaluate (read out) `E.catch` \(SomeException _) ->
       error $ concat ["getSomeConfigState", ": ", exe, " "
                      , intercalate " " (map show $ distdir:args)
@@ -240,25 +264,27 @@ getSomeConfigState = ask >>= \(progs, projdir, distdir) -> do
 -- | Create @cabal_macros.h@ and @Paths_\<pkg\>@ possibly other generated files
 -- in the usual place.
 writeAutogenFiles :: MonadIO m
-                  => FilePath -- ^ Path to the @dist/@ directory
+                  => (FilePath -> [String] -> String -> IO String)
+                  -> FilePath -- ^ Path to the @dist/@ directory
                   -> m ()
-writeAutogenFiles distdir = liftIO $ do
+writeAutogenFiles readProc distdir = liftIO $ do
   exe  <- findLibexecExe "cabal-helper-wrapper"
-  void $ readProcess exe ["/nowhere/../..", distdir, "write-autogen-files"] ""
+  void $ readProc exe ["/nowhere/../..", distdir, "write-autogen-files"] ""
 
 -- | Get the path to the sandbox package-db in a project
-getSandboxPkgDb :: FilePath
+getSandboxPkgDb :: (FilePath -> [String] -> String -> IO String)
+             -> FilePath
              -- ^ Cabal build platform, i.e. @buildPlatform@
              -> Version
              -- ^ GHC version (@cProjectVersion@ is your friend)
              -> IO (Maybe FilePath)
-getSandboxPkgDb =
-    CabalHelper.Sandbox.getSandboxPkgDb $ unsafePerformIO buildPlatform
+getSandboxPkgDb readProc =
+    CabalHelper.Sandbox.getSandboxPkgDb $ unsafePerformIO $ buildPlatform readProc
 
-buildPlatform :: IO String
-buildPlatform = do
+buildPlatform :: (FilePath -> [String] -> String -> IO String) -> IO String
+buildPlatform readProc = do
   exe  <- findLibexecExe "cabal-helper-wrapper"
-  CabalHelper.Sandbox.dropWhileEnd isSpace <$> readProcess exe ["print-build-platform"] ""
+  CabalHelper.Sandbox.dropWhileEnd isSpace <$> readProc exe ["print-build-platform"] ""
 
 -- | This exception is thrown by all 'runQuery' functions if the internal
 -- wrapper executable cannot be found. You may catch this and present the user
