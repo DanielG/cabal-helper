@@ -50,6 +50,7 @@ module Distribution.Helper (
   , Distribution.Helper.getSandboxPkgDb
 
   -- * Managing @dist/@
+  , prepare
   , reconfigure
   , writeAutogenFiles
 
@@ -260,6 +261,20 @@ getSomeConfigState = ask >>= \(QueryEnv readProc progs projdir distdir) -> do
 
   return $ SomeLocalBuildInfo
     pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts
+
+-- | Make sure the appropriate helper executable for the given project is
+-- installed and ready to run queries.
+prepare :: MonadIO m
+        => (FilePath -> [String] -> String -> IO String)
+        -> FilePath
+        -- ^ Path to project directory, i.e. the one containing the
+        -- @project.cabal@ file
+        -> FilePath
+        -- ^ Path to the @dist/@ directory
+        -> m ()
+prepare readProc projdir distdir = liftIO $ do
+  exe  <- findLibexecExe "cabal-helper-wrapper"
+  void $ readProc exe [projdir, distdir] ""
 
 -- | Create @cabal_macros.h@ and @Paths_\<pkg\>@ possibly other generated files
 -- in the usual place.
