@@ -168,15 +168,7 @@ main = do
       return $ Just $ ChResponseVersion (show comp) ver
 
     "ghc-options":flags -> do
-      res <- componentsMap lbi v distdir $ \c clbi bi -> let
-           outdir = componentOutDir lbi c
-           (clbi', adopts) = case flags of
-                               ["--with-inplace"] -> (clbi, mempty)
-                               [] -> removeInplaceDeps v lbi pd clbi
-
-
-           opts = componentGhcOptions normal lbi bi clbi' outdir
-         in renderGhcOptions' lbi v (opts `mappend` adopts)
+      res <- componentOptions lvd True flags id
       return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
 
     "ghc-src-options":flags -> do
@@ -204,12 +196,15 @@ main = do
     "ghc-merged-pkg-options":flags -> do
       let pd = localPkgDescr lbi
       res <- mconcat . map snd <$> (componentOptions' lvd True flags (\_ _ o -> return o) $ \opts -> mempty {
-                       ghcOptPackageDBs = ghcOptPackageDBs opts,
-                       ghcOptPackages   = ghcOptPackages opts,
-                       ghcOptHideAllPackages = ghcOptHideAllPackages opts
+                       ghcOptPackageDBs = [],
+                       ghcOptHideAllPackages = NoFlag,
+                       ghcOptPackages   = ghcOptPackages opts
                    })
 
-      let res' = res { ghcOptPackageDBs = nub $ ghcOptPackageDBs res }
+      let res' = res { ghcOptPackageDBs = withPackageDB lbi
+                     , ghcOptHideAllPackages = Flag True
+                     , ghcOptPackages   = nub $ ghcOptPackages res
+                     }
 
       Just . ChResponseList <$> renderGhcOptions' lbi v res'
 
@@ -304,7 +299,7 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
            opts = componentGhcOptions normal lbi bi clbi' outdir
            opts' = f opts
 
-         in rf lbi v $ opts' `mappend` adopts
+         in rf lbi v $ nubPackageFlags $ opts' `mappend` adopts
 
 componentOptions (lbi, v, distdir) inplaceFlag flags f =
     componentOptions' (lbi, v, distdir) inplaceFlag flags renderGhcOptions' f
@@ -379,6 +374,8 @@ removeInplaceDeps v lbi pd clbi = let
  where
    isInplaceDep :: (InstalledPackageId, PackageId) -> Bool
    isInplaceDep (ipid, pid) = inplacePackageId pid == ipid
+
+nubPackageFlags opts = opts { ghcOptPackages = nub $ ghcOptPackages opts }
 
 renderGhcOptions' lbi v opts = do
 #if CABAL_MAJOR == 1 && CABAL_MINOR < 20
