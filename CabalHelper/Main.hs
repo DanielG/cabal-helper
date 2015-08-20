@@ -203,7 +203,11 @@ main = do
 
       let res' = res { ghcOptPackageDBs = withPackageDB lbi
                      , ghcOptHideAllPackages = Flag True
+#if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
+                     , ghcOptPackages   = ghcOptPackages res
+#else
                      , ghcOptPackages   = nub $ ghcOptPackages res
+#endif
                      }
 
       Just . ChResponseList <$> renderGhcOptions' lbi v res'
@@ -375,7 +379,11 @@ removeInplaceDeps v lbi pd clbi = let
    isInplaceDep :: (InstalledPackageId, PackageId) -> Bool
    isInplaceDep (ipid, pid) = inplacePackageId pid == ipid
 
+#if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
+nubPackageFlags = id
+#else
 nubPackageFlags opts = opts { ghcOptPackages = nub $ ghcOptPackages opts }
+#endif
 
 renderGhcOptions' lbi v opts = do
 #if CABAL_MAJOR == 1 && CABAL_MINOR < 20
