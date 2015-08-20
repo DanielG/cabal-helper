@@ -60,14 +60,10 @@ import qualified Distribution.ModuleName as C (ModuleName)
 import Distribution.Text (display)
 import Distribution.Verbosity (Verbosity, silent, deafening, normal)
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
-import Distribution.Utils.NubList
-#endif
 
 import Control.Applicative ((<$>))
 import Control.Monad
 import Control.Exception (catch, PatternMatchFail(..))
-import Data.List
 import Data.Maybe
 import Data.Monoid
 import Data.IORef
@@ -82,6 +78,15 @@ import Text.Printf
 import CabalHelper.Sandbox
 import CabalHelper.Common
 import CabalHelper.Types
+
+#if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
+import Distribution.Utils.NubList
+import Data.List hiding (nub)
+
+nub = id
+#else
+import Data.List
+#endif
 
 usage = do
   prog <- getProgName
@@ -203,11 +208,7 @@ main = do
 
       let res' = res { ghcOptPackageDBs = withPackageDB lbi
                      , ghcOptHideAllPackages = Flag True
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
-                     , ghcOptPackages   = ghcOptPackages res
-#else
                      , ghcOptPackages   = nub $ ghcOptPackages res
-#endif
                      }
 
       Just . ChResponseList <$> renderGhcOptions' lbi v res'
@@ -379,11 +380,7 @@ removeInplaceDeps v lbi pd clbi = let
    isInplaceDep :: (InstalledPackageId, PackageId) -> Bool
    isInplaceDep (ipid, pid) = inplacePackageId pid == ipid
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
-nubPackageFlags = id
-#else
 nubPackageFlags opts = opts { ghcOptPackages = nub $ ghcOptPackages opts }
-#endif
 
 renderGhcOptions' lbi v opts = do
 #if CABAL_MAJOR == 1 && CABAL_MINOR < 20
