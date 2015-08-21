@@ -30,6 +30,8 @@ import qualified Data.ByteString.Char8 as BS8
 import System.Environment
 import System.IO
 import System.Exit
+import System.Directory
+import System.FilePath
 import Text.ParserCombinators.ReadP
 import Prelude
 
@@ -95,3 +97,6 @@ runReadP :: ReadP t -> String -> t
 runReadP p i = case filter ((=="") . snd) $ readP_to_S p i of
                  (a,""):[] -> a
                  _ -> error $ "Error parsing: " ++ show i
+
+appDataDir :: IO FilePath
+appDataDir = (</> "cabal-helper") <$> getAppUserDataDirectory "ghc-mod"

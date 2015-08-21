@@ -55,3 +55,13 @@ data ChPkgDb = ChPkgGlobal
              | ChPkgUser
              | ChPkgSpecific FilePath
                deriving (Eq, Ord, Read, Show, Generic)
+
+data Options = Options {
+          verbose       :: Bool
+        , ghcProgram    :: FilePath
+        , ghcPkgProgram :: FilePath
+        , cabalProgram  :: FilePath
+}
+
+defaultOptions :: Options
+defaultOptions = Options False "ghc" "ghc-pkg" "cabal"

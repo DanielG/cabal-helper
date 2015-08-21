@@ -81,7 +81,7 @@ import GHC.Generics
 import Prelude
 
 import Paths_cabal_helper (getLibexecDir)
-import CabalHelper.Types
+import CabalHelper.Types hiding (Options(..))
 import CabalHelper.Sandbox
 
 -- | Paths or names of various programs we need.

@@ -81,7 +81,7 @@ import Text.Printf
 
 import CabalHelper.Sandbox
 import CabalHelper.Common
-import CabalHelper.Types
+import CabalHelper.Types hiding (Options(..))
 
 usage = do
   prog <- getProgName
@@ -201,10 +201,9 @@ main = do
                        ghcOptPackages   = ghcOptPackages opts
                    })
 
-      let res' = res { ghcOptPackageDBs = withPackageDB lbi
-                     , ghcOptHideAllPackages = Flag True
-                     , ghcOptPackages   = nub $ ghcOptPackages res
-                     }
+      let res' = nubPackageFlags $ res { ghcOptPackageDBs = withPackageDB lbi
+                                       , ghcOptHideAllPackages = Flag True
+                                       }
 
       Just . ChResponseList <$> renderGhcOptions' lbi v res'
 
@@ -375,7 +374,12 @@ removeInplaceDeps v lbi pd clbi = let
    isInplaceDep :: (InstalledPackageId, PackageId) -> Bool
    isInplaceDep (ipid, pid) = inplacePackageId pid == ipid
 
+#if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
+-- >= 1.22 uses NubListR
+nubPackageFlags opts = opts
+#else
 nubPackageFlags opts = opts { ghcOptPackages = nub $ ghcOptPackages opts }
+#endif
 
 renderGhcOptions' lbi v opts = do
 #if CABAL_MAJOR == 1 && CABAL_MINOR < 20
