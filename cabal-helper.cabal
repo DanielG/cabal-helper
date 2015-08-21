@@ -86,10 +86,21 @@ Test-Suite spec
   Default-Language:    Haskell2010
   Type:                exitcode-stdio-1.0
   Main-Is:             Spec.hs
-  Hs-Source-Dirs:      tests
+  Hs-Source-Dirs:      tests, .
   GHC-Options:         -Wall
   Build-Depends:       base >= 4.5 && < 5
                      , cabal-helper
                      , extra
                      , unix
+                     , Cabal >= 1.14 && < 1.23
+                     , data-default
+                     , directory
+                     , filepath
+                     , transformers
+                     , mtl
                      , process
+                     , ghc-prim
+                     , bytestring
+                     , utf8-string
+                     , template-haskell
+                     , temporary

@@ -4,6 +4,21 @@ ghc:
   - 7.6
   - 7.8
 
+sudo: false
+
+addons:
+  apt:
+    packages:
+    - zlib1g-dev
+
+cache:
+  apt: true
+  directories:
+  - ~/.cabal
+  - ~/.ghc
+  - ~/.ghc-mod
+  - ~/.stack
+
 install:
   - export HOME=/tmp
   - cabal update
@@ -12,6 +27,9 @@ install:
   - cabal install -j --only-dependencies --enable-tests
   - if [ -n "$(ghc --version | awk '{ print $8 }' | sed -n '/^7.4/p')" ]; then cabal install Cabal --constraint "Cabal == 1.16.*"; fi
 
+
+before_script:
+  - rm -f ~/.ghc-mod cabal-helper-*-Cabal-*
 
 script:
   - touch ChangeLog # Create ChangeLog if we're not on the release branch
