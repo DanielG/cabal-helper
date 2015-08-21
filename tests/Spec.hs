@@ -4,10 +4,9 @@ import System.Posix.Env (setEnv)
 import System.Process
 import System.Exit
 import Data.Maybe
-import Data.Either
 import Data.Version
 import Data.Functor
-import Control.Exception
+import Control.Exception as E
 import Control.Arrow
 
 import CabalHelper.Common
@@ -73,7 +72,7 @@ main = do
 
 compilePrivatePkgDb :: Version -> IO (Either ExitCode FilePath)
 compilePrivatePkgDb cabalVer = do
-    db <- installCabal defaultOptions cabalVer `catch`
+    db <- installCabal defaultOptions cabalVer `E.catch`
           \(SomeException _) -> errorInstallCabal cabalVer "dist"
     compileWithPkg "." (Just db) cabalVer
 

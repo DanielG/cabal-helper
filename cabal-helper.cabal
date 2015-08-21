@@ -80,7 +80,7 @@ Executable cabal-helper-wrapper
                      , template-haskell
                      , temporary
                      , utf8-string
-
+                     , ghc-prim
 
 Test-Suite spec
   Default-Language:    Haskell2010
