@@ -35,6 +35,7 @@ category:            Distribution
 build-type:          Custom
 cabal-version:       >=1.10
 extra-source-files:  CabalHelper/Main.hs
+                     CabalHelper/Licenses.hs
 
 source-repository head
   type:     git
