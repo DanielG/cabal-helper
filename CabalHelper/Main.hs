@@ -114,7 +114,8 @@ commands = [ "print-bli"
            , "ghc-lang-options"
            , "package-db-stack"
            , "entrypoints"
-           , "source-dirs"]
+           , "source-dirs"
+           , "licenses"]
 
 main :: IO ()
 main = do
