@@ -36,6 +36,7 @@ module Distribution.Helper (
   , ghcPkgOptions
   , ghcMergedPkgOptions
   , ghcLangOptions
+  , pkgLicenses
 
   -- * Result types
   , ChModuleName(..)
@@ -102,7 +103,8 @@ data SomeLocalBuildInfo = SomeLocalBuildInfo {
       slbiGhcSrcOptions       :: [(ChComponentName, [String])],
       slbiGhcPkgOptions       :: [(ChComponentName, [String])],
       slbiGhcMergedPkgOptions :: [String],
-      slbiGhcLangOptions      :: [(ChComponentName, [String])]
+      slbiGhcLangOptions      :: [(ChComponentName, [String])],
+      slbiPkgLicenses         :: [(String, [(String, Version)])]
     } deriving (Eq, Ord, Read, Show)
 
 -- | Caches helper executable result so it doesn't have to be run more than once
@@ -198,6 +200,9 @@ ghcMergedPkgOptions :: MonadIO m => Query m [String]
 -- | Only language related options, i.e. @-XSomeExtension@
 ghcLangOptions :: MonadIO m => Query m [(ChComponentName, [String])]
 
+-- | Get the licenses of the packages the current project is linking against.
+pkgLicenses :: MonadIO m => Query m [(String, [(String, Version)])]
+
 packageDbStack      = Query $ slbiPackageDbStack      `liftM` getSlbi
 entrypoints         = Query $ slbiEntrypoints         `liftM` getSlbi
 sourceDirs          = Query $ slbiSourceDirs          `liftM` getSlbi
@@ -206,6 +211,7 @@ ghcSrcOptions       = Query $ slbiGhcSrcOptions       `liftM` getSlbi
 ghcPkgOptions       = Query $ slbiGhcPkgOptions       `liftM` getSlbi
 ghcMergedPkgOptions = Query $ slbiGhcMergedPkgOptions `liftM` getSlbi
 ghcLangOptions      = Query $ slbiGhcLangOptions      `liftM` getSlbi
+pkgLicenses         = Query $ slbiPkgLicenses         `liftM` getSlbi
 
 -- | Run @cabal configure@
 reconfigure :: MonadIO m
@@ -240,6 +246,7 @@ getSomeConfigState = ask >>= \(QueryEnv readProc progs projdir distdir) -> do
              , "ghc-pkg-options"
              , "ghc-merged-pkg-options"
              , "ghc-lang-options"
+             , "licenses"
              ] ++ progArgs
 
   res <- liftIO $ do
@@ -257,10 +264,12 @@ getSomeConfigState = ask >>= \(QueryEnv readProc progs projdir distdir) -> do
         Just (ChResponseCompList ghcSrcOpts),
         Just (ChResponseCompList ghcPkgOpts),
         Just (ChResponseList     ghcMergedPkgOpts),
-        Just (ChResponseCompList ghcLangOpts) ] = res
+        Just (ChResponseCompList ghcLangOpts),
+        Just (ChResponseLicenses pkgLics)
+        ] = res
 
   return $ SomeLocalBuildInfo
-    pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts
+    pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts pkgLics
 
 -- | Make sure the appropriate helper executable for the given project is
 -- installed and ready to run queries.

@@ -174,6 +174,7 @@ compile distdir opts@Options {..} Compile {..} = do
           if isNothing cCabalSourceDir
              then [ "-hide-all-packages"
                   , "-package", "base"
+                  , "-package", "containers"
                   , "-package", "directory"
                   , "-package", "filepath"
                   , "-package", "process"

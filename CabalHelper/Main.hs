@@ -79,6 +79,7 @@ import System.IO
 import System.IO.Unsafe (unsafeInterleaveIO, unsafePerformIO)
 import Text.Printf
 
+import CabalHelper.Licenses
 import CabalHelper.Sandbox
 import CabalHelper.Common
 import CabalHelper.Types hiding (Options(..))
@@ -100,6 +101,7 @@ usage = do
      ++"         | package-db-stack\n"
      ++"         | entrypoints\n"
      ++"         | source-dirs\n"
+     ++"         | licenses\n"
      ++"         ) ...\n"
 
 commands :: [String]
@@ -237,6 +239,10 @@ main = do
     "source-dirs":[] -> do
       res <- componentsMap lbi v distdir $$ \_ _ bi -> return $ hsSourceDirs bi
       return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
+
+    "licenses":[] -> do
+      return $ Just $ ChResponseLicenses $
+        displayDependencyLicenseList $ groupByLicense $ getDependencyInstalledPackageInfos lbi
 
     "print-lbi":flags ->
       case flags of
