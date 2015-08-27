@@ -58,12 +58,7 @@ getDependencyInstalledPackageIds
     :: Cabal.LocalBuildInfo -> Set Cabal.InstalledPackageId
 getDependencyInstalledPackageIds lbi =
     findTransitiveDependencies (Cabal.installedPkgs lbi) $
-        Set.fromList
-            [ installedPackageId
-            | (_, componentLbi, _)    <- Cabal.componentsConfigs lbi
-            , (installedPackageId, _) <- Cabal.componentPackageDeps componentLbi
-            ]
-
+      Set.fromList $ map fst $ Cabal.externalPackageDeps lbi
 
 --------------------------------------------------------------------------------
 getDependencyInstalledPackageInfos
