@@ -247,14 +247,14 @@ getSomeConfigState = ask >>= \(QueryEnv readProc progs projdir distdir) -> do
              , "ghc-merged-pkg-options"
              , "ghc-lang-options"
              , "licenses"
-             ] ++ progArgs
+             ]
 
   res <- liftIO $ do
     exe  <- findLibexecExe "cabal-helper-wrapper"
-    out <- readProc exe (projdir:distdir:args) ""
+    out <- readProc exe (progArgs ++ projdir:distdir:args) ""
     evaluate (read out) `E.catch` \(SomeException _) ->
       error $ concat ["getSomeConfigState", ": ", exe, " "
-                     , intercalate " " (map show $ distdir:args)
+                     , intercalate " " (map show $ progArgs ++ projdir:distdir:args)
                      , " (read failed)"]
 
   let [ Just (ChResponsePkgDbs pkgDbs),
