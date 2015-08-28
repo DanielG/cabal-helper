@@ -54,6 +54,8 @@ usage = do
 \  [--with-ghc=GHC_PATH]\n\
 \  [--with-ghc-pkg=GHC_PKG_PATH]\n\
 \  [--with-cabal=CABAL_PATH]\n\
+\  [--with-cabal-version=VERSION]\n\
+\  [--with-cabal-pkg-db=PKG_DB]\n\
 \  PROJ_DIR DIST_DIR ( print-exe | [CABAL_HELPER_ARGS...] ) )\n"
 
 globalArgSpec :: [OptDescr (Options -> Options)]
@@ -69,6 +71,13 @@ globalArgSpec =
 
       , option "" ["with-cabal"] "cabal-install executable to use" $
                reqArg "PROG" $ \p o -> o { cabalProgram = p }
+
+      , option "" ["with-cabal-version"] "Cabal library version to use" $
+               reqArg "VERSION" $ \p o -> o { cabalVersion = Just $ parseVer p }
+
+      , option "" ["with-cabal-pkg-db"] "package database to look for Cabal library in" $
+               reqArg "PKG_DB" $ \p o -> o { cabalPkgDb = Just p }
+
       ]
  where
    option :: [Char] -> [String] -> String -> ArgDescr a -> OptDescr a
@@ -116,13 +125,18 @@ main = handlePanic $ do
 \- Check first line of: %s\n\
 \- Maybe try: $ cabal configure" cfgf
         Just (hdrCabalVersion, _) -> do
-          eexe <- compileHelper opts hdrCabalVersion projdir distdir
-          case eexe of
-              Left e -> exitWith e
-              Right exe ->
-                case args' of
-                  "print-exe":_ -> putStrLn exe
-                  _ -> do
-                    (_,_,_,h) <- createProcess $ proc exe args
-                    exitWith =<< waitForProcess h
+          case cabalVersion opts of
+            Just ver | hdrCabalVersion /= ver -> panic $ printf "\
+\Cabal version %s was requested setup configuration was\n\
+\written by version %s" (showVersion ver) (showVersion hdrCabalVersion)
+            _ -> do
+              eexe <- compileHelper opts hdrCabalVersion projdir distdir
+              case eexe of
+                  Left e -> exitWith e
+                  Right exe ->
+                    case args' of
+                      "print-exe":_ -> putStrLn exe
+                      _ -> do
+                        (_,_,_,h) <- createProcess $ proc exe args
+                        exitWith =<< waitForProcess h
     _ -> error "invalid command line"

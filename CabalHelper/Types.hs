@@ -62,7 +62,9 @@ data Options = Options {
         , ghcProgram    :: FilePath
         , ghcPkgProgram :: FilePath
         , cabalProgram  :: FilePath
+        , cabalVersion  :: Maybe Version
+        , cabalPkgDb    :: Maybe FilePath
 }
 
 defaultOptions :: Options
-defaultOptions = Options False "ghc" "ghc-pkg" "cabal"
+defaultOptions = Options False "ghc" "ghc-pkg" "cabal" Nothing Nothing
