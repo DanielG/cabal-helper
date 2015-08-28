@@ -50,20 +50,6 @@ errMsg str = do
   prog <- getProgName
   hPutStrLn stderr $ prog ++ ": " ++ str
 
-align :: String -> String -> String -> String
-align n an str = let
-    h:rest = lines str
-    [hm]   = match n h
-    rest'  = [ move (hm - rm) r | r <- rest, rm <- match an r]
-    in
-      unlines (h:rest')
- where
-   match p str' = maybeToList $
-     fst <$> find ((p `isPrefixOf`) . snd) ([0..] `zip` tails str')
-   move i str' | i > 0  = replicate i ' ' ++ str'
-   move i str' = drop i str'
-
-
 -- | @getCabalConfigHeader "dist/setup-config"@ returns the cabal version and
 -- compiler version
 getCabalConfigHeader :: FilePath -> IO (Maybe (Version, (ByteString, Version)))

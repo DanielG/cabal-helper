@@ -86,23 +86,24 @@ import CabalHelper.Types hiding (Options(..))
 
 usage = do
   prog <- getProgName
-  hPutStr stderr $ align "(" "|" ("Usage: " ++ prog ++ " " ++ usageMsg)
+  hPutStr stderr $ "Usage: " ++ prog ++ " " ++ usageMsg
  where
    usageMsg = ""
-     ++"DIST_DIR ( version\n"
-     ++"         | print-lbi [--human]\n"
-     ++"         | write-autogen-files\n"
-     ++"         | compiler-version\n"
-     ++"         | ghc-options     [--with-inplace]\n"
-     ++"         | ghc-src-options [--with-inplace]\n"
-     ++"         | ghc-pkg-options [--with-inplace]\n"
-     ++"         | ghc-merged-pkg-options [--with-inplace]\n"
-     ++"         | ghc-lang-options [--with-inplace]\n"
-     ++"         | package-db-stack\n"
-     ++"         | entrypoints\n"
-     ++"         | source-dirs\n"
-     ++"         | licenses\n"
-     ++"         ) ...\n"
+     ++"PROJ_DIR DIST_DIR [--with-* ...] (\n"
+     ++"    version\n"
+     ++"  | print-lbi [--human]\n"
+     ++"  | write-autogen-files\n"
+     ++"  | compiler-version\n"
+     ++"  | ghc-options     [--with-inplace]\n"
+     ++"  | ghc-src-options [--with-inplace]\n"
+     ++"  | ghc-pkg-options [--with-inplace]\n"
+     ++"  | ghc-merged-pkg-options [--with-inplace]\n"
+     ++"  | ghc-lang-options [--with-inplace]\n"
+     ++"  | package-db-stack\n"
+     ++"  | entrypoints\n"
+     ++"  | source-dirs\n"
+     ++"  | licenses\n"
+     ++"  ) ...\n"
 
 commands :: [String]
 commands = [ "print-bli"

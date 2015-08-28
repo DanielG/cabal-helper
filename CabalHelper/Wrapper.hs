@@ -45,7 +45,7 @@ import CabalHelper.Types
 usage :: IO ()
 usage = do
   prog <- getProgName
-  hPutStr stderr $ align "(" "|" ("Usage: " ++ prog ++ " " ++ usageMsg)
+  hPutStr stderr $ "Usage: " ++ prog ++ " " ++ usageMsg
  where
    usageMsg = "\
 \( print-appdatadir\n\
