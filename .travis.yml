@@ -25,6 +25,7 @@ install:
   - echo $PATH
   - which cabal
   - cabal install -j --only-dependencies --enable-tests
+  - git clone --depth=1 https://github.com/haskell/cabal.git /tmp/cabal
   - if [ -n "$(ghc --version | awk '{ print $8 }' | sed -n '/^7.4/p')" ]; then cabal install Cabal --constraint "Cabal == 1.16.*"; fi
 
 
@@ -45,3 +46,5 @@ script:
   - cabal build
   - ./dist/build/cabal-helper-wrapper/cabal-helper-wrapper . dist "compiler-version" "entrypoints" "source-dirs" "ghc-options" "ghc-src-options" "ghc-pkg-options" "ghc-lang-options"
   - ./dist/build/spec/spec
+  # At least try to compile with Cabal HEAD
+  - ghc -i -i/tmp/cabal/Cabal -i. ~/dev/hs/cabal-helper/CabalHelper/Main.hs -odir /tmp/cabal/Cabal -DCABAL_MAJOR=100 -DCABAL_MINOR=100
