@@ -26,7 +26,9 @@ import           System.IO                          (hPutStrLn, stderr)
 
 --------------------------------------------------------------------------------
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
+#if CABAL_MAJOR == 1 && CABAL_MINOR >  22
+type PackageIndex a = Cabal.PackageIndex (InstalledPackageInfo.InstalledPackageInfo)
+#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 22
 type PackageIndex a = Cabal.PackageIndex (InstalledPackageInfo.InstalledPackageInfo_ a)
 #else
 type PackageIndex a = Cabal.PackageIndex
