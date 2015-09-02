@@ -47,4 +47,4 @@ script:
   - ./dist/build/cabal-helper-wrapper/cabal-helper-wrapper . dist "compiler-version" "entrypoints" "source-dirs" "ghc-options" "ghc-src-options" "ghc-pkg-options" "ghc-lang-options"
   - ./dist/build/spec/spec
   # At least try to compile with Cabal HEAD
-  - ghc -i -i/tmp/cabal/Cabal -i. CabalHelper/Main.hs -odir /tmp/cabal/Cabal -DCABAL_MAJOR=100 -DCABAL_MINOR=100
+  - ghc -i -i/tmp/cabal/Cabal -i. CabalHelper/Main.hs -odir /tmp/cabal/Cabal -DCABAL_MAJOR=1 -DCABAL_MINOR=1000
