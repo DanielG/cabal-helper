@@ -69,7 +69,10 @@ compileHelper opts cabalVer projdir distdir = withHelperSources $ \chdir -> do
           , cachedCabalPkg chdir
           , MaybeT (Just <$> compilePrivatePkgDb chdir)
           ]
-    mdb -> compileWithPkg chdir mdb cabalVer
+    mdb ->
+      run [ Right <$> MaybeT (cachedExe cabalVer)
+          , liftIO $ compileWithPkg chdir mdb cabalVer
+          ]
 
  where
    run actions = fromJust <$> runMaybeT (msum actions)
