@@ -14,17 +14,24 @@
 -- You should have received a copy of the GNU Affero General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-{-# LANGUAGE CPP, FlexibleContexts, ConstraintKinds #-}
+{-# LANGUAGE CPP, RecordWildCards, FlexibleContexts, ConstraintKinds #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, DeriveDataTypeable, DeriveGeneric #-}
 
 module Distribution.Helper (
     Programs(..)
+  , defaultPrograms
+  , QueryEnv
+  , qeReadProcess
+  , qePrograms
+  , qeProjectDir
+  , qeDistDir
+  , qeCabalPkgDb
+  , qeCabalVer
+  , defaultQueryEnv
 
   -- * Running Queries
   , Query
   , runQuery
-  , runQuery'
-  , runQuery''
 
   -- * Queries against Cabal\'s on disk state
 
@@ -68,7 +75,6 @@ import Control.Monad.Reader
 import Control.Exception as E
 import Data.Char
 import Data.List
-import Data.Default
 import Data.Version
 import Data.Typeable
 import Distribution.Simple.BuildPaths (exeExtension)
@@ -92,8 +98,45 @@ data Programs = Programs {
       ghcPkgProgram :: FilePath
     } deriving (Eq, Ord, Show, Read, Generic, Typeable)
 
-instance Default Programs where
-    def = Programs "cabal" "ghc" "ghc-pkg"
+defaultPrograms :: Programs
+defaultPrograms = Programs "cabal" "ghc" "ghc-pkg"
+
+data QueryEnv = QueryEnv {
+      -- | How to start the cabal-helper process. Useful if you need to
+      -- capture stderr output from the helper.
+      qeReadProcess :: FilePath -> [String] -> String -> IO String,
+
+      qePrograms    :: Programs,
+
+      -- | Path to project directory, i.e. the one containing the
+      -- @project.cabal@ file
+      qeProjectDir  :: FilePath,
+
+      -- | Path to the @dist/@ directory
+      qeDistDir     :: FilePath,
+
+      -- | Where to look for the Cabal library when linking the helper
+      qeCabalPkgDb  :: Maybe FilePath,
+
+      -- | If @dist/setup-config@ wasn\'t written by this version of Cabal throw
+      -- an error
+      qeCabalVer    :: Maybe Version
+    }
+
+defaultQueryEnv :: FilePath
+                -- ^ Path to project directory, i.e. the one containing the
+                -- @project.cabal@ file
+                -> FilePath
+                -- ^ Path to the @dist/@ directory
+                -> QueryEnv
+defaultQueryEnv projdir distdir = QueryEnv {
+    qeReadProcess = readProcess
+  , qePrograms    = defaultPrograms
+  , qeProjectDir  = projdir
+  , qeDistDir     = distdir
+  , qeCabalPkgDb  = Nothing
+  , qeCabalVer    = Nothing
+  }
 
 data SomeLocalBuildInfo = SomeLocalBuildInfo {
       slbiPackageDbStack      :: [ChPkgDb],
@@ -114,54 +157,20 @@ newtype Query m a = Query { unQuery :: StateT (Maybe SomeLocalBuildInfo)
                                          (ReaderT QueryEnv m) a }
     deriving (Functor, Applicative, Monad, MonadIO)
 
-data QueryEnv = QueryEnv {
-      _qeReadProcess :: FilePath -> [String] -> String -> IO String,
-      _qeProgs       :: Programs,
-      _qeProjectDir  :: FilePath,
-      _qeDistDir     :: FilePath
-    }
-
 type MonadQuery m = ( MonadIO m
                     , MonadState (Maybe SomeLocalBuildInfo) m
                     , MonadReader QueryEnv m)
 
-run :: Monad m
-  => QueryEnv -> Maybe SomeLocalBuildInfo -> Query m a -> m a
+run :: Monad m => QueryEnv -> Maybe SomeLocalBuildInfo -> Query m a -> m a
 run e s action = flip runReaderT e (flip evalStateT s (unQuery action))
 
 -- | @runQuery query distdir@. Run a 'Query'. @distdir@ is where Cabal's
 -- @setup-config@ file is located.
 runQuery :: Monad m
-         => FilePath -- ^ Path to project directory, i.e. the one containing the
-                     -- @project.cabal@ file
-         -> FilePath -- ^ Path to @dist/@
+         => QueryEnv
          -> Query m a
          -> m a
-runQuery pd dd action = run (QueryEnv readProcess def pd dd) Nothing action
-
-runQuery' :: Monad m
-         => Programs
-         -> FilePath -- ^ Path to project directory, i.e. the one containing the
-                     -- @project.cabal@ file
-         -> FilePath -- ^ Path to @dist/@
-         -> Query m a
-         -> m a
-runQuery' progs pd dd action =
-    run (QueryEnv readProcess progs pd dd) Nothing action
-
-runQuery'' :: Monad m
-         => (FilePath -> [String] -> String -> IO String)
-         -- ^ How to start the cabal-helper process. Useful if you need to
-         -- capture stderr output from the helper.
-         -> Programs
-         -> FilePath -- ^ Path to project directory, i.e. the one containing the
-                     -- @project.cabal@ file
-         -> FilePath -- ^ Path to @dist/@
-         -> Query m a
-         -> m a
-runQuery'' readProc progs pd dd action =
-    run (QueryEnv readProc progs pd dd) Nothing action
-
+runQuery qe action = run qe Nothing action
 
 getSlbi :: MonadQuery m => m SomeLocalBuildInfo
 getSlbi = do
@@ -224,7 +233,7 @@ reconfigure readProc progs cabalOpts = do
             [ "--with-ghc=" ++ ghcProgram progs ]
             -- Only pass ghc-pkg if it was actually set otherwise we
             -- might break cabal's guessing logic
-            ++ if ghcPkgProgram progs /= ghcPkgProgram def
+            ++ if ghcPkgProgram progs /= "ghc-pkg"
                  then [ "--with-ghc-pkg=" ++ ghcPkgProgram progs ]
                  else []
             ++ cabalOpts
@@ -232,13 +241,17 @@ reconfigure readProc progs cabalOpts = do
     return ()
 
 getSomeConfigState :: MonadQuery m => m SomeLocalBuildInfo
-getSomeConfigState = ask >>= \(QueryEnv readProc progs projdir distdir) -> do
-  let progArgs = [ "--with-ghc="     ++ ghcProgram progs
+getSomeConfigState = ask >>= \QueryEnv {..} -> do
+  let progs = qePrograms
+      projdir = qeProjectDir
+      distdir = qeDistDir
+
+      progArgs = [ "--with-ghc="     ++ ghcProgram progs
                  , "--with-ghc-pkg=" ++ ghcPkgProgram progs
                  , "--with-cabal="   ++ cabalProgram progs
                  ]
 
-  let args = [ "package-db-stack"
+      args = [ "package-db-stack"
              , "entrypoints"
              , "source-dirs"
              , "ghc-options"
@@ -251,7 +264,7 @@ getSomeConfigState = ask >>= \(QueryEnv readProc progs projdir distdir) -> do
 
   res <- liftIO $ do
     exe  <- findLibexecExe "cabal-helper-wrapper"
-    out <- readProc exe (progArgs ++ projdir:distdir:args) ""
+    out <- qeReadProcess exe (progArgs ++ projdir:distdir:args) ""
     evaluate (read out) `E.catch` \(SomeException _) ->
       error $ concat ["getSomeConfigState", ": ", exe, " "
                      , intercalate " " (map show $ progArgs ++ projdir:distdir:args)
