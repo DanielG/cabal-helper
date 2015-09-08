@@ -60,14 +60,10 @@ import qualified Distribution.ModuleName as C (ModuleName)
 import Distribution.Text (display)
 import Distribution.Verbosity (Verbosity, silent, deafening, normal)
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
-import Distribution.Utils.NubList
-#endif
 
 import Control.Applicative ((<$>))
 import Control.Monad
 import Control.Exception (catch, PatternMatchFail(..))
-import Data.List
 import Data.Maybe
 import Data.Monoid
 import Data.IORef
@@ -83,6 +79,15 @@ import CabalHelper.Licenses
 import CabalHelper.Sandbox
 import CabalHelper.Common
 import CabalHelper.Types hiding (Options(..))
+
+#if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
+import Distribution.Utils.NubList
+import Data.List hiding (nub)
+
+nub = id
+#else
+import Data.List
+#endif
 
 usage = do
   prog <- getProgName
