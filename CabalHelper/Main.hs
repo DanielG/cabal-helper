@@ -19,8 +19,12 @@
 import Distribution.Simple.Utils (cabalVersion)
 import Distribution.Simple.Configure
 
-import Distribution.Package (PackageIdentifier, InstalledPackageId, PackageId)
+import Distribution.Package (PackageIdentifier, InstalledPackageId, PackageId,
+                             packageName, packageVersion)
 import Distribution.PackageDescription (PackageDescription,
+                                        GenericPackageDescription(..),
+                                        Flag(..),
+                                        FlagName(..),
                                         FlagAssignment,
                                         Executable(..),
                                         Library(..),
@@ -65,9 +69,11 @@ import Distribution.Utils.NubList
 #endif
 
 import Control.Applicative ((<$>))
+import Control.Arrow (first, (&&&))
 import Control.Monad
 import Control.Exception (catch, PatternMatchFail(..))
 import Data.List
+import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid
 import Data.IORef
@@ -92,6 +98,10 @@ usage = do
      ++"PROJ_DIR DIST_DIR [--with-* ...] (\n"
      ++"    version\n"
      ++"  | print-lbi [--human]\n"
+     ++"  | package-id\n"
+     ++"  | flags\n"
+     ++"  | config-flags\n"
+     ++"  | non-default-config-flags\n"
      ++"  | write-autogen-files\n"
      ++"  | compiler-version\n"
      ++"  | ghc-options     [--with-inplace]\n"
@@ -107,6 +117,10 @@ usage = do
 
 commands :: [String]
 commands = [ "print-bli"
+           , "package-id"
+           , "flags"
+           , "config-flags"
+           , "non-default-config-flags"
            , "write-autogen-files"
            , "compiler-version"
            , "ghc-options"
@@ -131,8 +145,12 @@ main = do
          errMsg $ "distdir '"++distdir++"' does not exist"
          exitFailure
 
+  -- ghc-mod will catch multiple cabal files existing before we get here
+  [cfile] <- filter isCabalFile <$> getDirectoryContents projdir
+
   v <- maybe silent (const deafening) . lookup  "GHC_MOD_DEBUG" <$> getEnvironment
   lbi <- unsafeInterleaveIO $ getPersistBuildConfig distdir
+  gpd <- unsafeInterleaveIO $ readPackageDescription v (projdir </> cfile)
   let pd = localPkgDescr lbi
   let lvd = (lbi, v, distdir)
 
@@ -162,6 +180,30 @@ main = do
 
   print =<< flip mapM cmds $$ \cmd -> do
   case cmd of
+    "package-id":[] ->
+      return $ Just $
+        ChResponseVersion (display (packageName pd)) (packageVersion pd)
+
+    "flags":[] -> do
+      return $ Just $ ChResponseFlags $ sort $
+        map (flagName' &&& flagDefault) $ genPackageFlags gpd
+
+    "config-flags":[] -> do
+      return $ Just $ ChResponseFlags $ sort $
+        map (first unFlagName') $ configConfigurationsFlags $ configFlags lbi
+
+    "non-default-config-flags":[] -> do
+      let flagDefinitons = genPackageFlags gpd
+          flagAssgnments = configConfigurationsFlags $ configFlags lbi
+          nonDefaultFlags =
+              [ (fn, v)
+              | MkFlag {flagName=FlagName fn, flagDefault=dv} <- flagDefinitons
+              , (FlagName fn', v) <- flagAssgnments
+              , fn == fn'
+              , v /= dv
+              ]
+      return $ Just $ ChResponseFlags $ sort nonDefaultFlags
+
     "write-autogen-files":[] -> do
        -- calls writeAutogenFiles
       initialBuildSteps distdir pd lbi v
@@ -256,6 +298,8 @@ main = do
     _ ->
             errMsg "Invalid usage!" >> usage >> exitFailure
 
+flagName' = unFlagName' . flagName
+unFlagName' (FlagName n) = n
 
 getLibrary :: PackageDescription -> Library
 getLibrary pd = unsafePerformIO $ do
@@ -397,3 +441,12 @@ renderGhcOptions' lbi v opts = do
 #else
   return $ renderGhcOptions (compiler lbi) opts
 #endif
+
+isCabalFile :: FilePath -> Bool
+isCabalFile f = takeExtension' f == ".cabal"
+
+takeExtension' :: FilePath -> String
+takeExtension' p =
+    if takeFileName p == takeExtension p
+      then "" -- just ".cabal" is not a valid cabal file
+      else takeExtension p

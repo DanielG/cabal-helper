@@ -44,6 +44,10 @@ module Distribution.Helper (
   , ghcMergedPkgOptions
   , ghcLangOptions
   , pkgLicenses
+  , packageId
+  , flags
+  , configFlags
+  , nonDefaultConfigFlags
 
   -- * Result types
   , ChModuleName(..)
@@ -147,7 +151,11 @@ data SomeLocalBuildInfo = SomeLocalBuildInfo {
       slbiGhcPkgOptions       :: [(ChComponentName, [String])],
       slbiGhcMergedPkgOptions :: [String],
       slbiGhcLangOptions      :: [(ChComponentName, [String])],
-      slbiPkgLicenses         :: [(String, [(String, Version)])]
+      slbiPkgLicenses         :: [(String, [(String, Version)])],
+      slbiPackageId           :: (String, Version),
+      slbiFlags               :: [(String, Bool)],
+      slbiConfigFlags         :: [(String, Bool)],
+      slbiNonDefaultConfigFlags :: [(String, Bool)]
     } deriving (Eq, Ord, Read, Show)
 
 -- | Caches helper executable result so it doesn't have to be run more than once
@@ -212,6 +220,20 @@ ghcLangOptions :: MonadIO m => Query m [(ChComponentName, [String])]
 -- | Get the licenses of the packages the current project is linking against.
 pkgLicenses :: MonadIO m => Query m [(String, [(String, Version)])]
 
+-- | Package identifier, i.e. package name and version
+packageId :: MonadIO m => Query m (String, Version)
+
+-- | Flag definitions from cabal file
+flags :: MonadIO m => Query m [(String, Bool)]
+
+-- | Flag assignments from setup-config
+configFlags :: MonadIO m => Query m [(String, Bool)]
+
+-- | Flag assignments from setup-config which differ from the default
+-- setting. This can also include flags which cabal decided to modify,
+-- i.e. don't rely on these being the flags set by the user directly.
+nonDefaultConfigFlags :: MonadIO m => Query m [(String, Bool)]
+
 packageDbStack      = Query $ slbiPackageDbStack      `liftM` getSlbi
 entrypoints         = Query $ slbiEntrypoints         `liftM` getSlbi
 sourceDirs          = Query $ slbiSourceDirs          `liftM` getSlbi
@@ -221,6 +243,10 @@ ghcPkgOptions       = Query $ slbiGhcPkgOptions       `liftM` getSlbi
 ghcMergedPkgOptions = Query $ slbiGhcMergedPkgOptions `liftM` getSlbi
 ghcLangOptions      = Query $ slbiGhcLangOptions      `liftM` getSlbi
 pkgLicenses         = Query $ slbiPkgLicenses         `liftM` getSlbi
+packageId           = Query $ slbiPackageId           `liftM` getSlbi
+flags               = Query $ slbiFlags               `liftM` getSlbi
+configFlags         = Query $ slbiConfigFlags         `liftM` getSlbi
+nonDefaultConfigFlags = Query $ slbiNonDefaultConfigFlags `liftM` getSlbi
 
 -- | Run @cabal configure@
 reconfigure :: MonadIO m
@@ -260,6 +286,9 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
              , "ghc-merged-pkg-options"
              , "ghc-lang-options"
              , "licenses"
+             , "flags"
+             , "config-flags"
+             , "non-default-config-flags"
              ]
 
   res <- liftIO $ do
@@ -278,11 +307,15 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
         Just (ChResponseCompList ghcPkgOpts),
         Just (ChResponseList     ghcMergedPkgOpts),
         Just (ChResponseCompList ghcLangOpts),
-        Just (ChResponseLicenses pkgLics)
+        Just (ChResponseLicenses pkgLics),
+        Just (ChResponseVersion pkgName pkgVer),
+        Just (ChResponseFlags fls),
+        Just (ChResponseFlags cfls),
+        Just (ChResponseFlags ndcfls)
         ] = res
 
   return $ SomeLocalBuildInfo
-    pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts pkgLics
+    pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts pkgLics (pkgName, pkgVer) fls cfls ndcfls
 
 -- | Make sure the appropriate helper executable for the given project is
 -- installed and ready to run queries.

@@ -35,9 +35,10 @@ data ChResponse
     | ChResponseEntrypoints [(ChComponentName, ChEntrypoint)]
     | ChResponseList        [String]
     | ChResponsePkgDbs      [ChPkgDb]
-    | ChResponseLbi String
-    | ChResponseVersion String Version
+    | ChResponseLbi         String
+    | ChResponseVersion     String Version
     | ChResponseLicenses    [(String, [(String, Version)])]
+    | ChResponseFlags       [(String, Bool)]
   deriving (Eq, Ord, Read, Show, Generic)
 
 data ChEntrypoint = ChSetupEntrypoint -- ^ Almost like 'ChExeEntrypoint' but
