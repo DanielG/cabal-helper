@@ -286,6 +286,7 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
              , "ghc-merged-pkg-options"
              , "ghc-lang-options"
              , "licenses"
+             , "package-id"
              , "flags"
              , "config-flags"
              , "non-default-config-flags"
