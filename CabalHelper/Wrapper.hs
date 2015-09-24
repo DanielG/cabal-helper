@@ -35,6 +35,9 @@ import Prelude
 
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
+import Distribution.Verbosity (silent, deafening)
+import Distribution.PackageDescription.Parse (readPackageDescription)
+import Distribution.Package (packageName, packageVersion)
 
 import Paths_cabal_helper (version)
 import CabalHelper.Common
@@ -56,7 +59,7 @@ usage = do
 \  [--with-cabal=CABAL_PATH]\n\
 \  [--with-cabal-version=VERSION]\n\
 \  [--with-cabal-pkg-db=PKG_DB]\n\
-\  PROJ_DIR DIST_DIR ( print-exe | [CABAL_HELPER_ARGS...] ) )\n"
+\  PROJ_DIR DIST_DIR ( print-exe | package-id | [CABAL_HELPER_ARGS...] ) )\n"
 
 globalArgSpec :: [OptDescr (Options -> Options)]
 globalArgSpec =
@@ -116,6 +119,15 @@ main = handlePanic $ do
     "version":[] -> putStrLn $ showVersion version
     "print-appdatadir":[] -> putStrLn =<< appDataDir
     "print-build-platform":[] -> putStrLn $ display buildPlatform
+
+    projdir:_distdir:"package-id":[] -> do
+      v <- maybe silent (const deafening) . lookup  "GHC_MOD_DEBUG" <$> getEnvironment
+      -- ghc-mod will catch multiple cabal files existing before we get here
+      [cfile] <- filter isCabalFile <$> getDirectoryContents projdir
+      gpd <- readPackageDescription v (projdir </> cfile)
+      putStrLn $ show $
+        [Just $ ChResponseVersion (display (packageName gpd)) (packageVersion gpd)]
+
     projdir:distdir:args' -> do
       cfgf <- canonicalizePath (distdir </> "setup-config")
       mhdr <- getCabalConfigHeader cfgf

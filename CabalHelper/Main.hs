@@ -145,7 +145,6 @@ main = do
          errMsg $ "distdir '"++distdir++"' does not exist"
          exitFailure
 
-  -- ghc-mod will catch multiple cabal files existing before we get here
   [cfile] <- filter isCabalFile <$> getDirectoryContents projdir
 
   v <- maybe silent (const deafening) . lookup  "GHC_MOD_DEBUG" <$> getEnvironment
@@ -180,10 +179,6 @@ main = do
 
   print =<< flip mapM cmds $$ \cmd -> do
   case cmd of
-    "package-id":[] ->
-      return $ Just $
-        ChResponseVersion (display (packageName pd)) (packageVersion pd)
-
     "flags":[] -> do
       return $ Just $ ChResponseFlags $ sort $
         map (flagName' &&& flagDefault) $ genPackageFlags gpd
@@ -441,12 +436,3 @@ renderGhcOptions' lbi v opts = do
 #else
   return $ renderGhcOptions (compiler lbi) opts
 #endif
-
-isCabalFile :: FilePath -> Bool
-isCabalFile f = takeExtension' f == ".cabal"
-
-takeExtension' :: FilePath -> String
-takeExtension' p =
-    if takeFileName p == takeExtension p
-      then "" -- just ".cabal" is not a valid cabal file
-      else takeExtension p

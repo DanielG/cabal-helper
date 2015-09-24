@@ -44,10 +44,10 @@ module Distribution.Helper (
   , ghcMergedPkgOptions
   , ghcLangOptions
   , pkgLicenses
-  , packageId
   , flags
   , configFlags
   , nonDefaultConfigFlags
+  , packageId
 
   -- * Result types
   , ChModuleName(..)
@@ -152,7 +152,6 @@ data SomeLocalBuildInfo = SomeLocalBuildInfo {
       slbiGhcMergedPkgOptions :: [String],
       slbiGhcLangOptions      :: [(ChComponentName, [String])],
       slbiPkgLicenses         :: [(String, [(String, Version)])],
-      slbiPackageId           :: (String, Version),
       slbiFlags               :: [(String, Bool)],
       slbiConfigFlags         :: [(String, Bool)],
       slbiNonDefaultConfigFlags :: [(String, Bool)]
@@ -220,9 +219,6 @@ ghcLangOptions :: MonadIO m => Query m [(ChComponentName, [String])]
 -- | Get the licenses of the packages the current project is linking against.
 pkgLicenses :: MonadIO m => Query m [(String, [(String, Version)])]
 
--- | Package identifier, i.e. package name and version
-packageId :: MonadIO m => Query m (String, Version)
-
 -- | Flag definitions from cabal file
 flags :: MonadIO m => Query m [(String, Bool)]
 
@@ -234,6 +230,10 @@ configFlags :: MonadIO m => Query m [(String, Bool)]
 -- i.e. don't rely on these being the flags set by the user directly.
 nonDefaultConfigFlags :: MonadIO m => Query m [(String, Bool)]
 
+-- | Package identifier, i.e. package name and version
+packageId :: MonadIO m => Query m (String, Version)
+
+
 packageDbStack      = Query $ slbiPackageDbStack      `liftM` getSlbi
 entrypoints         = Query $ slbiEntrypoints         `liftM` getSlbi
 sourceDirs          = Query $ slbiSourceDirs          `liftM` getSlbi
@@ -243,10 +243,10 @@ ghcPkgOptions       = Query $ slbiGhcPkgOptions       `liftM` getSlbi
 ghcMergedPkgOptions = Query $ slbiGhcMergedPkgOptions `liftM` getSlbi
 ghcLangOptions      = Query $ slbiGhcLangOptions      `liftM` getSlbi
 pkgLicenses         = Query $ slbiPkgLicenses         `liftM` getSlbi
-packageId           = Query $ slbiPackageId           `liftM` getSlbi
 flags               = Query $ slbiFlags               `liftM` getSlbi
 configFlags         = Query $ slbiConfigFlags         `liftM` getSlbi
 nonDefaultConfigFlags = Query $ slbiNonDefaultConfigFlags `liftM` getSlbi
+packageId           = Query $ getPackageId
 
 -- | Run @cabal configure@
 reconfigure :: MonadIO m
@@ -266,8 +266,10 @@ reconfigure readProc progs cabalOpts = do
     _ <- liftIO $ readProc (cabalProgram progs) ("configure":progOpts) ""
     return ()
 
-getSomeConfigState :: MonadQuery m => m SomeLocalBuildInfo
-getSomeConfigState = ask >>= \QueryEnv {..} -> do
+
+
+invokeHelper :: MonadQuery m => [String] -> m [Maybe ChResponse]
+invokeHelper args = ask >>= \QueryEnv {..} -> do
   let progs = qePrograms
       projdir = qeProjectDir
       distdir = qeDistDir
@@ -277,29 +279,37 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
                  , "--with-cabal="   ++ cabalProgram progs
                  ]
 
-      args = [ "package-db-stack"
-             , "entrypoints"
-             , "source-dirs"
-             , "ghc-options"
-             , "ghc-src-options"
-             , "ghc-pkg-options"
-             , "ghc-merged-pkg-options"
-             , "ghc-lang-options"
-             , "licenses"
-             , "package-id"
-             , "flags"
-             , "config-flags"
-             , "non-default-config-flags"
-             ]
-
-  res <- liftIO $ do
+  liftIO $ do
     exe  <- findLibexecExe "cabal-helper-wrapper"
-    out <- qeReadProcess exe (progArgs ++ projdir:distdir:args) ""
+    let args' = progArgs ++ projdir:distdir:args
+    out <- qeReadProcess exe args' ""
     evaluate (read out) `E.catch` \(SomeException _) ->
-      error $ concat ["getSomeConfigState", ": ", exe, " "
-                     , intercalate " " (map show $ progArgs ++ projdir:distdir:args)
-                     , " (read failed)"]
+      error $ concat ["invokeHelper", ": ", exe, " "
+                     , intercalate " " (map show args')
+                     , " (read failed)"
+                     ]
 
+getPackageId :: MonadQuery m => m (String, Version)
+getPackageId = ask >>= \QueryEnv {..} -> do
+  [ Just (ChResponseVersion pkgName pkgVer) ] <- invokeHelper [ "package-id" ]
+  return (pkgName, pkgVer)
+
+
+getSomeConfigState :: MonadQuery m => m SomeLocalBuildInfo
+getSomeConfigState = ask >>= \QueryEnv {..} -> do
+  res <- invokeHelper [ "package-db-stack"
+                      , "entrypoints"
+                      , "source-dirs"
+                      , "ghc-options"
+                      , "ghc-src-options"
+                      , "ghc-pkg-options"
+                      , "ghc-merged-pkg-options"
+                      , "ghc-lang-options"
+                      , "licenses"
+                      , "flags"
+                      , "config-flags"
+                      , "non-default-config-flags"
+                      ]
   let [ Just (ChResponsePkgDbs pkgDbs),
         Just (ChResponseEntrypoints eps),
         Just (ChResponseCompList srcDirs),
@@ -309,14 +319,13 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
         Just (ChResponseList     ghcMergedPkgOpts),
         Just (ChResponseCompList ghcLangOpts),
         Just (ChResponseLicenses pkgLics),
-        Just (ChResponseVersion pkgName pkgVer),
         Just (ChResponseFlags fls),
         Just (ChResponseFlags cfls),
         Just (ChResponseFlags ndcfls)
         ] = res
 
   return $ SomeLocalBuildInfo
-    pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts pkgLics (pkgName, pkgVer) fls cfls ndcfls
+    pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts pkgLics fls cfls ndcfls
 
 -- | Make sure the appropriate helper executable for the given project is
 -- installed and ready to run queries.

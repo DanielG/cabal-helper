@@ -86,3 +86,12 @@ runReadP p i = case filter ((=="") . snd) $ readP_to_S p i of
 
 appDataDir :: IO FilePath
 appDataDir = (</> "cabal-helper") <$> getAppUserDataDirectory "ghc-mod"
+
+isCabalFile :: FilePath -> Bool
+isCabalFile f = takeExtension' f == ".cabal"
+
+takeExtension' :: FilePath -> String
+takeExtension' p =
+    if takeFileName p == takeExtension p
+      then "" -- just ".cabal" is not a valid cabal file
+      else takeExtension p
