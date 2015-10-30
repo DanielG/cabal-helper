@@ -47,8 +47,12 @@ import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(..),
                                            componentBuildInfo,
                                            externalPackageDeps,
                                            withComponentsLBI,
-                                           withLibLBI,
-                                           inplacePackageId)
+                                           withLibLBI)
+#if CABAL_MAJOR == 1 && CABAL_MINOR <= 22
+import Distribution.Simple.LocalBuildInfo (inplacePackageId)
+#else
+import Distribution.Simple.LocalBuildInfo (localComponentId)
+#endif
 
 import Distribution.Simple.GHC (componentGhcOptions)
 import Distribution.Simple.Program.GHC (GhcOptions(..), renderGhcOptions)
@@ -408,7 +412,10 @@ removeInplaceDeps v lbi pd clbi = let
     libbi = libBuildInfo lib
     liboutdir = componentOutDir lbi (CLib lib)
     libopts = (componentGhcOptions normal lbi libbi libclbi liboutdir) {
-                                    ghcOptPackageDBs = []
+                                      ghcOptPackageDBs = []
+#if CABAL_MAJOR == 1 && CABAL_MINOR > 22
+                                    , ghcOptComponentId = NoFlag
+#endif
                                   }
 
     (ideps, deps) = partition isInplaceDep (componentPackageDeps clbi)
@@ -419,7 +426,12 @@ removeInplaceDeps v lbi pd clbi = let
 
  where
    isInplaceDep :: (InstalledPackageId, PackageId) -> Bool
+#if CABAL_MAJOR == 1 && CABAL_MINOR <= 22
    isInplaceDep (ipid, pid) = inplacePackageId pid == ipid
+#else
+   isInplaceDep (ipid, pid) = localComponentId lbi == ipid
+#endif
+
 
 #if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
 -- >= 1.22 uses NubListR
