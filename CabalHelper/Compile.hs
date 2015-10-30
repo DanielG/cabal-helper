@@ -316,8 +316,24 @@ patchyCabalVersions = [
      let versionFile    = dir </> "Distribution/Version.hs"
          versionFileTmp = versionFile ++ ".tmp"
 
+     let languagePragma =
+           "{-# LANGUAGE DeriveDataTypeable, StandaloneDeriving #-}"
+         languagePragmaCPP =
+           "{-# LANGUAGE CPP, DeriveDataTypeable, StandaloneDeriving #-}"
+
+         derivingDataVersion =
+           "deriving instance Data Version"
+         derivingDataVersionCPP = unlines [
+             "#if __GLASGOW_HASKELL__ < 707",
+             derivingDataVersion,
+             "#endif"
+           ]
+
      vf <- readFile versionFile
-     writeFile versionFileTmp $ replace "deriving instance Data Version" "" vf
+     writeFile versionFileTmp
+       $ replace derivingDataVersion derivingDataVersionCPP
+       $ replace languagePragma languagePragmaCPP vf
+
      renameFile versionFileTmp versionFile
 
 unpackPatchedCabal ::
