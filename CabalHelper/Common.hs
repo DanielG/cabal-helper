@@ -96,10 +96,11 @@ takeExtension' p =
       then "" -- just ".cabal" is not a valid cabal file
       else takeExtension p
 
-replace n r h = go "" n r h
+replace :: String -> String -> String -> String
+replace n r hs' = go "" hs'
  where
-   go acc n r h
+   go acc h
        | take (length n) h == n =
            reverse acc ++ r ++ drop (length n) h
-   go acc n r (h:hs) = go (h:acc) n r hs
-   go acc n r [] = reverse acc
+   go acc (h:hs) = go (h:acc) hs
+   go acc [] = reverse acc
