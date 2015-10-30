@@ -34,6 +34,7 @@ import System.FilePath
 import System.Process
 import System.Exit
 import System.IO
+import System.IO.Temp
 import Prelude
 
 import Distribution.System (buildPlatform)
@@ -248,7 +249,17 @@ installCabal opts ver = do
 \\n\
 \Installing Cabal %s ...\n" appdir sver sver sver
 
-  db <- createPkgDb opts ver
+  withSystemTempDirectory "cabal-helper" $ \tmpdir -> do
+    let
+        mpatch :: Maybe (FilePath -> IO ())
+        mpatch = snd <$> find ((ver`elem`) . fst) patchyCabalVersions
+    msrcdir <- sequenceA $ unpackPatchedCabal opts ver tmpdir <$> mpatch
+    db <- createPkgDb opts ver
+    cabalInstall opts db ver msrcdir
+    return db
+
+cabalInstall :: Options -> FilePath -> Version -> Maybe FilePath -> IO ()
+cabalInstall opts db ver msrcdir = do
   cabalInstallVer <- cabalInstallVersion opts
   cabal_opts <- return $ concat
       [
@@ -264,15 +275,61 @@ installCabal opts ver = do
         , if ghcPkgProgram opts /= ghcPkgProgram defaultOptions
             then [ "--with-ghc-pkg=" ++ ghcPkgProgram opts ]
             else []
-        , [ "install", "Cabal", "--constraint"
-          , "Cabal == " ++ showVersion ver ]
+        ,
+          case msrcdir of
+            Nothing ->
+                [ "install", "Cabal"
+                , "--constraint", "Cabal == " ++ showVersion ver
+                ]
+            Just srcdir ->
+                [ "install", srcdir ]
       ]
 
-  vLog opts $ intercalate " " $ map (("\""++) . (++"\"")) $ cabalProgram opts:cabal_opts
+  vLog opts $ intercalate " "
+            $ map (("\""++) . (++"\""))
+            $ cabalProgram opts:cabal_opts
 
   callProcessStderr (Just "/") (cabalProgram opts) cabal_opts
   hPutStrLn stderr "done"
-  return db
+
+patchyCabalVersions :: [([Version], FilePath -> IO ())]
+patchyCabalVersions = [
+    ( [ Version [1,18,1] [] ]
+    , fixArrayConstraint
+    ),
+    ( [ Version [1,18,0] [] ]
+    , \dir -> do
+        fixArrayConstraint dir
+        fixOrphanInstance dir
+    )
+  ]
+ where
+   fixArrayConstraint dir = do
+     let cabalFile    = dir </> "Cabal.cabal"
+         cabalFileTmp = cabalFile ++ ".tmp"
+
+     cf <- readFile cabalFile
+     writeFile cabalFileTmp $ replace "&& < 0.5" "&& < 0.6" cf
+     renameFile cabalFileTmp cabalFile
+
+   fixOrphanInstance dir = do
+     let versionFile    = dir </> "Distribution/Version.hs"
+         versionFileTmp = versionFile ++ ".tmp"
+
+     vf <- readFile versionFile
+     writeFile versionFileTmp $ replace "deriving instance Data Version" "" vf
+     renameFile versionFileTmp versionFile
+
+unpackPatchedCabal ::
+    Options -> Version -> FilePath -> (FilePath -> IO ()) -> IO FilePath
+unpackPatchedCabal opts cabalVer tmpdir patch = do
+  let cabal = "Cabal-" ++ showVersion cabalVer
+      dir = tmpdir </> cabal
+
+  callProcessStderr (Just tmpdir) (cabalProgram opts) [ "get", cabal ]
+
+  patch dir
+  return dir
 
 errorInstallCabal :: Version -> FilePath -> a
 errorInstallCabal cabalVer _distdir = panic $ printf "\

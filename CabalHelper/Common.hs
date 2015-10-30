@@ -95,3 +95,11 @@ takeExtension' p =
     if takeFileName p == takeExtension p
       then "" -- just ".cabal" is not a valid cabal file
       else takeExtension p
+
+replace n r h = go "" n r h
+ where
+   go acc n r h
+       | take (length n) h == n =
+           reverse acc ++ r ++ drop (length n) h
+   go acc n r (h:hs) = go (h:acc) n r hs
+   go acc n r [] = reverse acc
