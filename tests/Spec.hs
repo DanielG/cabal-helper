@@ -16,9 +16,9 @@ import CabalHelper.Types
 main :: IO ()
 main = do
   flip (setEnv "HOME") True =<< fromMaybe "/tmp" <$> lookupEnv "TMPDIR"
-  writeAutogenFiles readProcess "." "./dist"
+  rawSystem "cabal" ["update"]
 
-  _ <- system "cabal update"
+  writeAutogenFiles readProcess "." "./dist"
 
   let vers :: [(Version, [Version])]
       vers = map (parseVer *** map parseVer) [

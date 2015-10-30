@@ -17,7 +17,6 @@ import System.FilePath (takeExtension)
 import System.IO (hPutStrLn, stderr)
 
 import Distribution.InstalledPackageInfo
-import Distribution.InstalledPackageInfo
 import Distribution.License
 import Distribution.Package
 import Distribution.Simple.Configure
@@ -37,9 +36,9 @@ type CPackageIndex a = PackageIndex
 #if CABAL_MAJOR == 1 && CABAL_MINOR > 22
 type CInstalledPackageId = ComponentId
 lookupInstalledPackageId = lookupComponentId
+#else
+type CInstalledPackageId = InstalledPackageId
 #endif
-
-
 
 findTransitiveDependencies
     :: CPackageIndex a
@@ -58,7 +57,7 @@ findTransitiveDependencies pkgIdx set0 = go Set.empty (Set.toList set0)
                     -- We can ignore those.
                     go set queue
                 Just ipi ->
-                    go (Set.insert q set) (depends ipi ++ queue)
+                    go (Set.insert q set) (Distribution.InstalledPackageInfo.depends ipi ++ queue)
 
 
 --------------------------------------------------------------------------------
