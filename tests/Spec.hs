@@ -57,7 +57,7 @@ main = do
                        ])
              ]
 
-  ghcVer <- ghcVersion defaultOptions
+  ghcVer <- majorVer <$> ghcVersion defaultOptions
 
   let cabalVers = concat $ map snd $ dropWhile ((<ghcVer) . fst)  vers
 
