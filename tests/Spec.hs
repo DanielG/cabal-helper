@@ -72,6 +72,7 @@ main = do
 
 compilePrivatePkgDb :: Version -> IO (Either ExitCode FilePath)
 compilePrivatePkgDb cabalVer = do
+    _ <- rawSystem "rm" [ "-r", "/tmp/.ghc-mod" ]
     db <- installCabal defaultOptions cabalVer `E.catch`
           \(SomeException _) -> errorInstallCabal cabalVer "dist"
     compileWithPkg "." (Just db) cabalVer
