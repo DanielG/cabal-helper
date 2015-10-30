@@ -16,7 +16,7 @@ import CabalHelper.Types
 main :: IO ()
 main = do
   flip (setEnv "HOME") True =<< fromMaybe "/tmp" <$> lookupEnv "TMPDIR"
-  rawSystem "cabal" ["update"]
+  _ <- rawSystem "cabal" ["update"]
 
   writeAutogenFiles readProcess "." "./dist"
 
