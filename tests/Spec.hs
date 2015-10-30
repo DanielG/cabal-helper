@@ -64,7 +64,7 @@ main = do
   rvs <- mapM compilePrivatePkgDb cabalVers
 
   if any isLeft' rvs
-     then exitFailure
+     then print rvs >> exitFailure
      else exitSuccess
  where
    isLeft' (Left _) = True
