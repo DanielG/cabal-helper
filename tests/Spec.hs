@@ -22,7 +22,7 @@ main = do
 
   let vers :: [(Version, [Version])]
       vers = map (parseVer *** map parseVer) [
-               ("7.4", [ "1.14.0"
+               ("7.4", [ -- "1.14.0" -- not supported at runtime
                        ]),
 
                ("7.6", [ "1.16.0"
