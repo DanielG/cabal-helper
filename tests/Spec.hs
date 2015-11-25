@@ -8,6 +8,7 @@ import Data.Version
 import Data.Functor
 import Control.Exception as E
 import Control.Arrow
+import Prelude
 
 import CabalHelper.Common
 import CabalHelper.Compile
