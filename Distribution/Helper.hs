@@ -48,6 +48,7 @@ module Distribution.Helper (
   , configFlags
   , nonDefaultConfigFlags
   , packageId
+  , compilerVersion
 
   -- * Result types
   , ChModuleName(..)
@@ -154,7 +155,8 @@ data SomeLocalBuildInfo = SomeLocalBuildInfo {
       slbiPkgLicenses         :: [(String, [(String, Version)])],
       slbiFlags               :: [(String, Bool)],
       slbiConfigFlags         :: [(String, Bool)],
-      slbiNonDefaultConfigFlags :: [(String, Bool)]
+      slbiNonDefaultConfigFlags :: [(String, Bool)],
+      slbiCompilerVersion     :: (String, Version)
     } deriving (Eq, Ord, Read, Show)
 
 -- | Caches helper executable result so it doesn't have to be run more than once
@@ -163,6 +165,9 @@ data SomeLocalBuildInfo = SomeLocalBuildInfo {
 newtype Query m a = Query { unQuery :: StateT (Maybe SomeLocalBuildInfo)
                                          (ReaderT QueryEnv m) a }
     deriving (Functor, Applicative, Monad, MonadIO)
+
+instance MonadTrans Query where
+    lift = Query . lift . lift
 
 type MonadQuery m = ( MonadIO m
                     , MonadState (Maybe SomeLocalBuildInfo) m
@@ -230,6 +235,9 @@ configFlags :: MonadIO m => Query m [(String, Bool)]
 -- i.e. don't rely on these being the flags set by the user directly.
 nonDefaultConfigFlags :: MonadIO m => Query m [(String, Bool)]
 
+-- | The version of GHC the project is configured to use
+compilerVersion :: MonadIO m => Query m (String, Version)
+
 -- | Package identifier, i.e. package name and version
 packageId :: MonadIO m => Query m (String, Version)
 
@@ -246,6 +254,7 @@ pkgLicenses         = Query $ slbiPkgLicenses         `liftM` getSlbi
 flags               = Query $ slbiFlags               `liftM` getSlbi
 configFlags         = Query $ slbiConfigFlags         `liftM` getSlbi
 nonDefaultConfigFlags = Query $ slbiNonDefaultConfigFlags `liftM` getSlbi
+compilerVersion     = Query $ slbiCompilerVersion     `liftM` getSlbi
 packageId           = Query $ getPackageId
 
 -- | Run @cabal configure@
@@ -309,6 +318,7 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
                       , "flags"
                       , "config-flags"
                       , "non-default-config-flags"
+                      , "compiler-version"
                       ]
   let [ Just (ChResponsePkgDbs pkgDbs),
         Just (ChResponseEntrypoints eps),
@@ -321,11 +331,12 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
         Just (ChResponseLicenses pkgLics),
         Just (ChResponseFlags fls),
         Just (ChResponseFlags cfls),
-        Just (ChResponseFlags ndcfls)
+        Just (ChResponseFlags ndcfls),
+        Just (ChResponseVersion comp compVer)
         ] = res
 
   return $ SomeLocalBuildInfo
-    pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts pkgLics fls cfls ndcfls
+    pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts pkgLics fls cfls ndcfls (comp, compVer)
 
 -- | Make sure the appropriate helper executable for the given project is
 -- installed and ready to run queries.
