@@ -64,8 +64,10 @@ module Distribution.Helper (
 
   -- * Managing @dist/@
   , prepare
+  , prepare'
   , reconfigure
   , writeAutogenFiles
+  , writeAutogenFiles'
 
   -- * $libexec related error handling
   , LibexecNotFoundError(..)
@@ -80,6 +82,7 @@ import Control.Monad.Reader
 import Control.Exception as E
 import Data.Char
 import Data.List
+import Data.Maybe
 import Data.Version
 import Data.Typeable
 import Distribution.Simple.BuildPaths (exeExtension)
@@ -275,51 +278,57 @@ reconfigure readProc progs cabalOpts = do
     _ <- liftIO $ readProc (cabalProgram progs) ("configure":progOpts) ""
     return ()
 
+readHelper :: (MonadIO m, MonadQuery m) => [String] -> m [Maybe ChResponse]
+readHelper args = ask >>= \qe -> liftIO $ do
+  out <- either error id <$> invokeHelper qe args
+  let res = read out
+  liftIO $ evaluate res `E.catch` \se@(SomeException _) -> do
+      md <- lookupEnv' "CABAL_HELPER_DEBUG"
+      let msg = "readHelper: exception: '" ++ show se ++ "'"
+      error $ msg ++ case md of
+        Nothing -> ", for more information set the environment variable CABAL_HELPER_DEBUG"
+        Just _ -> ", output: '"++ out ++"'"
 
-
-invokeHelper :: MonadQuery m => [String] -> m [Maybe ChResponse]
-invokeHelper args = ask >>= \QueryEnv {..} -> do
-  let progs = qePrograms
-      projdir = qeProjectDir
-      distdir = qeDistDir
-
-      progArgs = [ "--with-ghc="     ++ ghcProgram progs
-                 , "--with-ghc-pkg=" ++ ghcPkgProgram progs
-                 , "--with-cabal="   ++ cabalProgram progs
+invokeHelper :: QueryEnv -> [String] -> IO (Either String String)
+invokeHelper QueryEnv {..} args = do
+  let progArgs = [ "--with-ghc="     ++ ghcProgram qePrograms
+                 , "--with-ghc-pkg=" ++ ghcPkgProgram qePrograms
+                 , "--with-cabal="   ++ cabalProgram qePrograms
+                 ]
+  exe  <- findLibexecExe "cabal-helper-wrapper"
+  let args' = progArgs ++ qeProjectDir:qeDistDir:args
+  out <- qeReadProcess exe args' ""
+  (Right <$> evaluate out) `E.catch` \(SomeException _) ->
+      return $ Left $ concat
+                 ["invokeHelper", ": ", exe, " "
+                 , intercalate " " (map show args')
+                 , " failed"
                  ]
 
-  liftIO $ do
-    exe  <- findLibexecExe "cabal-helper-wrapper"
-    let args' = progArgs ++ projdir:distdir:args
-    out <- qeReadProcess exe args' ""
-    evaluate (read out) `E.catch` \(SomeException _) ->
-      error $ concat ["invokeHelper", ": ", exe, " "
-                     , intercalate " " (map show args')
-                     , " (read failed)"
-                     ]
 
 getPackageId :: MonadQuery m => m (String, Version)
 getPackageId = ask >>= \QueryEnv {..} -> do
-  [ Just (ChResponseVersion pkgName pkgVer) ] <- invokeHelper [ "package-id" ]
+  [ Just (ChResponseVersion pkgName pkgVer) ] <- readHelper [ "package-id" ]
   return (pkgName, pkgVer)
 
 
 getSomeConfigState :: MonadQuery m => m SomeLocalBuildInfo
 getSomeConfigState = ask >>= \QueryEnv {..} -> do
-  res <- invokeHelper [ "package-db-stack"
-                      , "entrypoints"
-                      , "source-dirs"
-                      , "ghc-options"
-                      , "ghc-src-options"
-                      , "ghc-pkg-options"
-                      , "ghc-merged-pkg-options"
-                      , "ghc-lang-options"
-                      , "licenses"
-                      , "flags"
-                      , "config-flags"
-                      , "non-default-config-flags"
-                      , "compiler-version"
-                      ]
+  res <- readHelper
+         [ "package-db-stack"
+         , "entrypoints"
+         , "source-dirs"
+         , "ghc-options"
+         , "ghc-src-options"
+         , "ghc-pkg-options"
+         , "ghc-merged-pkg-options"
+         , "ghc-lang-options"
+         , "licenses"
+         , "flags"
+         , "config-flags"
+         , "non-default-config-flags"
+         , "compiler-version"
+         ]
   let [ Just (ChResponsePkgDbs pkgDbs),
         Just (ChResponseEntrypoints eps),
         Just (ChResponseCompList srcDirs),
@@ -338,22 +347,24 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
   return $ SomeLocalBuildInfo
     pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts pkgLics fls cfls ndcfls (comp, compVer)
 
--- | Make sure the appropriate helper executable for the given project is
--- installed and ready to run queries.
 prepare :: MonadIO m
         => (FilePath -> [String] -> String -> IO String)
         -> FilePath
-        -- ^ Path to project directory, i.e. the one containing the
-        -- @project.cabal@ file
         -> FilePath
-        -- ^ Path to the @dist/@ directory
         -> m ()
 prepare readProc projdir distdir = liftIO $ do
   exe  <- findLibexecExe "cabal-helper-wrapper"
   void $ readProc exe [projdir, distdir] ""
 
--- | Create @cabal_macros.h@ and @Paths_\<pkg\>@ possibly other generated files
--- in the usual place.
+{-# DEPRECATED prepare
+  "Will be replaced by prepare' in the next major release" #-}
+
+-- | Make sure the appropriate helper executable for the given project is
+-- installed and ready to run queries.
+prepare' :: MonadIO m => QueryEnv -> m ()
+prepare' qe =
+  liftIO $ void $ invokeHelper qe []
+
 writeAutogenFiles :: MonadIO m
                   => (FilePath -> [String] -> String -> IO String)
                   -> FilePath
@@ -365,6 +376,15 @@ writeAutogenFiles :: MonadIO m
 writeAutogenFiles readProc projdir distdir = liftIO $ do
   exe  <- findLibexecExe "cabal-helper-wrapper"
   void $ readProc exe [projdir, distdir, "write-autogen-files"] ""
+
+{-# DEPRECATED writeAutogenFiles
+  "Will be replaced by writeAutogenFiles' in the next major release" #-}
+
+-- | Create @cabal_macros.h@ and @Paths_\<pkg\>@ possibly other generated files
+-- in the usual place.
+writeAutogenFiles' :: MonadIO m => QueryEnv -> m ()
+writeAutogenFiles' qe  =
+  liftIO $ void $ invokeHelper qe ["write-autogen-files"]
 
 -- | Get the path to the sandbox package-db in a project
 getSandboxPkgDb :: (FilePath -> [String] -> String -> IO String)
@@ -453,3 +473,6 @@ getExecutablePath' =
 #else
     getProgName
 #endif
+
+lookupEnv' :: String -> IO (Maybe String)
+lookupEnv' k = lookup k <$> getEnvironment

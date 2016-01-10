@@ -19,7 +19,7 @@ main = do
   flip (setEnv "HOME") True =<< fromMaybe "/tmp" <$> lookupEnv "TMPDIR"
   _ <- rawSystem "cabal" ["update"]
 
-  writeAutogenFiles readProcess "." "./dist"
+  writeAutogenFiles' $ defaultQueryEnv "." "./dist"
 
   let vers :: [(Version, [Version])]
       vers = map (parseVer *** map parseVer) [
