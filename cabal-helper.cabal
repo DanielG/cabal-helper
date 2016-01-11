@@ -89,6 +89,7 @@ Test-Suite spec
   Main-Is:             Spec.hs
   Hs-Source-Dirs:      tests, .
   GHC-Options:         -Wall
+  Build-Tools:         cabal
   Build-Depends:       base >= 4.5 && < 5
                      , cabal-helper
                      , extra

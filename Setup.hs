@@ -6,6 +6,7 @@ import Distribution.Simple.Install
 import Distribution.Simple.Register
 import Distribution.Simple.InstallDirs as ID
 import Distribution.Simple.LocalBuildInfo
+import Distribution.Simple.Program
 import Distribution.PackageDescription
 
 import Control.Applicative
@@ -17,7 +18,8 @@ import System.FilePath
 main :: IO ()
 main = defaultMainWithHooks $ simpleUserHooks {
          instHook = inst,
-         copyHook = copy
+         copyHook = copy,
+         hookedPrograms = [ simpleProgram "cabal" ]
        }
 
 -- mostly copypasta from 'defaultInstallHook'
