@@ -97,7 +97,8 @@ compileHelper opts cabalVer projdir distdir = withHelperSources $ \chdir -> do
    compileSandbox :: FilePath -> MaybeT IO (Either ExitCode FilePath)
    compileSandbox chdir = do
        sandbox <- MaybeT $ getSandboxPkgDb projdir (display buildPlatform) =<< ghcVersion opts
-       ver <- MaybeT $ find (== cabalVer) <$> listCabalVersions' opts (Just sandbox)
+       ver <- MaybeT $ logSomeError opts "compileSandbox" $
+         find (== cabalVer) <$> listCabalVersions' opts (Just sandbox)
        vLog opts $ logMsg ++ "sandbox package-db"
        liftIO $ compileWithPkg chdir (Just sandbox) ver
 
