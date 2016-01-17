@@ -416,7 +416,7 @@ findLibexecExe :: String -> IO FilePath
 findLibexecExe "cabal-helper-wrapper" = do
     libexecdir <- getLibexecDir
     let exeName = "cabal-helper-wrapper"
-        exe = libexecdir </> exeName <.> exeExtension
+        exe = libexecdir </> exeName <.> exeExtension'
 
     exists <- doesFileExist exe
 
@@ -476,3 +476,6 @@ getExecutablePath' =
 
 lookupEnv' :: String -> IO (Maybe String)
 lookupEnv' k = lookup k <$> getEnvironment
+
+exeExtension' :: FilePath
+exeExtension' = Distribution.Simple.BuildPaths.exeExtension

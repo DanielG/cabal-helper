@@ -49,11 +49,11 @@ guessToolFromGhcPath toolname ghcPath
            path              = ghcPath
            dir               = takeDirectory path
            versionSuffix     = takeVersionSuffix (dropExeExtension path)
-           guessNormal       = dir </> toolname <.> exeExtension
+           guessNormal       = dir </> toolname <.> exeExtension'
            guessGhcVersioned = dir </> (toolname ++ "-ghc" ++ versionSuffix)
-                               <.> exeExtension
+                               <.> exeExtension'
            guessVersioned    = dir </> (toolname ++ versionSuffix)
-                               <.> exeExtension
+                               <.> exeExtension'
            guesses | null versionSuffix = [guessNormal]
                    | otherwise          = [guessGhcVersioned,
                                            guessVersioned,
@@ -70,7 +70,7 @@ guessToolFromGhcPath toolname ghcPath
         dropExeExtension :: FilePath -> FilePath
         dropExeExtension filepath =
           case splitExtension filepath of
-            (filepath', extension) | extension == exeExtension -> filepath'
+            (filepath', extension) | extension == exeExtension' -> filepath'
                                    | otherwise                 -> filepath
 
 -- | @takeWhileEndLE p@ is equivalent to @reverse . takeWhile p . reverse@, but
@@ -81,3 +81,6 @@ takeWhileEndLE p = fst . foldr go ([], False)
     go x (rest, done)
       | not done && p x = (x:rest, False)
       | otherwise = (rest, True)
+
+exeExtension' :: FilePath
+exeExtension' = Distribution.Simple.BuildPaths.exeExtension
