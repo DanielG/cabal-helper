@@ -87,6 +87,14 @@ Test-Suite spec
   Default-Language:    Haskell2010
   Type:                exitcode-stdio-1.0
   Main-Is:             Spec.hs
+  Other-Modules:       CabalHelper.Common
+                       CabalHelper.Compile
+                       CabalHelper.Data
+                       CabalHelper.Log
+                       CabalHelper.Sandbox
+                       CabalHelper.Types
+                       Distribution.Helper
+                       Paths_cabal_helper
   Hs-Source-Dirs:      tests, .
   GHC-Options:         -Wall
   Build-Tools:         cabal
