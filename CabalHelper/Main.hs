@@ -48,10 +48,10 @@ import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(..),
                                            externalPackageDeps,
                                            withComponentsLBI,
                                            withLibLBI)
-#if CABAL_MAJOR == 1 && CABAL_MINOR <= 22
+#if CABAL_MAJOR == 1 && CABAL_MINOR >= 23
+import Distribution.Simple.LocalBuildInfo (localUnitId)
+#elif CABAL_MAJOR == 1 && CABAL_MINOR <= 22
 import Distribution.Simple.LocalBuildInfo (inplacePackageId)
-#else
-import Distribution.Simple.LocalBuildInfo (localComponentId)
 #endif
 
 import Distribution.Simple.GHC (componentGhcOptions)
@@ -413,7 +413,7 @@ removeInplaceDeps v lbi pd clbi = let
     liboutdir = componentOutDir lbi (CLib lib)
     libopts = (componentGhcOptions normal lbi libbi libclbi liboutdir) {
                                       ghcOptPackageDBs = []
-#if CABAL_MAJOR == 1 && CABAL_MINOR > 22
+#if CABAL_MAJOR == 1 && CABAL_MINOR > 22 && CABAL_MINOR < 23
                                     , ghcOptComponentId = NoFlag
 #endif
                                   }
@@ -426,10 +426,11 @@ removeInplaceDeps v lbi pd clbi = let
 
  where
    isInplaceDep :: (InstalledPackageId, PackageId) -> Bool
-#if CABAL_MAJOR == 1 && CABAL_MINOR <= 22
+#if CABAL_MAJOR == 1 && CABAL_MINOR >= 23
+   isInplaceDep (ipid, pid) = localUnitId lbi == ipid
+#elif CABAL_MAJOR == 1 && CABAL_MINOR <= 22
    isInplaceDep (ipid, pid) = inplacePackageId pid == ipid
-#else
-   isInplaceDep (ipid, pid) = localComponentId lbi == ipid
+
 #endif
 
 

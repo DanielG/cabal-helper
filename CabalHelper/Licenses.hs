@@ -33,11 +33,15 @@ type CPackageIndex a = PackageIndex (InstalledPackageInfo_ a)
 type CPackageIndex a = PackageIndex
 #endif
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR > 22
+#if CABAL_MAJOR == 1 && CABAL_MINOR >= 23
+type CInstalledPackageId = UnitId
+lookupInstalledPackageId' = lookupUnitId
+#elif CABAL_MAJOR == 1 && CABAL_MINOR > 22
 type CInstalledPackageId = ComponentId
-lookupInstalledPackageId = lookupComponentId
+lookupInstalledPackageId' = lookupComponentId
 #else
 type CInstalledPackageId = InstalledPackageId
+lookupInstalledPackageId' = lookupInstalledPackageId
 #endif
 
 findTransitiveDependencies
@@ -50,7 +54,7 @@ findTransitiveDependencies pkgIdx set0 = go Set.empty (Set.toList set0)
     go set (q : queue)
         | q `Set.member` set = go set queue
         | otherwise          =
-            case lookupInstalledPackageId pkgIdx q of
+            case lookupInstalledPackageId' pkgIdx q of
                 Nothing  ->
                     -- Not found can mean that the package still needs to be
                     -- installed (e.g. a component of the target cabal package).
@@ -62,7 +66,7 @@ findTransitiveDependencies pkgIdx set0 = go Set.empty (Set.toList set0)
 
 --------------------------------------------------------------------------------
 getDependencyInstalledPackageIds
-    :: LocalBuildInfo -> Set InstalledPackageId
+    :: LocalBuildInfo -> Set CInstalledPackageId
 getDependencyInstalledPackageIds lbi =
     findTransitiveDependencies (installedPkgs lbi) $
       Set.fromList $ map fst $ externalPackageDeps lbi
@@ -71,7 +75,7 @@ getDependencyInstalledPackageIds lbi =
 getDependencyInstalledPackageInfos
     :: LocalBuildInfo -> [InstalledPackageInfo]
 getDependencyInstalledPackageInfos lbi = catMaybes $
-    map (lookupInstalledPackageId pkgIdx) $
+    map (lookupInstalledPackageId' pkgIdx) $
     Set.toList (getDependencyInstalledPackageIds lbi)
   where
     pkgIdx = installedPkgs lbi
