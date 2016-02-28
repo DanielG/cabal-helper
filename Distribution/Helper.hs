@@ -156,7 +156,6 @@ data SomeLocalBuildInfo = SomeLocalBuildInfo {
       slbiGhcMergedPkgOptions :: [String],
       slbiGhcLangOptions      :: [(ChComponentName, [String])],
       slbiPkgLicenses         :: [(String, [(String, Version)])],
-      slbiFlags               :: [(String, Bool)],
       slbiConfigFlags         :: [(String, Bool)],
       slbiNonDefaultConfigFlags :: [(String, Bool)],
       slbiCompilerVersion     :: (String, Version)
@@ -254,7 +253,7 @@ ghcPkgOptions       = Query $ slbiGhcPkgOptions       `liftM` getSlbi
 ghcMergedPkgOptions = Query $ slbiGhcMergedPkgOptions `liftM` getSlbi
 ghcLangOptions      = Query $ slbiGhcLangOptions      `liftM` getSlbi
 pkgLicenses         = Query $ slbiPkgLicenses         `liftM` getSlbi
-flags               = Query $ slbiFlags               `liftM` getSlbi
+flags               = Query $ getFlags
 configFlags         = Query $ slbiConfigFlags         `liftM` getSlbi
 nonDefaultConfigFlags = Query $ slbiNonDefaultConfigFlags `liftM` getSlbi
 compilerVersion     = Query $ slbiCompilerVersion     `liftM` getSlbi
@@ -310,6 +309,11 @@ getPackageId :: MonadQuery m => m (String, Version)
 getPackageId = ask >>= \QueryEnv {..} -> do
   [ Just (ChResponseVersion pkgName pkgVer) ] <- readHelper [ "package-id" ]
   return (pkgName, pkgVer)
+  
+getFlags :: MonadQuery m => m [(String, Bool)]
+getFlags = ask >>= \QueryEnv {..} -> do
+  [ Just (ChResponseFlags fs) ] <- readHelper [ "flags" ]
+  return fs
 
 
 getSomeConfigState :: MonadQuery m => m SomeLocalBuildInfo
@@ -324,7 +328,6 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
          , "ghc-merged-pkg-options"
          , "ghc-lang-options"
          , "licenses"
-         , "flags"
          , "config-flags"
          , "non-default-config-flags"
          , "compiler-version"
@@ -338,14 +341,13 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
         Just (ChResponseList     ghcMergedPkgOpts),
         Just (ChResponseCompList ghcLangOpts),
         Just (ChResponseLicenses pkgLics),
-        Just (ChResponseFlags fls),
         Just (ChResponseFlags cfls),
         Just (ChResponseFlags ndcfls),
         Just (ChResponseVersion comp compVer)
         ] = res
 
   return $ SomeLocalBuildInfo
-    pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts pkgLics fls cfls ndcfls (comp, compVer)
+    pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts pkgLics cfls ndcfls (comp, compVer)
 
 prepare :: MonadIO m
         => (FilePath -> [String] -> String -> IO String)

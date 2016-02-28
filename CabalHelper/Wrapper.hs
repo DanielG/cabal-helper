@@ -16,6 +16,7 @@
 {-# LANGUAGE RecordWildCards, FlexibleContexts #-}
 module Main where
 
+import Control.Arrow ((&&&))
 import Control.Applicative
 import Control.Monad
 import Data.Char
@@ -36,6 +37,10 @@ import Prelude
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
 import Distribution.Verbosity (silent, deafening)
+import Distribution.PackageDescription (FlagName(..),
+                                        flagDefault,
+                                        flagName,
+                                        genPackageFlags)
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.Package (packageName, packageVersion)
 
@@ -127,6 +132,16 @@ main = handlePanic $ do
       gpd <- readPackageDescription v (projdir </> cfile)
       putStrLn $ show $
         [Just $ ChResponseVersion (display (packageName gpd)) (packageVersion gpd)]
+
+    projdir:_distdir:"flags":[] -> do
+      v <- maybe silent (const deafening) . lookup  "GHC_MOD_DEBUG" <$> getEnvironment
+      -- ghc-mod will catch multiple cabal files existing before we get here
+      [cfile] <- filter isCabalFile <$> getDirectoryContents projdir
+      gpd <- readPackageDescription v (projdir </> cfile)
+      let flagName' = unFlagName' . flagName
+          unFlagName' (FlagName n) = n
+      putStrLn $ show $
+        [Just $ ChResponseFlags $ sort $ (map (flagName' &&& flagDefault) $ genPackageFlags gpd)]
 
     projdir:distdir:args' -> do
       cfgf <- canonicalizePath (distdir </> "setup-config")
