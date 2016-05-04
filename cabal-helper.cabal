@@ -49,7 +49,7 @@ library
   default-language:    Haskell2010
   GHC-Options:         -Wall
   Build-Depends:       base >= 4.5 && < 5
-                     , Cabal >= 1.14 && < 1.24
+                     , Cabal >= 1.14 && < 1.25
                      , directory
                      , filepath
                      , transformers
@@ -73,7 +73,7 @@ Executable cabal-helper-wrapper
   X-Install-Target:    $libexecdir
   Build-Depends:       base >= 4.5 && < 5
                      , bytestring
-                     , Cabal >= 1.14 && < 1.24
+                     , Cabal >= 1.14 && < 1.25
                      , directory
                      , filepath
                      , process
@@ -82,6 +82,22 @@ Executable cabal-helper-wrapper
                      , temporary
                      , utf8-string
                      , ghc-prim
+
+Executable cabal-helper-main
+  if flag(dev)
+    Buildable:         True
+  else
+    Buildable:         False
+  Default-Language:    Haskell98
+  Main-Is:             CabalHelper/Main.hs
+  Other-Modules:
+  GHC-Options:         -Wall -fno-warn-unused-imports -optP-DCABAL_MAJOR=1 -optP-DCABAL_MINOR=24 -optP-DCABAL_HELPER=1 -optP-DCABAL_HELPER_DEV=1
+  Build-Depends:       base
+                     , Cabal
+                     , containers
+                     , bytestring
+                     , filepath
+                     , directory
 
 Test-Suite spec
   Default-Language:    Haskell2010
@@ -102,7 +118,7 @@ Test-Suite spec
                      , cabal-helper
                      , extra
                      , unix
-                     , Cabal >= 1.14 && < 1.24
+                     , Cabal >= 1.14 && < 1.25
                      , directory
                      , filepath
                      , transformers
@@ -113,3 +129,8 @@ Test-Suite spec
                      , utf8-string
                      , template-haskell
                      , temporary
+
+flag dev
+  description: Build development components
+  default:     False
+  manual:      True

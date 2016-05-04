@@ -14,7 +14,7 @@
 -- You should have received a copy of the GNU Affero General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-{-# LANGUAGE CPP, BangPatterns, RecordWildCards #-}
+{-# LANGUAGE CPP, BangPatterns, RecordWildCards, RankNTypes #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-}
 import Distribution.Simple.Utils (cabalVersion)
 import Distribution.Simple.Configure
@@ -441,11 +441,19 @@ nubPackageFlags opts = opts
 nubPackageFlags opts = opts { ghcOptPackages = nub $ ghcOptPackages opts }
 #endif
 
+renderGhcOptions' :: LocalBuildInfo
+                  -> Verbosity
+                  -> GhcOptions
+                  -> IO [String]
 renderGhcOptions' lbi v opts = do
 #if CABAL_MAJOR == 1 && CABAL_MINOR < 20
   (ghcProg, _) <- requireProgram v ghcProgram (withPrograms lbi)
   let Just ghcVer = programVersion ghcProg
   return $ renderGhcOptions ghcVer opts
-#else
+#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 22 && CABAL_MINOR < 24
+-- && CABAL_MINOR < 24
   return $ renderGhcOptions (compiler lbi) opts
+#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 24
+--  CABAL_MAJOR == 1 && CABAL_MINOR >= 24
+  return $ renderGhcOptions (compiler lbi) (hostPlatform lbi) opts
 #endif

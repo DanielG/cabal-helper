@@ -23,9 +23,12 @@ import Distribution.Simple.Configure
 import Distribution.Simple.LocalBuildInfo
 import Distribution.Simple.PackageIndex
 import Distribution.Text
+import Distribution.ModuleName
 --------------------------------------------------------------------------------
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR >  22
+
+
+#if CABAL_MAJOR == 1 && CABAL_MINOR > 22
 type CPackageIndex a = PackageIndex (InstalledPackageInfo)
 #elif CABAL_MAJOR == 1 && CABAL_MINOR >= 22
 type CPackageIndex a = PackageIndex (InstalledPackageInfo_ a)
@@ -35,6 +38,7 @@ type CPackageIndex a = PackageIndex
 
 #if CABAL_MAJOR == 1 && CABAL_MINOR >= 23
 type CInstalledPackageId = UnitId
+lookupInstalledPackageId' :: PackageIndex a -> UnitId -> Maybe a
 lookupInstalledPackageId' = lookupUnitId
 #elif CABAL_MAJOR == 1 && CABAL_MINOR > 22
 type CInstalledPackageId = ComponentId
@@ -45,7 +49,7 @@ lookupInstalledPackageId' = lookupInstalledPackageId
 #endif
 
 findTransitiveDependencies
-    :: CPackageIndex a
+    :: CPackageIndex Distribution.ModuleName.ModuleName
     -> Set CInstalledPackageId
     -> Set CInstalledPackageId
 findTransitiveDependencies pkgIdx set0 = go Set.empty (Set.toList set0)
@@ -86,16 +90,16 @@ groupByLicense
     :: [InstalledPackageInfo]
     -> [(License, [InstalledPackageInfo])]
 groupByLicense = foldl'
-    (\assoc ipi -> insert (license ipi) ipi assoc) []
+    (\assoc ipi -> insertAList (license ipi) ipi assoc) []
   where
     -- 'Cabal.License' doesn't have an 'Ord' instance so we need to use an
     -- association list instead of 'Map'. The number of licenses probably won't
     -- exceed 100 so I think we're alright.
-    insert :: Eq k => k -> v -> [(k, [v])] -> [(k, [v])]
-    insert k v []   = [(k, [v])]
-    insert k v ((k', vs) : kvs)
+    insertAList :: Eq k => k -> v -> [(k, [v])] -> [(k, [v])]
+    insertAList k v []   = [(k, [v])]
+    insertAList k v ((k', vs) : kvs)
         | k == k'   = (k, v : vs) : kvs
-        | otherwise = (k', vs) : insert k v kvs
+        | otherwise = (k', vs) : insertAList k v kvs
 
 
 --------------------------------------------------------------------------------
