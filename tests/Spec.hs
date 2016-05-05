@@ -14,6 +14,7 @@ import CabalHelper.Common
 import CabalHelper.Compile
 import CabalHelper.Types
 
+
 main :: IO ()
 main = do
   flip (setEnv "HOME") True =<< fromMaybe "/tmp" <$> lookupEnv "TMPDIR"
@@ -21,8 +22,11 @@ main = do
 
   writeAutogenFiles' $ defaultQueryEnv "." "./dist"
 
-  let vers :: [(Version, [Version])]
-      vers = map (parseVer *** map parseVer) [
+  let parseVer' "HEAD" = Left HEAD
+      parseVer' v = Right $ parseVer v
+
+  let vers :: [(Version, [Either HEAD Version])]
+      vers = map (parseVer *** map parseVer') [
                ("7.4", [ -- "1.14.0" -- not supported at runtime
                        ]),
 
@@ -57,6 +61,7 @@ main = do
                        , "1.22.4.0"
                        , "1.22.5.0"
                        , "1.22.6.0"
+                       , "HEAD"
                        ]),
                ("8.0", [
                        ])
@@ -64,7 +69,7 @@ main = do
 
   ghcVer <- majorVer <$> ghcVersion defaultOptions
 
-  let cabalVers = concat $ map snd $ dropWhile ((<ghcVer) . fst)  vers
+  let cabalVers = reverse $ concat $ map snd $ dropWhile ((<ghcVer) . fst) vers
 
   rvs <- mapM compilePrivatePkgDb cabalVers
 
@@ -75,16 +80,28 @@ main = do
    isLeft' (Left _) = True
    isLeft' (Right _) = False
 
-compilePrivatePkgDb :: Version -> IO (Either ExitCode FilePath)
-compilePrivatePkgDb cabalVer = do
+data HEAD = HEAD deriving (Show)
+
+compilePrivatePkgDb :: Either HEAD Version -> IO (Either ExitCode FilePath)
+compilePrivatePkgDb (Left HEAD) = do
     _ <- rawSystem "rm" [ "-r", "/tmp/.ghc-mod" ]
-    db <- installCabal defaultOptions cabalVer `E.catch`
-          \(SomeException _) -> errorInstallCabal cabalVer "dist"
-    compileWithPkg "." (Just db) cabalVer
+    (db, commit) <- installCabalHEAD defaultOptions { verbose = True } `E.catch`
+        \(SomeException ex) -> error $ "Inslling cabal HEAD failed: " ++ show ex
+    compileWithPkg "." (Just db) (Left commit)
+compilePrivatePkgDb (Right cabalVer) = do
+    _ <- rawSystem "rm" [ "-r", "/tmp/.ghc-mod" ]
+    db <- installCabal defaultOptions { verbose = True } cabalVer `E.catch`
+        \(SomeException _) -> errorInstallCabal cabalVer "dist"
+    compileWithPkg "." (Just db) (Right cabalVer)
 
-compileWithPkg :: FilePath -> Maybe FilePath -> Version -> IO (Either ExitCode FilePath)
+compileWithPkg :: FilePath
+               -> Maybe FilePath
+               -> Either String Version
+               -> IO (Either ExitCode FilePath)
 compileWithPkg chdir mdb ver =
-    compile "dist" defaultOptions $ Compile chdir Nothing mdb ver [cabalPkgId ver]
+    compile "dist" defaultOptions { verbose = True } $
+      Compile chdir Nothing mdb ver [cabalPkgId ver]
 
-cabalPkgId :: Version -> String
-cabalPkgId v = "Cabal-" ++ showVersion v
+cabalPkgId :: Either String Version -> String
+cabalPkgId (Left _commitid) = "Cabal"
+cabalPkgId (Right v) = "Cabal-" ++ showVersion v
