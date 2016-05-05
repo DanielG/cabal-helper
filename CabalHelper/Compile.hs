@@ -167,9 +167,9 @@ compile distdir opts@Options {..} Compile {..} = do
     vLog opts $ "outdir: " ++ outdir
     vLog opts $ "exedir: " ++ exedir
 
-    let (mj, mi) = case compCabalVersion of
-                     Left _commitid -> (1, 10000)
-                     Right (Version (x:y:_) _) -> (x, y)
+    let (mj:mi:_) = case compCabalVersion of
+                     Left _commitid -> [1, 10000]
+                     Right (Version vs _) -> vs
     let ghc_opts =
              concat [
           [ "-outputdir", outdir
@@ -370,7 +370,7 @@ unpackCabalHEAD tmpdir = do
   let dir = tmpdir </> "cabal-head.git"
       url = "https://github.com/haskell/cabal.git"
   ExitSuccess <- rawSystem "git" [ "clone", "--depth=1", url, dir]
-  commit <- trim <$> readProcess "git" ["rev-parse", "HEAD"] ""
+  commit <- trim <$> readProcess "git" ["-C", dir, "rev-parse", "HEAD"] ""
   return (dir </> "Cabal", commit)
 
 errorInstallCabal :: Version -> FilePath -> a

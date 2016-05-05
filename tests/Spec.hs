@@ -86,7 +86,7 @@ compilePrivatePkgDb :: Either HEAD Version -> IO (Either ExitCode FilePath)
 compilePrivatePkgDb (Left HEAD) = do
     _ <- rawSystem "rm" [ "-r", "/tmp/.ghc-mod" ]
     (db, commit) <- installCabalHEAD defaultOptions { verbose = True } `E.catch`
-        \(SomeException ex) -> error $ "Inslling cabal HEAD failed: " ++ show ex
+        \(SomeException ex) -> error $ "Installing cabal HEAD failed: " ++ show ex
     compileWithPkg "." (Just db) (Left commit)
 compilePrivatePkgDb (Right cabalVer) = do
     _ <- rawSystem "rm" [ "-r", "/tmp/.ghc-mod" ]

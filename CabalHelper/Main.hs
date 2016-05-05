@@ -204,8 +204,7 @@ main = do
       return $ Just $ ChResponseFlags $ sort nonDefaultFlags
 
     "write-autogen-files":[] -> do
-       -- calls writeAutogenFiles
-      initialBuildSteps distdir pd lbi v
+      initialBuildStepsForAllComponents distdir pd lbi v
       return Nothing
 
     "compiler-version":[] -> do
@@ -328,6 +327,8 @@ componentsMap lbi v distdir f = do
 
     lr <- newIORef []
 
+    -- withComponentsLBI is deprecated but also exists in very old versions
+    -- it's equivalent to withAllComponentsInBuildOrder in newer versions
     withComponentsLBI pd lbi $ \c clbi -> do
         let bi = componentBuildInfo c
             name = componentNameFromComponent c
@@ -354,12 +355,20 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
 componentOptions (lbi, v, distdir) inplaceFlag flags f =
     componentOptions' (lbi, v, distdir) inplaceFlag flags renderGhcOptions' f
 
-componentNameToCh CLibName = ChLibName
+#if CABAL_MAJOR == 1 && CABAL_MINOR < 25
+componentNameToCh CLibName = ChLibName ""
+#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 25
+componentNameToCh (CLibName n) = ChLibName n
+#endif
 componentNameToCh (CExeName n) = ChExeName n
 componentNameToCh (CTestName n) = ChTestName n
 componentNameToCh (CBenchName n) = ChBenchName n
 
+#if CABAL_MAJOR == 1 && CABAL_MINOR < 25
 componentNameFromComponent (CLib Library {}) = CLibName
+#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 25
+componentNameFromComponent (CLib Library {..}) = CLibName libName
+#endif
 componentNameFromComponent (CExe Executable {..}) = CExeName exeName
 componentNameFromComponent (CTest TestSuite {..}) = CTestName testName
 componentNameFromComponent (CBench Benchmark {..}) = CBenchName benchmarkName
@@ -450,10 +459,20 @@ renderGhcOptions' lbi v opts = do
   (ghcProg, _) <- requireProgram v ghcProgram (withPrograms lbi)
   let Just ghcVer = programVersion ghcProg
   return $ renderGhcOptions ghcVer opts
-#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 22 && CABAL_MINOR < 24
+#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 20 && CABAL_MINOR < 24
 -- && CABAL_MINOR < 24
   return $ renderGhcOptions (compiler lbi) opts
 #elif CABAL_MAJOR == 1 && CABAL_MINOR >= 24
 --  CABAL_MAJOR == 1 && CABAL_MINOR >= 24
   return $ renderGhcOptions (compiler lbi) (hostPlatform lbi) opts
+#endif
+
+
+#if CABAL_MAJOR == 1 && CABAL_MINOR < 25
+initialBuildStepsForAllComponents distdir pd lbi v =
+  initialBuildSteps distdir pd lbi v
+#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 25
+initialBuildStepsForAllComponents distdir pd lbi v =
+  withComponentsLBI pd lbi $ \_c clbi ->
+    initialBuildSteps distdir pd lbi clbi v
 #endif
