@@ -86,9 +86,6 @@ compileHelper opts cabalVer projdir distdir = withHelperSources $ \chdir -> do
    -- | Check if this version is globally available
    compileGlobal :: FilePath -> MaybeT IO (Either ExitCode FilePath)
    compileGlobal chdir = do
-      -- TODO: add option to let user specify custom package-db, relevant when
-      -- using a Cabal compiled from git!
-
        ver <- MaybeT $ find (== cabalVer) <$> listCabalVersions opts
        vLog opts $ logMsg ++ "user/global package-db"
        liftIO $ compileWithPkg chdir Nothing ver
