@@ -114,10 +114,10 @@ Test-Suite spec
                      , template-haskell
                      , temporary
 
-custom-setup
-  setup-depends: base,
-                 Cabal,
-                 filepath
+-- custom-setup
+--   setup-depends: base,
+--                  Cabal,
+--                  filepath
 
 -- TODO: Use cabal_macros.h to replace -D flags by including it in
 -- CabalHelper.Data
