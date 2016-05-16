@@ -1,5 +1,5 @@
 name:                cabal-helper
-version:             0.7.0.1
+version:             0.7.1.0
 synopsis:            Simple interface to some of Cabal's configuration state used by ghc-mod
 description:
     @cabal-helper@ provides a library which wraps the internal use of an
@@ -57,7 +57,7 @@ library
                      , process
                      , ghc-prim
 
-Executable cabal-helper-wrapper
+Executable cabal-helper-wrapper-v0.7
   Default-Language:    Haskell2010
   Other-Extensions:    TemplateHaskell
   Main-Is:             CabalHelper/Wrapper.hs

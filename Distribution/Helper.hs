@@ -95,7 +95,7 @@ import Text.Printf
 import GHC.Generics
 import Prelude
 
-import Paths_cabal_helper (getLibexecDir)
+import Paths_cabal_helper (getLibexecDir, version)
 import CabalHelper.Types hiding (Options(..))
 import CabalHelper.Sandbox
 
@@ -295,7 +295,7 @@ invokeHelper QueryEnv {..} args = do
                  , "--with-ghc-pkg=" ++ ghcPkgProgram qePrograms
                  , "--with-cabal="   ++ cabalProgram qePrograms
                  ]
-  exe  <- findLibexecExe "cabal-helper-wrapper"
+  exe  <- findLibexecExe
   let args' = progArgs ++ qeProjectDir:qeDistDir:args
   out <- qeReadProcess exe args' ""
   (Right <$> evaluate out) `E.catch` \(SomeException _) ->
@@ -353,7 +353,7 @@ prepare :: MonadIO m
         -> FilePath
         -> m ()
 prepare readProc projdir distdir = liftIO $ do
-  exe  <- findLibexecExe "cabal-helper-wrapper"
+  exe  <- findLibexecExe
   void $ readProc exe [projdir, distdir] ""
 
 {-# DEPRECATED prepare
@@ -374,7 +374,7 @@ writeAutogenFiles :: MonadIO m
                   -- ^ Path to the @dist/@ directory
                   -> m ()
 writeAutogenFiles readProc projdir distdir = liftIO $ do
-  exe  <- findLibexecExe "cabal-helper-wrapper"
+  exe  <- findLibexecExe
   void $ readProc exe [projdir, distdir, "write-autogen-files"] ""
 
 {-# DEPRECATED writeAutogenFiles
@@ -398,7 +398,7 @@ getSandboxPkgDb readProc =
 
 buildPlatform :: (FilePath -> [String] -> String -> IO String) -> IO String
 buildPlatform readProc = do
-  exe  <- findLibexecExe "cabal-helper-wrapper"
+  exe  <- findLibexecExe
   CabalHelper.Sandbox.dropWhileEnd isSpace <$> readProc exe ["print-build-platform"] ""
 
 -- | This exception is thrown by all 'runQuery' functions if the internal
@@ -412,10 +412,11 @@ instance Show LibexecNotFoundError where
   show (LibexecNotFoundError exe dir) =
     libexecNotFoundError exe dir "https://github.com/DanielG/cabal-helper/issues"
 
-findLibexecExe :: String -> IO FilePath
-findLibexecExe "cabal-helper-wrapper" = do
+findLibexecExe :: IO FilePath
+findLibexecExe = do
     libexecdir <- getLibexecDir
-    let exeName = "cabal-helper-wrapper"
+    let Version (mj:mi:_) _ = version
+        exeName = "cabal-helper-wrapper-v" ++ show mj ++ "." ++ show mi
         exe = libexecdir </> exeName <.> exeExtension'
 
     exists <- doesFileExist exe
@@ -429,7 +430,6 @@ findLibexecExe "cabal-helper-wrapper" = do
                error $ throw $ LibexecNotFoundError exeName libexecdir
            Just dir ->
                return $ dir </> "dist" </> "build" </> exeName </> exeName
-findLibexecExe exe = error $ "findLibexecExe: Unknown executable: " ++ exe
 
 tryFindCabalHelperTreeLibexecDir :: IO (Maybe FilePath)
 tryFindCabalHelperTreeLibexecDir = do
