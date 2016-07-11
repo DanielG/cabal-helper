@@ -1,5 +1,9 @@
 {-# LANGUAGE CPP #-}
-module CabalHelper.Licenses where
+module CabalHelper.Licenses (
+    displayDependencyLicenseList
+  , groupByLicense
+  , getDependencyInstalledPackageInfos
+  ) where
 
 -- Copyright (c) 2014, Jasper Van der Jeugt <m@jaspervdj.be>
 
