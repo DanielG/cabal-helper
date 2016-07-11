@@ -306,10 +306,10 @@ getLibrary pd = unsafePerformIO $ do
   readIORef lr
 
 getLibraryClbi pd lbi = unsafePerformIO $ do
-  lr <- newIORef (error "getLibraryClbi: empty IORef")
+  lr <- newIORef Nothing
 
   withLibLBI pd lbi $ \ lib clbi ->
-      writeIORef lr (lib,clbi)
+      writeIORef lr $ Just (lib,clbi)
 
   readIORef lr
 
@@ -417,21 +417,26 @@ removeInplaceDeps :: Verbosity
                   -> ComponentLocalBuildInfo
                   -> (ComponentLocalBuildInfo, GhcOptions)
 removeInplaceDeps v lbi pd clbi = let
-    (lib, libclbi) = getLibraryClbi pd lbi
-    libbi = libBuildInfo lib
-    liboutdir = componentOutDir lbi (CLib lib)
-    libopts = (componentGhcOptions normal lbi libbi libclbi liboutdir) {
-                                      ghcOptPackageDBs = []
-#if CABAL_MAJOR == 1 && CABAL_MINOR > 22 && CABAL_MINOR < 23
-                                    , ghcOptComponentId = NoFlag
-#endif
-                                  }
-
     (ideps, deps) = partition isInplaceDep (componentPackageDeps clbi)
     hasIdeps = not $ null ideps
+    libopts =
+      case getLibraryClbi pd lbi of
+        Just (lib, libclbi) | hasIdeps ->
+          let
+            libbi = libBuildInfo lib
+            liboutdir = componentOutDir lbi (CLib lib)
+          in
+            (componentGhcOptions normal lbi libbi libclbi liboutdir) {
+                ghcOptPackageDBs = []
+#if CABAL_MAJOR == 1 && CABAL_MINOR > 22 && CABAL_MINOR < 23
+              , ghcOptComponentId = NoFlag
+#endif
+
+            }
+        _ -> mempty
     clbi' = clbi { componentPackageDeps = deps }
 
-  in (clbi', if hasIdeps then libopts else mempty)
+  in (clbi', libopts)
 
  where
    isInplaceDep :: (InstalledPackageId, PackageId) -> Bool
