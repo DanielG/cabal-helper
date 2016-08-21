@@ -120,7 +120,7 @@ usage = do
      ++"  ) ...\n"
 
 commands :: [String]
-commands = [ "print-bli"
+commands = [ "print-lbi"
            , "package-id"
            , "flags"
            , "config-flags"
