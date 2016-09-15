@@ -29,6 +29,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
 import System.Environment
 import System.IO
+import qualified System.Info
 import System.Exit
 import System.Directory
 import System.FilePath
@@ -84,8 +85,19 @@ runReadP p i = case filter ((=="") . snd) $ readP_to_S p i of
                  (a,""):[] -> a
                  _ -> error $ "Error parsing: " ++ show i
 
-appDataDir :: IO FilePath
-appDataDir = (</> "cabal-helper") <$> getAppUserDataDirectory "ghc-mod"
+appCacheDir :: IO FilePath
+appCacheDir =
+    (</> "ghc-mod") <$> getEnvDefault "XDG_CACHE_HOME" (homeRel cache)
+ where
+    getEnvDefault var def = lookupEnv var >>= \m -> case m of Nothing -> def; Just x -> return x
+    homeRel path = (</> path) <$> getHomeDirectory
+    cache =
+        case System.Info.os of
+          "mingw32" -> windowsCache
+          _         -> unixCache
+
+    windowsCache = "Local Settings" </> "Cache"
+    unixCache = ".cache"
 
 isCabalFile :: FilePath -> Bool
 isCabalFile f = takeExtension' f == ".cabal"

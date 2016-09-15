@@ -51,7 +51,7 @@ usage = do
   hPutStr stderr $ "Usage: " ++ prog ++ " " ++ usageMsg
  where
    usageMsg = "\
-\( print-appdatadir\n\
+\( print-appcachedir\n\
 \| print-build-platform\n\
 \| [--verbose]\n\
 \  [--with-ghc=GHC_PATH]\n\
@@ -124,7 +124,8 @@ main = handlePanic $ do
     [] -> usage
     "help":[] -> usage
     "version":[] -> putStrLn $ showVersion version
-    "print-appdatadir":[] -> putStrLn =<< appDataDir
+    "print-appdatadir":[] -> putStrLn =<< appCacheDir
+    "print-appcachedir":[] -> putStrLn =<< appCacheDir
     "print-build-platform":[] -> putStrLn $ display buildPlatform
 
     projdir:_distdir:"package-id":[] -> do
