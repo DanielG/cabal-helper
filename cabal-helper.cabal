@@ -34,7 +34,8 @@ maintainer:          dxld@darkboxed.org
 category:            Distribution
 build-type:          Custom
 cabal-version:       >=1.10
-extra-source-files:  CabalHelper/Main.hs
+extra-source-files:  README.md
+                     CabalHelper/Main.hs
                      CabalHelper/Licenses.hs
 
 source-repository head
