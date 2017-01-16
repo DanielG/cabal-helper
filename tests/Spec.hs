@@ -45,11 +45,13 @@ main = do
                        , "1.18.1.4"
                        , "1.18.1.5"
                        , "1.18.1.6"
+                       , "1.18.1.7"
 
                        , "1.20.0.0"
                        , "1.20.0.1"
                        , "1.20.0.2"
                        , "1.20.0.3"
+                       , "1.20.0.4"
                        , "1.22.0.0"
                        , "1.22.1.0"
                        , "1.22.1.1"
@@ -66,7 +68,9 @@ main = do
                        ]),
                ("8.0", [
                          "1.24.0.0"
-                       , "HEAD"
+                       , "1.24.1.0"
+                       , "1.24.2.0"
+--                       , "HEAD"
                        ])
              ]
 
@@ -76,25 +80,38 @@ main = do
 
   rvs <- mapM compilePrivatePkgDb cabalVers
 
-  if any isLeft' rvs
-     then print rvs >> exitFailure
+  let printStatus (cv, rv) = putStrLn $ "- Cabal "++show cv++" "++status
+        where status = case rv of
+                         Right _ ->
+                             "suceeded"
+                         Left (ExitFailure rvc) ->
+                             "failed (exit code "++show rvc++")"
+
+  let drvs = cabalVers `zip` rvs
+
+  mapM printStatus (cabalVers `zip` rvs)
+  if any isLeft' $ map snd $ filter ((/=Left HEAD) . fst) drvs
+     then exitFailure
      else exitSuccess
+
  where
    isLeft' (Left _) = True
    isLeft' (Right _) = False
 
-data HEAD = HEAD deriving (Show)
+data HEAD = HEAD deriving (Eq, Show)
 
 compilePrivatePkgDb :: Either HEAD Version -> IO (Either ExitCode FilePath)
 compilePrivatePkgDb (Left HEAD) = do
     _ <- rawSystem "rm" [ "-r", "/tmp/.ghc-mod" ]
     (db, commit) <- installCabalHEAD defaultOptions { verbose = True } `E.catch`
-        \(SomeException ex) -> error $ "Installing cabal HEAD failed: " ++ show ex
+        \(SomeException ex) ->
+            error $ "Installing cabal HEAD failed: " ++ show ex
     compileWithPkg "." (Just db) (Left commit)
 compilePrivatePkgDb (Right cabalVer) = do
     _ <- rawSystem "rm" [ "-r", "/tmp/.ghc-mod" ]
     db <- installCabal defaultOptions { verbose = True } cabalVer `E.catch`
-        \(SomeException _) -> errorInstallCabal cabalVer "dist"
+        \(SomeException _) ->
+            errorInstallCabal cabalVer "dist"
     compileWithPkg "." (Just db) (Right cabalVer)
 
 compileWithPkg :: FilePath

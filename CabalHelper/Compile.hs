@@ -308,10 +308,17 @@ patchyCabalVersions = [
     ( [ Version [1,18,1] [] ]
     , fixArrayConstraint
     ),
+
+
     ( [ Version [1,18,0] [] ]
     , \dir -> do
         fixArrayConstraint dir
         fixOrphanInstance dir
+    ),
+
+    -- just want the pristine version
+    ( [ Version [1,24,1,0] [] ]
+    , \_ -> return ()
     )
   ]
  where
@@ -359,7 +366,8 @@ unpackCabal ::
 unpackCabal opts cabalVer tmpdir = do
   let cabal = "Cabal-" ++ showVersion cabalVer
       dir = tmpdir </> cabal
-  callProcessStderr (Just tmpdir) (cabalProgram opts) [ "get", cabal ]
+  callProcessStderr (Just tmpdir) (cabalProgram opts)
+                    [ "get", "--pristine", cabal ]
   return dir
 
 unpackCabalHEAD :: FilePath -> IO (FilePath, String)
