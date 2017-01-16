@@ -84,12 +84,12 @@ main = do
         where status = case rv of
                          Right _ ->
                              "suceeded"
-                         Left (ExitFailure rvc) ->
+                         Left rvc ->
                              "failed (exit code "++show rvc++")"
 
   let drvs = cabalVers `zip` rvs
 
-  mapM printStatus (cabalVers `zip` rvs)
+  mapM_ printStatus (cabalVers `zip` rvs)
   if any isLeft' $ map snd $ filter ((/=Left HEAD) . fst) drvs
      then exitFailure
      else exitSuccess
