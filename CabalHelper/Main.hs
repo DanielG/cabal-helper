@@ -183,10 +183,6 @@ main = do
 
   print =<< flip mapM cmds $$ \cmd -> do
   case cmd of
-    "flags":[] -> do
-      return $ Just $ ChResponseFlags $ sort $
-        map (flagName' &&& flagDefault) $ genPackageFlags gpd
-
     "config-flags":[] -> do
       return $ Just $ ChResponseFlags $ sort $
         map (first unFlagName') $ configConfigurationsFlags $ configFlags lbi
