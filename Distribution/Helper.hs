@@ -415,8 +415,7 @@ instance Show LibexecNotFoundError where
 findLibexecExe :: IO FilePath
 findLibexecExe = do
     libexecdir <- getLibexecDir
-    let Version (mj:mi:_) _ = version
-        exeName = "cabal-helper-wrapper-v" ++ show mj ++ "." ++ show mi
+    let exeName = "cabal-helper-wrapper"
         exe = libexecdir </> exeName <.> exeExtension'
 
     exists <- doesFileExist exe

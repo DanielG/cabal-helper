@@ -58,7 +58,7 @@ library
                      , process       < 1.5  && >= 1.1.0.1
                      , ghc-prim
 
-Executable cabal-helper-wrapper-v0.7
+Executable cabal-helper-wrapper
   Default-Language:    Haskell2010
   Other-Extensions:    TemplateHaskell
   Main-Is:             CabalHelper/Wrapper.hs
@@ -71,7 +71,7 @@ Executable cabal-helper-wrapper-v0.7
                        CabalHelper.Log
                        CabalHelper.Sandbox
   GHC-Options:         -Wall
-  X-Install-Target:    $libexecdir
+  x-internal:          True
   Build-Depends:       base             < 5    && >= 4.5
                      , Cabal            < 1.26 && >= 1.14
                      , bytestring       < 0.11 && >= 0.9.2.1

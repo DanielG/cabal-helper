@@ -1,26 +1,46 @@
 #!/usr/bin/env runhaskell
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards, NamedFieldPuns #-}
 import Distribution.Simple
+import Distribution.Simple.Utils
 import Distribution.Simple.Setup
 import Distribution.Simple.Install
 import Distribution.Simple.Register
-import Distribution.Simple.InstallDirs as ID
+import Distribution.Simple.BuildPaths
+import qualified Distribution.Simple.InstallDirs as ID
 import Distribution.Simple.LocalBuildInfo
 import Distribution.Simple.Program
 import Distribution.PackageDescription
 
+import qualified Data.Map as M
+import Data.Map (Map)
+
+import Control.Arrow
 import Control.Applicative
 import Control.Monad
 import Data.List
 import Data.Maybe
+import Data.Version
+import Data.Monoid
+import System.Process
+import System.Exit
 import System.FilePath
+import System.Directory (renameFile)
 
 main :: IO ()
 main = defaultMainWithHooks $ simpleUserHooks {
-         instHook = inst,
-         copyHook = copy,
-         hookedPrograms = [ simpleProgram "cabal" ]
-       }
+   instHook = inst,
+   copyHook = copy,
+   buildHook = \pd lbi hooks flags -> (buildHook simpleUserHooks) pd (patchLibexecdir lbi) hooks flags,
+   hookedPrograms = [ simpleProgram "cabal" ]
+ }
+
+patchLibexecdir :: LocalBuildInfo -> LocalBuildInfo
+patchLibexecdir lbi = let
+    idirtpl     = installDirTemplates lbi
+    libexecdir' = toPathTemplate $ fromPathTemplate (libexecdir idirtpl) </> "$abi/$pkgid"
+    lbi' = lbi { installDirTemplates = idirtpl { libexecdir = libexecdir' } }
+  in
+    lbi'
 
 -- mostly copypasta from 'defaultInstallHook'
 inst ::
@@ -31,7 +51,7 @@ inst pd lbi _uf ifl = do
                       copyDest       = toFlag NoCopyDest,
                       copyVerbosity  = installVerbosity ifl
                   }
-  xInstallTarget pd lbi (\pd' lbi' -> install pd' lbi' copyFlags)
+  xInstallTarget pd lbi copyFlags (\pd' lbi' -> install pd' lbi' copyFlags)
   let registerFlags = defaultRegisterFlags {
                           regDistPref  = installDistPref ifl,
                           regInPlace   = installInPlace ifl,
@@ -42,58 +62,44 @@ inst pd lbi _uf ifl = do
 
 copy :: PackageDescription -> LocalBuildInfo -> UserHooks -> CopyFlags -> IO ()
 copy pd lbi _uh cf =
-    xInstallTarget pd lbi (\pd' lbi' -> install pd' lbi' cf)
-
-
+    xInstallTarget pd lbi cf (\pd' lbi' -> install pd' lbi' cf)
 
 xInstallTarget :: PackageDescription
                -> LocalBuildInfo
+               -> CopyFlags
                -> (PackageDescription -> LocalBuildInfo -> IO ())
                -> IO ()
-xInstallTarget pd lbi fn = do
-  let (extended, regular) = partition (isJust . installTarget) (executables pd)
+xInstallTarget pd lbi cf fn = do
+  let (extended, regular) = partition isInternal (executables pd)
 
   let pd_regular = pd { executables = regular }
 
   _ <- flip mapM extended $ \exe -> do
-    putStrLn $ "extended "  ++ show (exeName exe)
 
-    let
-        idirtpl          = installDirTemplates lbi
-        env              = installDirsTemplateEnv idirtpl
-        libexecdir'      = fromPathTemplate (libexecdir idirtpl)
+    let pd_extended = onlyExePackageDesc [exe] pd
 
-        pd_extended      = onlyExePackageDesc [exe] pd
-        install_target   = fromJust $ installTarget exe
-        install_target'  = ID.substPathTemplate env install_target
-        -- $libexec isn't a real thing :/ so we have to simulate it
-        install_target'' = substLibExec' libexecdir' install_target'
+    fn pd_extended lbi
 
-    let lbi' = lbi {
-                 installDirTemplates =
-                     (installDirTemplates lbi) {
-                   bindir = install_target''
-                 }
-               }
-    fn pd_extended lbi'
+    let lbi' = patchLibexecdir lbi
+        copydest  = fromFlag (copyDest cf)
+        verbosity = fromFlag (copyVerbosity cf)
+        InstallDirs { bindir, libexecdir } = absoluteInstallDirs pd lbi' copydest
+        progprefix = substPathTemplate (packageId pd) lbi (progPrefix lbi)
+        progsuffix = substPathTemplate (packageId pd) lbi (progSuffix lbi)
+        fixedExeBaseName = progprefix ++ exeName exe ++ progsuffix
+
+        fixedExeFileName = bindir </> fixedExeBaseName <.> exeExtension
+        newExeFileName   = libexecdir </> fixedExeBaseName <.> exeExtension
+
+    createDirectoryIfMissingVerbose verbosity True libexecdir
+    renameFile fixedExeFileName newExeFileName
 
   fn pd_regular lbi
 
  where
-   installTarget :: Executable -> Maybe PathTemplate
-   installTarget exe =
-    toPathTemplate <$> lookup "x-install-target" (customFieldsBI $ buildInfo exe)
-
-   substLibExec libexecdir "$libexecdir" = libexecdir
-   substLibExec _ comp = comp
-
-   substLibExec' dir =
-       withPT $
-           withSP $ map (substLibExec dir . dropTrailingPathSeparator)
-
-
-   withPT f pt = toPathTemplate $ f (fromPathTemplate pt)
-   withSP f p  = joinPath $ f (splitPath p)
+   isInternal :: Executable -> Bool
+   isInternal exe =
+    fromMaybe False $ (=="True") <$> lookup "x-internal" (customFieldsBI $ buildInfo exe)
 
 onlyExePackageDesc :: [Executable] -> PackageDescription -> PackageDescription
 onlyExePackageDesc exes pd = emptyPackageDescription {
