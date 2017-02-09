@@ -12,7 +12,6 @@ import Control.Arrow ((***), (&&&))
 import Control.Monad (forM_, unless)
 import Data.List (foldl', sort)
 import Data.Maybe (catMaybes)
-import Data.Version (Version)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import System.Directory (getDirectoryContents)
@@ -28,6 +27,7 @@ import Distribution.Simple.LocalBuildInfo
 import Distribution.Simple.PackageIndex
 import Distribution.Text
 import Distribution.ModuleName
+import Distribution.Version (Version)
 --------------------------------------------------------------------------------
 
 
