@@ -14,7 +14,7 @@
 -- You should have received a copy of the GNU Affero General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-{-# LANGUAGE CPP, BangPatterns, RecordWildCards, RankNTypes #-}
+{-# LANGUAGE CPP, BangPatterns, RecordWildCards, RankNTypes, ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-}
 import Distribution.Simple.Utils (cabalVersion)
 import Distribution.Simple.Configure
@@ -34,6 +34,9 @@ import Distribution.PackageDescription (PackageDescription,
                                         TestSuiteInterface(..),
                                         BenchmarkInterface(..),
                                         withLib)
+#if CABAL_MAJOR == 1 && CABAL_MINOR >= 25
+import Distribution.PackageDescription (unFlagName, mkFlagName)
+#endif
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.PackageDescription.Configuration (flattenPackageDescription)
 
@@ -67,13 +70,19 @@ import Distribution.ModuleName (components)
 import qualified Distribution.ModuleName as C (ModuleName)
 import Distribution.Text (display)
 import Distribution.Verbosity (Verbosity, silent, deafening, normal)
+import Distribution.Version (Version, mkVersion, versionNumbers)
 
 #if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
 import Distribution.Utils.NubList
 #endif
 
+#if CABAL_MAJOR == 1 && CABAL_MINOR >= 25
+import Distribution.Types.ForeignLib (ForeignLib(..))
+import Distribution.Types.UnqualComponentName (unUnqualComponentName)
+#endif
+
 import Control.Applicative ((<$>))
-import Control.Arrow (first, (&&&))
+import Control.Arrow (first, second, (&&&))
 import Control.Monad
 import Control.Exception (catch, PatternMatchFail(..))
 import Data.List
@@ -81,6 +90,7 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid
 import Data.IORef
+import qualified Data.Version as DataVersion
 import System.Environment
 import System.Directory
 import System.FilePath
@@ -189,15 +199,15 @@ main = do
 
     "config-flags":[] -> do
       return $ Just $ ChResponseFlags $ sort $
-        map (first unFlagName') $ configConfigurationsFlags $ configFlags lbi
+        map (first unFlagName) $ configConfigurationsFlags $ configFlags lbi
 
     "non-default-config-flags":[] -> do
       let flagDefinitons = genPackageFlags gpd
           flagAssgnments = configConfigurationsFlags $ configFlags lbi
           nonDefaultFlags =
               [ (fn, v)
-              | MkFlag {flagName=FlagName fn, flagDefault=dv} <- flagDefinitons
-              , (FlagName fn', v) <- flagAssgnments
+              | MkFlag {flagName=(unFlagName -> fn), flagDefault=dv} <- flagDefinitons
+              , (unFlagName -> fn', v) <- flagAssgnments
               , fn == fn'
               , v /= dv
               ]
@@ -209,7 +219,7 @@ main = do
 
     "compiler-version":[] -> do
       let CompilerId comp ver = compilerId $ compiler lbi
-      return $ Just $ ChResponseVersion (show comp) ver
+      return $ Just $ ChResponseVersion (show comp) (toDataVersion ver)
 
     "ghc-options":flags -> do
       res <- componentOptions lvd True flags id
@@ -284,7 +294,9 @@ main = do
 
     "licenses":[] -> do
       return $ Just $ ChResponseLicenses $
-        displayDependencyLicenseList $ groupByLicense $ getDependencyInstalledPackageInfos lbi
+             map (second (map (second toDataVersion))) $
+                 displayDependencyLicenseList $
+                     groupByLicense $ getDependencyInstalledPackageInfos lbi
 
     "print-lbi":flags ->
       case flags of
@@ -296,8 +308,18 @@ main = do
     _ ->
             errMsg "Invalid usage!" >> usage >> exitFailure
 
-flagName' = unFlagName' . flagName
-unFlagName' (FlagName n) = n
+flagName' = unFlagName . flagName
+
+#if CABAL_MAJOR == 1 && CABAL_MINOR < 25
+unFlagName (FlagName n) = n
+mkFlagName n = FlagName n
+#endif
+
+toDataVersion :: Version -> DataVersion.Version
+toDataVersion v = DataVersion.Version (versionNumbers v) []
+
+--fromDataVersion :: DataVersion.Version -> Version
+--fromDataVersion (DataVersion.Version vs _) = mkVersion vs
 
 getLibrary :: PackageDescription -> Library
 getLibrary pd = unsafePerformIO $ do
@@ -355,32 +377,40 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
 componentOptions (lbi, v, distdir) inplaceFlag flags f =
     componentOptions' (lbi, v, distdir) inplaceFlag flags renderGhcOptions' f
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR < 25
-componentNameToCh CLibName = ChLibName ""
-#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 25
-componentNameToCh (CLibName n) = ChLibName n
+componentNameToCh CLibName = ChLibName
+#if CABAL_MAJOR == 1 && CABAL_MINOR >= 25
+componentNameToCh (CSubLibName n) = ChSubLibName $ unUnqualComponentName' n
+componentNameToCh (CFLibName   n) = ChFLibName $ unUnqualComponentName' n
 #endif
-componentNameToCh (CExeName n) = ChExeName n
-componentNameToCh (CTestName n) = ChTestName n
-componentNameToCh (CBenchName n) = ChBenchName n
+componentNameToCh (CExeName n) = ChExeName $ unUnqualComponentName' n
+componentNameToCh (CTestName n) = ChTestName $ unUnqualComponentName' n
+componentNameToCh (CBenchName n) = ChBenchName $ unUnqualComponentName' n
+
+#if CABAL_MAJOR == 1 && CABAL_MINOR >= 25
+unUnqualComponentName' = unUnqualComponentName
+#else
+unUnqualComponentName' = id
+#endif
 
 #if CABAL_MAJOR == 1 && CABAL_MINOR < 25
 componentNameFromComponent (CLib Library {}) = CLibName
 #elif CABAL_MAJOR == 1 && CABAL_MINOR >= 25
-componentNameFromComponent (CLib Library {..}) = CLibName libName
+componentNameFromComponent (CLib Library { libName = Nothing }) = CLibName
+componentNameFromComponent (CLib Library { libName = Just n })  = CSubLibName n
+componentNameFromComponent (CFLib ForeignLib {..}) = CFLibName foreignLibName
 #endif
 componentNameFromComponent (CExe Executable {..}) = CExeName exeName
 componentNameFromComponent (CTest TestSuite {..}) = CTestName testName
 componentNameFromComponent (CBench Benchmark {..}) = CBenchName benchmarkName
 
 componentOutDir lbi (CLib Library {..})= buildDir lbi
-componentOutDir lbi (CExe Executable {..})= exeOutDir lbi exeName
+componentOutDir lbi (CExe Executable {..})= exeOutDir lbi (unUnqualComponentName' exeName)
 componentOutDir lbi (CTest TestSuite { testInterface = TestSuiteExeV10 _ _, ..}) =
-    exeOutDir lbi testName
+    exeOutDir lbi (unUnqualComponentName' testName)
 componentOutDir lbi (CTest TestSuite { testInterface = TestSuiteLibV09 _ _, ..}) =
-    exeOutDir lbi (testName ++ "Stub")
+    exeOutDir lbi (unUnqualComponentName' testName ++ "Stub")
 componentOutDir lbi (CBench Benchmark { benchmarkInterface = BenchmarkExeV10 _ _, ..})=
-    exeOutDir lbi benchmarkName
+    exeOutDir lbi (unUnqualComponentName' benchmarkName)
 
 gmModuleName :: C.ModuleName -> ChModuleName
 gmModuleName = ChModuleName . intercalate "." . components
@@ -472,12 +502,5 @@ renderGhcOptions' lbi v opts = do
   return $ renderGhcOptions (compiler lbi) (hostPlatform lbi) opts
 #endif
 
-
-#if CABAL_MAJOR == 1 && CABAL_MINOR < 25
 initialBuildStepsForAllComponents distdir pd lbi v =
   initialBuildSteps distdir pd lbi v
-#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 25
-initialBuildStepsForAllComponents distdir pd lbi v =
-  withComponentsLBI pd lbi $ \_c clbi ->
-    initialBuildSteps distdir pd lbi clbi v
-#endif

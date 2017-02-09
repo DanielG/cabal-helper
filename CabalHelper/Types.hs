@@ -24,7 +24,9 @@ newtype ChModuleName = ChModuleName String
     deriving (Eq, Ord, Read, Show, Generic)
 
 data ChComponentName = ChSetupHsName
-                     | ChLibName String
+                     | ChLibName
+                     | ChSubLibName String
+                     | ChFLibName String
                      | ChExeName String
                      | ChTestName String
                      | ChBenchName String
