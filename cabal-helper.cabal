@@ -29,6 +29,7 @@ description:
 
 license:             AGPL-3
 license-file:        LICENSE
+license-files:       LICENSE LICENSE.cabal-dependency-licenses
 author:              Daniel Gröber <dxld@darkboxed.org>
 maintainer:          dxld@darkboxed.org
 category:            Distribution
