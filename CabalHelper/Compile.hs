@@ -413,6 +413,9 @@ errorInstallCabal cabalVer _distdir = panic $ printf "\
  where
    sver = showVersion cabalVer
 
+helperPrepared :: Version -> IO Bool
+helperPrepared compCabalVersion = isJust <$> cachedExe compCabalVersion
+
 cachedExe :: Version -> IO (Maybe FilePath)
 cachedExe compCabalVersion = do
    exe <- exePath (Right compCabalVersion)
