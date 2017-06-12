@@ -18,7 +18,7 @@ after_script:
   script:
     - echo $PWD
     - ghc-pkg list
-    - cabal install --user --only-dependencies -j2 --force-reinstalls --enable-tests --enable-documentation
+    - cabal install -j1 --user --only-dependencies --force-reinstalls --enable-tests --enable-documentation
     - which cabal
     - cabal --version
     - cabal configure --enable-tests
