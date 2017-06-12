@@ -81,6 +81,7 @@ executable cabal-helper-wrapper
                        CabalHelper.Compile
                        CabalHelper.Log
                        CabalHelper.Sandbox
+                       CabalHelper.Compat.Version
   ghc-options:         -Wall
   scope:               private
   x-scope:             private

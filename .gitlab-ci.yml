@@ -2,7 +2,10 @@ stages:
   - build
 
 before_script:
+  - apt-get install -y git
+
   - cabal update
+
   - mkdir -p ../cabal-helper.sdist
   - ls -l ..
   - cabal sdist --output-directory=../cabal-helper.sdist
