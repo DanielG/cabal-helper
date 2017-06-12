@@ -16,6 +16,12 @@
 
 {-# LANGUAGE CPP, BangPatterns, RecordWildCards, RankNTypes, ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-deprecations #-}
+
+#ifdef MIN_VERSION_Cabal
+#undef CH_MIN_VERSION_Cabal
+#define CH_MIN_VERSION_Cabal MIN_VERSION_Cabal
+#endif>
+
 import Distribution.Simple.Utils (cabalVersion)
 import Distribution.Simple.Configure
 
@@ -34,7 +40,8 @@ import Distribution.PackageDescription (PackageDescription,
                                         TestSuiteInterface(..),
                                         BenchmarkInterface(..),
                                         withLib)
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 25
+#if CH_MIN_VERSION_Cabal(1,25,0)
+-- CPP CABAL_MAJOR == 1 && CABAL_MINOR >= 25
 import Distribution.PackageDescription (unFlagName, mkFlagName)
 #endif
 import Distribution.PackageDescription.Parse (readPackageDescription)
@@ -51,9 +58,11 @@ import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(..),
                                            externalPackageDeps,
                                            withComponentsLBI,
                                            withLibLBI)
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 23
+#if CH_MIN_VERSION_Cabal(1,23,0)
+-- >= 1.23
 import Distribution.Simple.LocalBuildInfo (localUnitId)
-#elif CABAL_MAJOR == 1 && CABAL_MINOR <= 22
+#else
+-- <= 1.22
 import Distribution.Simple.LocalBuildInfo (inplacePackageId)
 #endif
 
@@ -70,15 +79,27 @@ import Distribution.ModuleName (components)
 import qualified Distribution.ModuleName as C (ModuleName)
 import Distribution.Text (display)
 import Distribution.Verbosity (Verbosity, silent, deafening, normal)
-import Distribution.Version (Version, mkVersion, versionNumbers)
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
+import Distribution.Version (Version)
+#if CH_MIN_VERSION_Cabal(2,0,0)
+-- CPP >= 2.0
+import Distribution.Version (versionNumbers, mkVersion)
+#endif
+
+#if CH_MIN_VERSION_Cabal(1,22,0)
+-- CPP >= 1.22
 import Distribution.Utils.NubList
 #endif
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 25
+#if CH_MIN_VERSION_Cabal(1,25,0)
+-- CPP >= 1.25
 import Distribution.Types.ForeignLib (ForeignLib(..))
 import Distribution.Types.UnqualComponentName (unUnqualComponentName)
+#endif
+
+#if CH_MIN_VERSION_Cabal(2,1,0)
+import Distribution.Types.UnitId (UnitId)
+import Distribution.Types.MungedPackageId (MungedPackageId)
 #endif
 
 import Control.Applicative ((<$>))
@@ -310,16 +331,21 @@ main = do
 
 flagName' = unFlagName . flagName
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR < 25
+#if !CH_MIN_VERSION_Cabal(1,25,0)
+-- CPP < 1.25
 unFlagName (FlagName n) = n
 mkFlagName n = FlagName n
 #endif
 
 toDataVersion :: Version -> DataVersion.Version
-toDataVersion v = DataVersion.Version (versionNumbers v) []
-
 --fromDataVersion :: DataVersion.Version -> Version
+#if CH_MIN_VERSION_Cabal(2,0,0)
+toDataVersion v = DataVersion.Version (versionNumbers v) []
 --fromDataVersion (DataVersion.Version vs _) = mkVersion vs
+#else
+toDataVersion = id
+fromDataVersion = id
+#endif
 
 getLibrary :: PackageDescription -> Library
 getLibrary pd = unsafePerformIO $ do
@@ -378,7 +404,8 @@ componentOptions (lbi, v, distdir) inplaceFlag flags f =
     componentOptions' (lbi, v, distdir) inplaceFlag flags renderGhcOptions' f
 
 componentNameToCh CLibName = ChLibName
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 25
+#if CH_MIN_VERSION_Cabal(1,25,0)
+-- CPP >= 1.25
 componentNameToCh (CSubLibName n) = ChSubLibName $ unUnqualComponentName' n
 componentNameToCh (CFLibName   n) = ChFLibName $ unUnqualComponentName' n
 #endif
@@ -386,15 +413,18 @@ componentNameToCh (CExeName n) = ChExeName $ unUnqualComponentName' n
 componentNameToCh (CTestName n) = ChTestName $ unUnqualComponentName' n
 componentNameToCh (CBenchName n) = ChBenchName $ unUnqualComponentName' n
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 25
+#if CH_MIN_VERSION_Cabal(1,25,0)
+-- CPP >= 1.25
 unUnqualComponentName' = unUnqualComponentName
 #else
 unUnqualComponentName' = id
 #endif
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR < 25
+#if !CH_MIN_VERSION_Cabal(1,25,0)
+-- CPP < 1.25
 componentNameFromComponent (CLib Library {}) = CLibName
-#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 25
+#elif CH_MIN_VERSION_Cabal(1,25,0)
+-- CPP >= 1.25 (redundant)
 componentNameFromComponent (CLib Library { libName = Nothing }) = CLibName
 componentNameFromComponent (CLib Library { libName = Just n })  = CSubLibName n
 componentNameFromComponent (CFLib ForeignLib {..}) = CFLibName foreignLibName
@@ -458,10 +488,6 @@ removeInplaceDeps v lbi pd clbi = let
           in
             (componentGhcOptions normal lbi libbi libclbi liboutdir) {
                 ghcOptPackageDBs = []
-#if CABAL_MAJOR == 1 && CABAL_MINOR > 22 && CABAL_MINOR < 23
-              , ghcOptComponentId = NoFlag
-#endif
-
             }
         _ -> mempty
     clbi' = clbi { componentPackageDeps = deps }
@@ -469,16 +495,22 @@ removeInplaceDeps v lbi pd clbi = let
   in (clbi', libopts)
 
  where
+#if CH_MIN_VERSION_Cabal(2,1,0)
+   isInplaceDep :: (UnitId, MungedPackageId) -> Bool
+   isInplaceDep (mpid, pid) = localUnitId lbi == mpid
+#else
    isInplaceDep :: (InstalledPackageId, PackageId) -> Bool
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 23
+#  if CH_MIN_VERSION_Cabal(1,23,0)
+-- CPP >= 1.23
    isInplaceDep (ipid, pid) = localUnitId lbi == ipid
-#elif CABAL_MAJOR == 1 && CABAL_MINOR <= 22
+#  else
+-- CPP <= 1.22
    isInplaceDep (ipid, pid) = inplacePackageId pid == ipid
-
+#  endif
 #endif
 
-
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 22
+#if CH_MIN_VERSION_Cabal(1,22,0)
+-- CPP >= 1.22
 -- >= 1.22 uses NubListR
 nubPackageFlags opts = opts
 #else
@@ -490,15 +522,16 @@ renderGhcOptions' :: LocalBuildInfo
                   -> GhcOptions
                   -> IO [String]
 renderGhcOptions' lbi v opts = do
-#if CABAL_MAJOR == 1 && CABAL_MINOR < 20
+#if !CH_MIN_VERSION_Cabal(1,20,0)
+-- CPP < 1.20
   (ghcProg, _) <- requireProgram v ghcProgram (withPrograms lbi)
   let Just ghcVer = programVersion ghcProg
   return $ renderGhcOptions ghcVer opts
-#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 20 && CABAL_MINOR < 24
--- && CABAL_MINOR < 24
+#elif CH_MIN_VERSION_Cabal(1,20,0) && !CH_MIN_VERSION_Cabal(1,24,0)
+-- CPP >= 1.20 && < 1.24
   return $ renderGhcOptions (compiler lbi) opts
-#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 24
---  CABAL_MAJOR == 1 && CABAL_MINOR >= 24
+#else
+-- CPP >= 1.24
   return $ renderGhcOptions (compiler lbi) (hostPlatform lbi) opts
 #endif
 

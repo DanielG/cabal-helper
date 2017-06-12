@@ -152,7 +152,8 @@ compile distdir opts@Options {..} Compile {..} = do
     cCabalSourceDir <- canonicalizePath `traverse` compCabalSourceDir
     appdir <- appDataDir
 
-    let outdir' = maybe appdir (const $ distdir </> "cabal-helper") cCabalSourceDir
+    let outdir' =
+            maybe appdir (const $ distdir </> "cabal-helper") cCabalSourceDir
     createDirectoryIfMissing True outdir'
     outdir <- canonicalizePath outdir'
 
@@ -164,16 +165,17 @@ compile distdir opts@Options {..} Compile {..} = do
     vLog opts $ "outdir: " ++ outdir
     vLog opts $ "exedir: " ++ exedir
 
-    let (mj:mi:_) = case compCabalVersion of
-                     Left _commitid -> [1, 10000]
-                     Right (Version vs _) -> vs
-    let ghc_opts =
-             concat [
+    let (mj1:mj2:mi:_) = case compCabalVersion of
+                         Left _commitid -> [1, 10000, 0]
+                         Right (Version vs _) -> vs
+    let ghc_opts = concat [
           [ "-outputdir", outdir
           , "-o", exe
           , "-optP-DCABAL_HELPER=1"
-          , "-optP-DCABAL_MAJOR=" ++ show mj
-          , "-optP-DCABAL_MINOR=" ++ show mi
+          , "-optP-DCH_MIN_VERSION_Cabal(major1,major2,minor)=(\
+                   \   (major1)  < "++show mj1++" \
+                   \|| (major1) == "++show mj1++" && (major2)  < "++show mj2++"\
+                   \|| (major1) == "++show mj1++" && (major2) == "++show mj2++" && (minor) < "++show mi++")"
           ],
           maybeToList $ ("-package-conf="++) <$> compPackageDb,
           map ("-i"++) $ nub $ ".":maybeToList cCabalSourceDir,
@@ -289,9 +291,7 @@ cabalInstall opts db e_ver_msrcdir = do
         ,
           case e_ver_msrcdir of
             Right ver ->
-                [ "install", "Cabal"
-                , "--constraint", "Cabal == " ++ showVersion ver
-                ]
+                [ "install", "Cabal-"++showVersion ver ]
             Left srcdir ->
                 [ "install", srcdir ]
       ]

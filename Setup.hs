@@ -1,5 +1,14 @@
 #!/usr/bin/env runhaskell
-{-# LANGUAGE RecordWildCards, NamedFieldPuns #-}
+{-# LANGUAGE CPP, RecordWildCards, NamedFieldPuns #-}
+
+#if defined(MIN_VERSION_Cabal) && MIN_VERSION_Cabal(2,1,0)
+
+-- https://github.com/haskell/cabal/pull/4501 is upstream in 2.0, yey
+import Distribution.Simple
+main = defaultMain
+
+#else
+
 import Distribution.Simple
 import Distribution.Simple.Utils
 import Distribution.Simple.Setup
@@ -70,7 +79,7 @@ xInstallTarget :: PackageDescription
                -> (PackageDescription -> LocalBuildInfo -> IO ())
                -> IO ()
 xInstallTarget pd lbi cf fn = do
-  let (extended, regular) = partition isInternal (executables pd)
+  let (extended, regular) = partition isExeScopePrivate (executables pd)
 
   let pd_regular = pd { executables = regular }
 
@@ -96,13 +105,16 @@ xInstallTarget pd lbi cf fn = do
 
   fn pd_regular lbi
 
+isExeScopePrivate :: Executable -> Bool
+isExeScopePrivate exe =
+  fromMaybe False $ (=="private") <$> lookup "x-scope" fields
  where
-   isInternal :: Executable -> Bool
-   isInternal exe =
-    fromMaybe False $ (=="True") <$> lookup "x-internal" (customFieldsBI $ buildInfo exe)
+   fields = customFieldsBI $ buildInfo exe
 
 onlyExePackageDesc :: [Executable] -> PackageDescription -> PackageDescription
 onlyExePackageDesc exes pd = emptyPackageDescription {
                      package = package pd
                    , executables = exes
                    }
+
+#endif

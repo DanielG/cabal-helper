@@ -1,4 +1,10 @@
 {-# LANGUAGE CPP #-}
+
+#ifdef MIN_VERSION_Cabal
+#undef CH_MIN_VERSION_Cabal
+#define CH_MIN_VERSION_Cabal MIN_VERSION_Cabal
+#endif
+
 module CabalHelper.Licenses (
     displayDependencyLicenseList
   , groupByLicense
@@ -32,21 +38,21 @@ import Distribution.Version (Version)
 
 
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR > 22
+#if CH_MIN_VERSION_Cabal(1,23,0)
+-- CPP > 1.22
 type CPackageIndex a = PackageIndex (InstalledPackageInfo)
-#elif CABAL_MAJOR == 1 && CABAL_MINOR >= 22
+#elif CH_MIN_VERSION_Cabal(1,22,0)
+-- CPP >= 1.22
 type CPackageIndex a = PackageIndex (InstalledPackageInfo_ a)
 #else
 type CPackageIndex a = PackageIndex
 #endif
 
-#if CABAL_MAJOR == 1 && CABAL_MINOR >= 23
+#if CH_MIN_VERSION_Cabal(1,23,0)
+-- CPP >= 1.23
 type CInstalledPackageId = UnitId
 lookupInstalledPackageId' :: PackageIndex a -> UnitId -> Maybe a
 lookupInstalledPackageId' = lookupUnitId
-#elif CABAL_MAJOR == 1 && CABAL_MINOR > 22
-type CInstalledPackageId = ComponentId
-lookupInstalledPackageId' = lookupComponentId
 #else
 type CInstalledPackageId = InstalledPackageId
 lookupInstalledPackageId' = lookupInstalledPackageId

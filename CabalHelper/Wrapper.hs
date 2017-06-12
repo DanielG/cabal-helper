@@ -22,7 +22,6 @@ import Data.Char
 import Data.List
 import Data.Maybe
 import Data.String
-import Data.Version
 import Text.Printf
 import System.Console.GetOpt
 import System.Environment
@@ -44,6 +43,7 @@ import CabalHelper.Common
 import CabalHelper.GuessGhc
 import CabalHelper.Compile
 import CabalHelper.Types
+import CabalHelper.Compat.Version
 
 usage :: IO ()
 usage = do
@@ -126,7 +126,7 @@ main = handlePanic $ do
       [cfile] <- filter isCabalFile <$> getDirectoryContents projdir
       gpd <- readPackageDescription v (projdir </> cfile)
       putStrLn $ show $
-        [Just $ ChResponseVersion (display (packageName gpd)) (packageVersion gpd)]
+        [Just $ ChResponseVersion (display (packageName gpd)) (toDataVersion $ packageVersion gpd)]
 
     projdir:distdir:args' -> do
       cfgf <- canonicalizePath (distdir </> "setup-config")

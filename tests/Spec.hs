@@ -8,6 +8,7 @@ import Data.Version
 import Data.Functor
 import Control.Exception as E
 import Control.Arrow
+import Control.Monad
 import Prelude
 
 import CabalHelper.Common
@@ -66,10 +67,12 @@ main = do
                        , "1.22.7.0"
                        , "1.22.8.0"
                        ]),
-               ("8.0", [
+               ("8.0.1", [
                          "1.24.0.0"
                        , "1.24.1.0"
-                       , "1.24.2.0"
+                       ]),
+               ("8.0.2", [
+                         "1.24.2.0"
                        , "HEAD"
                        ])
              ]
@@ -78,7 +81,10 @@ main = do
 
   let cabalVers = reverse $ concat $ map snd $ dropWhile ((<ghcVer) . fst) vers
 
-  rvs <- mapM compilePrivatePkgDb cabalVers
+  rvs <- forM cabalVers $ \ver -> do
+           let sver = either show showVersion ver
+           putStrLn $ "\n\n\n\n\n\n====== Compiling with Cabal-" ++ sver
+           compilePrivatePkgDb ver
 
   let printStatus (cv, rv) = putStrLn $ "- Cabal "++show cv++" "++status
         where status = case rv of
