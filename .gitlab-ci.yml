@@ -9,8 +9,6 @@ before_script:
   - mkdir -p ../cabal-helper.sdist
   - ls -l ..
   - cabal sdist --output-directory=../cabal-helper.sdist
-  - rm -f cabal.sandbox.config && cabal sandbox init
-  - cp cabal.sandbox.config ../cabal-helper.sdist
   - cd ../cabal-helper.sdist
 
 after_script:
