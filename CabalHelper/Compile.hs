@@ -375,7 +375,8 @@ unpackCabalHEAD tmpdir = do
   let dir = tmpdir </> "cabal-head.git"
       url = "https://github.com/haskell/cabal.git"
   ExitSuccess <- rawSystem "git" [ "clone", "--depth=1", url, dir]
-  commit <- trim <$> readProcess "git" ["-C", dir, "rev-parse", "HEAD"] ""
+  let git_rev_parse = (proc "git" ["rev-parse", "HEAD"]) { cwd = Just dir }
+  commit <- trim <$> readCreateProcess git_rev_parse ""
   return (dir </> "Cabal", commit)
 
 errorInstallCabal :: Version -> FilePath -> a
