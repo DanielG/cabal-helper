@@ -452,7 +452,7 @@ libexecNotFoundError :: String   -- ^ Name of the executable we were trying to
 libexecNotFoundError exe dir reportBug = printf
  ( "Could not find $libexecdir/%s\n"
  ++"\n"
- ++"If you are a developer set the environment variable\n"
+ ++"If you are a cabal-helper developer you can set the environment variable\n"
  ++"`cabal_helper_libexecdir' to override $libexecdir[1]. The following will\n"
  ++"work in the cabal-helper source tree:\n"
  ++"\n"
