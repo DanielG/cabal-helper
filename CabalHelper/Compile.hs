@@ -175,7 +175,7 @@ compile distdir opts@Options {..} Compile {..} = do
           , "-optP-DCH_MIN_VERSION_Cabal(major1,major2,minor)=(\
                    \   (major1)  < "++show mj1++" \
                    \|| (major1) == "++show mj1++" && (major2)  < "++show mj2++"\
-                   \|| (major1) == "++show mj1++" && (major2) == "++show mj2++" && (minor) < "++show mi++")"
+                   \|| (major1) == "++show mj1++" && (major2) == "++show mj2++" && (minor) <= "++show mi++")"
           ],
           maybeToList $ ("-package-conf="++) <$> compPackageDb,
           map ("-i"++) $ nub $ ".":maybeToList cCabalSourceDir,
