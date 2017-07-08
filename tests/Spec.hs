@@ -3,9 +3,15 @@ import System.Environment.Extra (lookupEnv)
 import System.Posix.Env (setEnv)
 import System.Process
 import System.Exit
+import System.IO
+import Data.List
 import Data.Maybe
 import Data.Version
 import Data.Functor
+import Data.Function
+import qualified Distribution.Compat.ReadP as Dist
+import Distribution.Version hiding (Version)
+import Distribution.Text
 import Control.Exception as E
 import Control.Arrow
 import Control.Monad
@@ -13,8 +19,19 @@ import Prelude
 
 import CabalHelper.Common
 import CabalHelper.Compile
+import CabalHelper.Compat.Version
 import CabalHelper.Types
 
+runReadP'Dist :: Dist.ReadP t t -> String -> t
+runReadP'Dist p i = case filter ((=="") . snd) $ Dist.readP_to_S p i of
+                 (a,""):[] -> a
+                 _ -> error $ "Error parsing: " ++ show i
+
+withinRange'CH :: Either HEAD Version -> VersionRange -> Bool
+withinRange'CH v r =
+    withinRange (fromDataVersion v') r
+  where
+    v' = either (const $ parseVer "1000000000") id v
 
 main :: IO ()
 main = do
@@ -24,66 +41,65 @@ main = do
   writeAutogenFiles' $ defaultQueryEnv "." "./dist"
 
   let parseVer' "HEAD" = Left HEAD
-      parseVer' v = Right $ parseVer v
+      parseVer' v      = Right $ parseVer v
 
-  let vers :: [(Version, [Either HEAD Version])]
-      vers = map (parseVer *** map parseVer') [
-               ("7.4", [ -- "1.14.0" -- not supported at runtime
-                       ]),
+  let cabal_versions :: [Either HEAD Version]
+      cabal_versions = map parseVer'
+           -- "1.14.0" -- not supported at runtime
+           [ "1.16.0"
+           , "1.16.0.1"
+           , "1.16.0.2"
+           , "1.16.0.3"
+           , "1.18.0"
+           , "1.18.1"
+           , "1.18.1.1"
+           , "1.18.1.2"
+           , "1.18.1.3"
+           , "1.18.1.4"
+           , "1.18.1.5"
+           , "1.18.1.6"
+           , "1.18.1.7"
+           , "1.20.0.0"
+           , "1.20.0.1"
+           , "1.20.0.2"
+           , "1.20.0.3"
+           , "1.20.0.4"
+           , "1.22.0.0"
+           , "1.22.1.0"
+           , "1.22.1.1"
+           , "1.22.2.0"
+           , "1.22.3.0"
+           , "1.22.4.0"
+           , "1.22.5.0"
+           , "1.22.6.0"
+           , "1.22.7.0"
+           , "1.22.8.0"
+           , "1.24.0.0"
+           , "1.24.1.0"
+           , "1.24.2.0"
+           , "HEAD"
+           ]
 
-               ("7.6", [ "1.16.0"
-                       , "1.16.0.1"
-                       , "1.16.0.2"
-                       , "1.16.0.3"
-                       ]),
+  ghc_ver <- ghcVersion defaultOptions
 
-               ("7.8", [
-                         "1.18.0"
-                       , "1.18.1"
-                       , "1.18.1.1"
-                       , "1.18.1.2"
-                       , "1.18.1.3"
-                       , "1.18.1.4"
-                       , "1.18.1.5"
-                       , "1.18.1.6"
-                       , "1.18.1.7"
+  let constraint :: VersionRange
+      Just (_, constraint) =
+          find (and . (zipWith (==) `on` versionBranch) ghc_ver . fst) $
+          map (parseVer *** runReadP'Dist parse) $
+              [ ("7.4"  , ">= 1.14    && < 2")
+              , ("7.6"  , ">= 1.16    && < 2")
+              , ("7.8"  , ">= 1.18    && < 2")
+              , ("7.10" , ">= 1.22.2  && < 2")
+              , ("8.0.1", ">= 1.24          ")
+              , ("8.0.2", ">= 1.24.2        ")
+              ]
 
-                       , "1.20.0.0"
-                       , "1.20.0.1"
-                       , "1.20.0.2"
-                       , "1.20.0.3"
-                       , "1.20.0.4"
-                       , "1.22.0.0"
-                       , "1.22.1.0"
-                       , "1.22.1.1"
-                       ]),
+      relevant_cabal_versions =
+          reverse $ filter (flip withinRange'CH constraint) cabal_versions
 
-               ("7.10", [
-                         "1.22.2.0"
-                       , "1.22.3.0"
-                       , "1.22.4.0"
-                       , "1.22.5.0"
-                       , "1.22.6.0"
-                       , "1.22.7.0"
-                       , "1.22.8.0"
-                       ]),
-               ("8.0.1", [
-                         "1.24.0.0"
-                       , "1.24.1.0"
-                       ]),
-               ("8.0.2", [
-                         "1.24.2.0"
-                       , "HEAD"
-                       ])
-             ]
-
-  ghcVer <- ghcVersion defaultOptions
-
-  let cabalVers = reverse $ concat $ map snd $ dropWhile ((<ghcVer) . fst) vers
-
-  rvs <- forM cabalVers $ \ver -> do
+  rvs <- forM relevant_cabal_versions $ \ver -> do
            let sver = either show showVersion ver
-           putStrLn $ "\n\n\n\n\n\n====== Compiling with Cabal-" ++ sver
+           hPutStrLn stderr $ "\n\n\n\n\n\n====== Compiling with Cabal-" ++ sver
            compilePrivatePkgDb ver
 
   let printStatus (cv, rv) = putStrLn $ "- Cabal "++show cv++" "++status
@@ -93,9 +109,9 @@ main = do
                          Left rvc ->
                              "failed (exit code "++show rvc++")"
 
-  let drvs = cabalVers `zip` rvs
+  let drvs = relevant_cabal_versions `zip` rvs
 
-  mapM_ printStatus (cabalVers `zip` rvs)
+  mapM_ printStatus (relevant_cabal_versions `zip` rvs)
   if any isLeft' $ map snd $ filter ((/=Left HEAD) . fst) drvs
      then exitFailure
      else exitSuccess
