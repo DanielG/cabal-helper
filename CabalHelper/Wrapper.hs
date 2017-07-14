@@ -59,7 +59,7 @@ usage = do
 \  [--with-cabal=CABAL_PATH]\n\
 \  [--with-cabal-version=VERSION]\n\
 \  [--with-cabal-pkg-db=PKG_DB]\n\
-\  PROJ_DIR DIST_DIR ( print-exe | package-id | [CABAL_HELPER_ARGS...] ) )\n"
+\  PROJ_DIR DIST_DIR ( print-exe | print-exe-prepared | package-id | [CABAL_HELPER_ARGS...] ) )\n"
 
 globalArgSpec :: [OptDescr (Options -> Options)]
 globalArgSpec =
@@ -142,13 +142,18 @@ main = handlePanic $ do
 \Cabal version %s was requested setup configuration was\n\
 \written by version %s" (showVersion ver) (showVersion hdrCabalVersion)
             _ -> do
-              eexe <- compileHelper opts hdrCabalVersion projdir distdir
-              case eexe of
-                  Left e -> exitWith e
-                  Right exe ->
-                    case args' of
-                      "print-exe":_ -> putStrLn exe
-                      _ -> do
-                        (_,_,_,h) <- createProcess $ proc exe args
-                        exitWith =<< waitForProcess h
+              case args' of
+                "print-exe-prepared":[] -> do
+                  isPrepared <- helperPrepared hdrCabalVersion
+                  putStrLn $ if isPrepared then "True" else "False"
+                _ -> do
+                  eexe <- compileHelper opts hdrCabalVersion projdir distdir
+                  case eexe of
+                      Left e -> exitWith e
+                      Right exe ->
+                          case args' of
+                          "print-exe":_ -> putStrLn exe
+                          _ -> do
+                              (_,_,_,h) <- createProcess $ proc exe args
+                              exitWith =<< waitForProcess h
     _ -> error "invalid command line"

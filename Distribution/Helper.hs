@@ -65,6 +65,7 @@ module Distribution.Helper (
   -- * Managing @dist/@
   , prepare
   , prepare'
+  , isPrepared
   , reconfigure
   , writeAutogenFiles
   , writeAutogenFiles'
@@ -364,6 +365,13 @@ prepare readProc projdir distdir = liftIO $ do
 prepare' :: MonadIO m => QueryEnv -> m ()
 prepare' qe =
   liftIO $ void $ invokeHelper qe []
+
+isPrepared :: MonadIO m => QueryEnv -> m Bool
+isPrepared qe = liftIO $ do
+  out <- invokeHelper qe ["print-exe-prepared"]
+  return $ case out of
+    Left _ -> False
+    Right r -> read r
 
 writeAutogenFiles :: MonadIO m
                   => (FilePath -> [String] -> String -> IO String)
