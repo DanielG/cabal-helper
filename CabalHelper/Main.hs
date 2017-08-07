@@ -97,7 +97,7 @@ import Distribution.Types.ForeignLib (ForeignLib(..))
 import Distribution.Types.UnqualComponentName (unUnqualComponentName)
 #endif
 
-#if CH_MIN_VERSION_Cabal(2,1,0)
+#if CH_MIN_VERSION_Cabal(2,0,0)
 import Distribution.Types.UnitId (UnitId)
 import Distribution.Types.MungedPackageId (MungedPackageId)
 #endif
@@ -495,7 +495,7 @@ removeInplaceDeps v lbi pd clbi = let
   in (clbi', libopts)
 
  where
-#if CH_MIN_VERSION_Cabal(2,1,0)
+#if CH_MIN_VERSION_Cabal(2,0,0)
    isInplaceDep :: (UnitId, MungedPackageId) -> Bool
    isInplaceDep (mpid, pid) = localUnitId lbi == mpid
 #else
