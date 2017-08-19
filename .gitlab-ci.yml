@@ -29,6 +29,11 @@ after_script:
     - ./dist/build/spec/spec
     - cabal haddock
 
+job-ghc8.2.1-cabal-install2.0.0.0:
+  image: registry.gitlab.com/dxld/ghc-mod:ghc8.2.1-cabal-install2.0.0.0
+  stage: build
+  <<: *common_script
+
 job-ghc8.0.2-cabal-install1.24.0.2:
   image: registry.gitlab.com/dxld/ghc-mod:ghc8.0.2-cabal-install1.24.0.2
   stage: build
