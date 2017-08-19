@@ -2,7 +2,7 @@ stages:
   - build
 
 before_script:
-  - apt-get install -y git
+  - apt-get update && apt-get install -y git
 
   - cabal update
 
