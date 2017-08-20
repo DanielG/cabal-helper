@@ -4,7 +4,7 @@
 #define MIN_VERSION_Cabal(x,y,z) 0
 #endif
 
-#if MIN_VERSION_Cabal(2,1,0)
+#if MIN_VERSION_Cabal(2,0,0)
 
 -- https://github.com/haskell/cabal/pull/4501 is upstream in 2.0, yey
 import Distribution.Simple
