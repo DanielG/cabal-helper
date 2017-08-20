@@ -39,28 +39,18 @@ job-ghc8.0.2-cabal-install1.24.0.2:
   stage: build
   <<: *common_script
 
-job-ghc8.0.1-cabal-install1.24.0.0:
-  image: registry.gitlab.com/dxld/ghc-mod:ghc8.0.1-cabal-install1.24.0.0
-  stage: build
-  <<: *common_script
-
-job-ghc7.10.3-cabal-install1.22.8.0:
+job-ghc7.10.3-cabal-install1.22.9.0:
   image: registry.gitlab.com/dxld/ghc-mod:ghc7.10.3-cabal-install1.22.8.0
   stage: build
   <<: *common_script
 
-# job-ghc7.10.3-cabal-install1.22.5.0:
-#   image: registry.gitlab.com/dxld/ghc-mod:ghc7.10.3-cabal-install1.22.5.0
-#   stage: build
-#   <<: *common_script
-
-job-ghc7.8.4-cabal-install1.18.1.0:
-  image: registry.gitlab.com/dxld/ghc-mod:ghc7.8.4-cabal-install1.18.1.0
+job-ghc7.8.4-cabal-install1.18.2.0:
+  image: registry.gitlab.com/dxld/ghc-mod:ghc7.8.4-cabal-install1.18.2.0
   stage: build
   <<: *common_script
 
-job-ghc7.6.3-cabal-install1.18.1.0:
-  image: registry.gitlab.com/dxld/ghc-mod:ghc7.6.3-cabal-install1.18.1.0
+job-ghc7.6.3-cabal-install1.18.2.0:
+  image: registry.gitlab.com/dxld/ghc-mod:ghc7.6.3-cabal-install1.18.2.0
   stage: build
   <<: *common_script
 
