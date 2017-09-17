@@ -120,10 +120,11 @@ import System.IO
 import System.IO.Unsafe (unsafeInterleaveIO, unsafePerformIO)
 import Text.Printf
 
-import CabalHelper.Licenses
-import CabalHelper.Sandbox
-import CabalHelper.Common
-import CabalHelper.Types hiding (Options(..))
+import CabalHelper.Shared.Sandbox
+import CabalHelper.Shared.Common
+import CabalHelper.Shared.Types hiding (Options(..))
+
+import CabalHelper.Runtime.Licenses
 
 usage = do
   prog <- getProgName

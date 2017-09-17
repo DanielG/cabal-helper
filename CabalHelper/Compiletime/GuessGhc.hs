@@ -1,4 +1,4 @@
-module CabalHelper.GuessGhc (guessToolFromGhcPath) where
+module CabalHelper.Compiletime.GuessGhc (guessToolFromGhcPath) where
 
 import Data.Maybe
 import Data.Char

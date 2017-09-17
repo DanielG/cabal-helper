@@ -5,7 +5,7 @@
 #define CH_MIN_VERSION_Cabal MIN_VERSION_Cabal
 #endif
 
-module CabalHelper.Licenses (
+module CabalHelper.Runtime.Licenses (
     displayDependencyLicenseList
   , groupByLicense
   , getDependencyInstalledPackageInfos

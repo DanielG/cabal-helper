@@ -96,8 +96,8 @@ import GHC.Generics
 import Prelude
 
 import Paths_cabal_helper (getLibexecDir)
-import CabalHelper.Types hiding (Options(..))
-import CabalHelper.Sandbox
+import CabalHelper.Shared.Types hiding (Options(..))
+import CabalHelper.Shared.Sandbox
 
 -- | Paths or names of various programs we need.
 data Programs = Programs {
@@ -394,12 +394,12 @@ getSandboxPkgDb :: (FilePath -> [String] -> String -> IO String)
              -- ^ GHC version (@cProjectVersion@ is your friend)
              -> IO (Maybe FilePath)
 getSandboxPkgDb readProc =
-    CabalHelper.Sandbox.getSandboxPkgDb $ unsafePerformIO $ buildPlatform readProc
+    CabalHelper.Shared.Sandbox.getSandboxPkgDb $ unsafePerformIO $ buildPlatform readProc
 
 buildPlatform :: (FilePath -> [String] -> String -> IO String) -> IO String
 buildPlatform readProc = do
   exe  <- findLibexecExe
-  CabalHelper.Sandbox.dropWhileEnd isSpace <$> readProc exe ["print-build-platform"] ""
+  CabalHelper.Shared.Sandbox.dropWhileEnd isSpace <$> readProc exe ["print-build-platform"] ""
 
 -- | This exception is thrown by all 'runQuery' functions if the internal
 -- wrapper executable cannot be found. You may catch this and present the user

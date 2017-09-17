@@ -39,11 +39,11 @@ import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.Package (packageName, packageVersion)
 
 import Paths_cabal_helper (version)
-import CabalHelper.Common
-import CabalHelper.GuessGhc
-import CabalHelper.Compile
-import CabalHelper.Types
-import CabalHelper.Compat.Version
+import CabalHelper.Compiletime.Compat.Version
+import CabalHelper.Compiletime.Compile
+import CabalHelper.Compiletime.GuessGhc
+import CabalHelper.Shared.Common
+import CabalHelper.Shared.Types
 
 usage :: IO ()
 usage = do
@@ -109,10 +109,17 @@ guessProgramPaths opts = do
    same f o o'  = f o == f o'
    dopts = defaultOptions
 
+overrideVerbosityEnvVar :: Options -> IO Options
+overrideVerbosityEnvVar opts = do
+  x <- lookup  "GHC_MOD_DEBUG" <$> getEnvironment
+  return $ case x of
+    Just _  -> opts { verbose = True }
+    Nothing -> opts
+
 main :: IO ()
 main = handlePanic $ do
   (opts', args) <- parseCommandArgs defaultOptions <$> getArgs
-  opts <- guessProgramPaths opts'
+  opts <- overrideVerbosityEnvVar =<< guessProgramPaths opts'
   case args of
     [] -> usage
     "help":[] -> usage
@@ -121,7 +128,8 @@ main = handlePanic $ do
     "print-build-platform":[] -> putStrLn $ display buildPlatform
 
     projdir:_distdir:"package-id":[] -> do
-      v <- maybe silent (const deafening) . lookup  "GHC_MOD_DEBUG" <$> getEnvironment
+      let v | verbose opts = deafening
+            | otherwise    = silent
       -- ghc-mod will catch multiple cabal files existing before we get here
       [cfile] <- filter isCabalFile <$> getDirectoryContents projdir
       gpd <- readPackageDescription v (projdir </> cfile)

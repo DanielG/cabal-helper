@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-module CabalHelper.Compat.Version
+module CabalHelper.Compiletime.Compat.Version
     ( DataVersion
     , toDataVersion
     , fromDataVersion

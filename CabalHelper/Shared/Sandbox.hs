@@ -1,4 +1,4 @@
-module CabalHelper.Sandbox where
+module CabalHelper.Shared.Sandbox where
 
 import Control.Applicative
 import Data.Char
@@ -43,7 +43,7 @@ extractSandboxDbDir conf = extractValue <$> parse conf
     keyLen = length key
 
     parse = listToMaybe . filter (key `isPrefixOf`) . lines
-    extractValue = CabalHelper.Sandbox.dropWhileEnd isSpace . dropWhile isSpace . drop keyLen
+    extractValue = CabalHelper.Shared.Sandbox.dropWhileEnd isSpace . dropWhile isSpace . drop keyLen
 
 
 mightExist :: FilePath -> IO (Maybe FilePath)

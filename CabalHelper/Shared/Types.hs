@@ -15,7 +15,7 @@
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 {-# LANGUAGE DeriveGeneric, DeriveDataTypeable, DefaultSignatures #-}
-module CabalHelper.Types where
+module CabalHelper.Shared.Types where
 
 import GHC.Generics
 import Data.Version

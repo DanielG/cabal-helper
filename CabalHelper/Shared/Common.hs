@@ -15,7 +15,7 @@
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 {-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
-module CabalHelper.Common where
+module CabalHelper.Shared.Common where
 
 import Control.Applicative
 import Control.Exception as E

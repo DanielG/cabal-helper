@@ -10,17 +10,17 @@ import Data.Version
 import Data.Functor
 import Data.Function
 import qualified Distribution.Compat.ReadP as Dist
-import Distribution.Version hiding (Version)
+import Distribution.Version hiding (Version, showVersion)
 import Distribution.Text
 import Control.Exception as E
 import Control.Arrow
 import Control.Monad
 import Prelude
 
-import CabalHelper.Common
-import CabalHelper.Compile
-import CabalHelper.Compat.Version
-import CabalHelper.Types
+import CabalHelper.Compiletime.Compat.Version
+import CabalHelper.Compiletime.Compile
+import CabalHelper.Shared.Common
+import CabalHelper.Shared.Types
 
 runReadP'Dist :: Dist.ReadP t t -> String -> t
 runReadP'Dist p i = case filter ((=="") . snd) $ Dist.readP_to_S p i of
@@ -135,21 +135,20 @@ compilePrivatePkgDb (Left HEAD) = do
           hPutStrLn stderr err
           return $ Left $ ExitFailure 1
       Right (db, commit) ->
-          compileWithPkg "." (Just db) (Left commit)
+          compileWithPkg (Just db) (Left commit)
 compilePrivatePkgDb (Right cabalVer) = do
     _ <- rawSystem "rm" [ "-r", "/tmp/.ghc-mod" ]
     db <- installCabal defaultOptions { verbose = True } cabalVer `E.catch`
         \(SomeException _) -> do
             errorInstallCabal cabalVer "dist"
-    compileWithPkg "." (Just db) (Right cabalVer)
+    compileWithPkg (Just db) (Right cabalVer)
 
-compileWithPkg :: FilePath
-               -> Maybe FilePath
+compileWithPkg :: Maybe FilePath
                -> Either String Version
                -> IO (Either ExitCode FilePath)
-compileWithPkg chdir mdb ver =
+compileWithPkg mdb ver =
     compile "dist" defaultOptions { verbose = True } $
-      Compile chdir Nothing mdb ver [cabalPkgId ver]
+      Compile Nothing mdb ver [cabalPkgId ver]
 
 cabalPkgId :: Either String Version -> String
 cabalPkgId (Left _commitid) = "Cabal"
