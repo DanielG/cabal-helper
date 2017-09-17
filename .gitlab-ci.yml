@@ -18,7 +18,7 @@ after_script:
   script:
     - echo $PWD
     - ghc-pkg list
-    - $CI_PROJECT_DIR/scripts/retry.sh cabal install -j2 --user --only-dependencies --force-reinstalls --enable-tests --enable-documentation
+    - $CI_PROJECT_DIR/scripts/retry.sh cabal install -j2 --user --only-dependencies --enable-tests --enable-documentation
     - which cabal
     - cabal --version
     - cabal configure --enable-tests
@@ -26,7 +26,7 @@ after_script:
     - ghc-pkg list
     - which cabal
     - cabal --version
-    - ./dist/build/spec/spec
+    - ./dist/build/compile-test/compile-test
     - cabal haddock
 
 job-ghc8.2.1-cabal-install2.0.0.0:
