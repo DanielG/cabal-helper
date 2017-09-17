@@ -27,7 +27,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.UTF8 as UTF8
 import Language.Haskell.TH
 import System.Directory
-import System.Environment
+import System.Environment.Extra
 import System.FilePath
 import System.IO.Temp
 import Prelude
