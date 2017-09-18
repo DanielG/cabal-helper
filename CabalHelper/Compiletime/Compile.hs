@@ -171,8 +171,6 @@ compile distdir opts@Options {..} Compile {..} = do
 
     withHelperSources mchsrcdir $ \compCabalHelperSourceDir -> do
 
-    _ <- liftIO $ system $ "ls -lR " ++ compCabalHelperSourceDir
-
     vLog opts $ "sourcedir: " ++ compCabalHelperSourceDir
     vLog opts $ "outdir: " ++ outdir
     vLog opts $ "exe: " ++ exe
