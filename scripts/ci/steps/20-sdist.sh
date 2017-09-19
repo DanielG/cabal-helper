@@ -1,10 +1,6 @@
-source_dir="$(mktemp --tmpdir -d "cabal-helper.sdistXXXXXXXXX")"
 mkdir -p "$source_dir"
+mkdir -p "$build_dir"
 
-cabal sdist --output-directory="$source_dir"
-
-if [ -e cabal.sandbox.config ]; then
-    cp cabal.sandbox.config "$source_dir"
-fi
+cabal --sandbox-config="$sandbox_config" sdist --builddir="$build_dir" --output-directory="$source_dir"
 
 cd "$source_dir"
