@@ -123,7 +123,6 @@ data HEAD = HEAD deriving (Eq, Show)
 
 compilePrivatePkgDb :: Either HEAD Version -> IO (Either ExitCode FilePath)
 compilePrivatePkgDb (Left HEAD) = do
-    _ <- rawSystem "rm" [ "-r", "/tmp/.ghc-mod" ]
     res <- (Right <$> installCabalHEAD defaultOptions { verbose = True })
              `E.catch` \(SomeException ex) -> return $ Left $
                  "ERROR: Installing cabal HEAD failed: " ++ show ex
@@ -134,7 +133,6 @@ compilePrivatePkgDb (Left HEAD) = do
       Right (db, commit) ->
           compileWithPkg (Just db) (Left commit)
 compilePrivatePkgDb (Right cabalVer) = do
-    _ <- rawSystem "rm" [ "-r", "/tmp/.ghc-mod" ]
     db <- installCabal defaultOptions { verbose = True } cabalVer `E.catch`
         \(SomeException _) -> do
             errorInstallCabal cabalVer "dist"
