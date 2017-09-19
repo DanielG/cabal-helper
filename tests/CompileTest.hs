@@ -1,5 +1,4 @@
 import Distribution.Helper
-import System.Environment.Extra (lookupEnv)
 import System.Posix.Env (setEnv)
 import System.Process
 import System.Exit
@@ -17,6 +16,7 @@ import Control.Arrow
 import Control.Monad
 import Prelude
 
+import CabalHelper.Compiletime.Compat.Environment
 import CabalHelper.Compiletime.Compat.Version
 import CabalHelper.Compiletime.Compile
 import CabalHelper.Shared.Common

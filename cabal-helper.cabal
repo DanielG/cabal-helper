@@ -76,6 +76,7 @@ executable cabal-helper-wrapper
   other-extensions:    TemplateHaskell
   main-is:             CabalHelper/Compiletime/Wrapper.hs
   other-modules:
+                       CabalHelper.Compiletime.Compat.Environment
                        CabalHelper.Compiletime.Compat.Version
                        CabalHelper.Compiletime.Compile
                        CabalHelper.Compiletime.Data
@@ -99,8 +100,7 @@ executable cabal-helper-wrapper
                      , process          < 1.7  && >= 1.1.0.1
                      , temporary        < 1.3  && >= 1.2.0.4
                      , utf8-string      < 1.1  && >= 1.0.1.1
-                     , time             < 1.9  && >= 1.8.0.3
-                     , extra            < 1.6  && >= 1.4.10
+                     , time             < 1.9  && >= 1.8.0.2
 
                      , template-haskell
                      , ghc-prim
@@ -111,6 +111,7 @@ test-suite compile-test
   type:                exitcode-stdio-1.0
   main-is:             tests/CompileTest.hs
   other-modules:
+                       CabalHelper.Compiletime.Compat.Environment
                        CabalHelper.Compiletime.Compat.Version
                        CabalHelper.Compiletime.Compile
                        CabalHelper.Compiletime.Data
@@ -134,8 +135,7 @@ test-suite compile-test
                      , process          < 1.7  && >= 1.1.0.1
                      , temporary        < 1.3  && >= 1.2.0.4
                      , utf8-string      < 1.1  && >= 1.0.1.1
-                     , time             < 1.9  && >= 1.8.0.3
-                     , extra            < 1.6  && >= 1.4.10
+                     , time             < 1.9  && >= 1.8.0.2
 
                      -- additional test deps
                      , unix             < 2.8  && >= 2.5.1.0
