@@ -1,4 +1,3 @@
-import Distribution.Helper
 import System.Posix.Env (setEnv)
 import System.Process
 import System.Exit
@@ -37,8 +36,6 @@ main :: IO ()
 main = do
   flip (setEnv "HOME") True =<< fromMaybe "/tmp" <$> lookupEnv "TMPDIR"
   _ <- rawSystem "cabal" ["update"]
-
-  writeAutogenFiles' $ defaultQueryEnv "." "./dist"
 
   let parseVer' "HEAD" = Left HEAD
       parseVer' v      = Right $ parseVer v
