@@ -135,14 +135,14 @@ compilePrivatePkgDb (Left HEAD) = do
 compilePrivatePkgDb (Right cabalVer) = do
     db <- installCabal defaultOptions { verbose = True } cabalVer `E.catch`
         \(SomeException _) -> do
-            errorInstallCabal cabalVer "dist"
+            errorInstallCabal cabalVer "/does-not-exist"
     compileWithPkg (Just db) (Right cabalVer)
 
 compileWithPkg :: Maybe FilePath
                -> Either String Version
                -> IO (Either ExitCode FilePath)
 compileWithPkg mdb ver =
-    compile "dist" defaultOptions { verbose = True } $
+    compile "/does-not-exist" defaultOptions { verbose = True } $
       Compile Nothing mdb ver [cabalPkgId ver]
 
 cabalPkgId :: Either String Version -> String
