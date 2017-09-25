@@ -149,7 +149,7 @@ main = handlePanic $ do
         Just (hdrCabalVersion, _) -> do
           case cabalVersion opts of
             Just ver | hdrCabalVersion /= ver -> panic $ printf "\
-\Cabal version %s was requested setup configuration was\n\
+\Cabal version %s was requested but setup configuration was\n\
 \written by version %s" (showVersion ver) (showVersion hdrCabalVersion)
             _ -> do
               eexe <- compileHelper opts hdrCabalVersion projdir distdir
