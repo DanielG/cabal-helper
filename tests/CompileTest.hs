@@ -1,7 +1,10 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 import System.Posix.Env (setEnv)
 import System.Process
 import System.Exit
 import System.IO
+import Control.Exception as E
 import Data.List
 import Data.Maybe
 import Data.Version
@@ -121,9 +124,13 @@ main = do
 
 compilePrivatePkgDb :: Either HEAD Version -> IO (Either ExitCode FilePath)
 compilePrivatePkgDb eCabalVer = do
-    (db, e_commit_ver)
-        <- installCabal defaultOptions { verbose = True } eCabalVer
-    compileWithPkg (Just db) e_commit_ver
+    res <- E.try $ installCabal defaultOptions { verbose = True } eCabalVer
+    case res of
+      Right (db, e_commit_ver) ->
+          compileWithPkg (Just db) e_commit_ver
+      Left (ioe :: IOException) -> do
+          print ioe
+          return $ Left (ExitFailure 1)
 
 compileWithPkg :: Maybe PackageDbDir
                -> Either String Version
