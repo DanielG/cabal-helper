@@ -100,8 +100,9 @@ main = do
            hPutStrLn stderr $ "\n\n\n\n\n\n====== Compiling with Cabal-" ++ sver
            compilePrivatePkgDb ver
 
-  let printStatus (cv, rv) = putStrLn $ "- Cabal "++show cv++" "++status
-        where status = case rv of
+  let printStatus (cv, rv) = putStrLn $ "- Cabal "++ver++" "++status
+        where  ver = case cv of Left _ -> "HEAD"; Right v -> showVersion v
+               status = case rv of
                          Right _ ->
                              "suceeded"
                          Left rvc ->
