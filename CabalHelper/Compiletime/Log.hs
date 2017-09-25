@@ -19,5 +19,5 @@ vLog _ _ = return ()
 logIOError :: Options -> String -> IO (Maybe a) -> IO (Maybe a)
 logIOError opts label a = do
   a `E.catch` \(ex :: IOError) -> do
-      vLog opts $ label ++ ": " ++ E.displayException ex
+      vLog opts $ label ++ ": " ++ show ex
       return Nothing
