@@ -1,29 +1,24 @@
 # cabal-helper
 
-`cabal-helper` provides a library which wraps the internal use of
-anexecutable to lift the restrictions imposed by linking against versions of
-GHC before `7.10`. This has the pleasant side effect of isolating the user
-from having to deal with Cabal version changes manually as `cabal-helper`
-can simply recompile it's helper program automatically as needed.
+Cabal's little helper provides access to build information gathered by `cabal`
+when configuring a project. Specifically we're interested in retrieving enough
+information to bring up a compiler session, using the GHC API, which is similar
+to running `cabal repl` in a project.
 
-`cabal-helper` uses a wrapper executable to compile the actual cabal-helper
-executable at runtime while linking against an arbitrary version of
-Cabal. This runtime-compiled helper executable is then used to extract
-various bits and peices from Cabal's on disk state (dist/setup-config)
-written by it's configure command.
+While simple in principle this is complicated by the fact that the information
+Cabal writes to disk is in an unstable format and only really accessible through
+the Cabal API itself.
 
-In addition to this the wrapper executable also supports installing any
-version of Cabal from hackage in case it cannot be found in any available
-package database. The wrapper installs these instances of the Cabal library
-into a private package database so as to not interfere with the user's
-packages.
+Since we do not want to bind the user of a development tool which utilises this
+library to a specific version of Cabal we compile the code which interfaces with
+the Cabal library's API on the user's machine, at runtime, against whichever
+version of Cabal was used to write the on disk information for a given project.
 
-Furthermore the wrapper supports one special case namely reading a state
-file for Cabal itself. This is needed as Cabal compiles it's Setup.hs using
-itself and not using any version of Cabal installed in any package database.
-
-`cabal-helper` can compile with `Cabal >= 1.14` but requires `Cabal >= 1.16`
-at runtime.
+If this version of Cabal is not available on the users machine anymore, which is
+fairly likely since cabal-install is usually linked statically, we have support
+for compiling the Cabal library also. In this case the library is installed into
+a private, isolated, package database in `$XDG_CACHE_DIR/cabal-helper` so as to
+not interfere with the user's package database.
 
 ## IRC
 
