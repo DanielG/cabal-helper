@@ -64,10 +64,8 @@ module Distribution.Helper (
 
   -- * Managing @dist/@
   , prepare
-  , prepare'
   , reconfigure
   , writeAutogenFiles
-  , writeAutogenFiles'
 
   -- * $libexec related error handling
   , LibexecNotFoundError(..)
@@ -347,43 +345,16 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
   return $ SomeLocalBuildInfo
     pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts pkgLics fls cfls ndcfls (comp, compVer)
 
-prepare :: MonadIO m
-        => (FilePath -> [String] -> String -> IO String)
-        -> FilePath
-        -> FilePath
-        -> m ()
-prepare readProc projdir distdir = liftIO $ do
-  exe  <- findLibexecExe
-  void $ readProc exe [projdir, distdir] ""
-
-{-# DEPRECATED prepare
-  "Will be replaced by prepare' in the next major release" #-}
-
 -- | Make sure the appropriate helper executable for the given project is
 -- installed and ready to run queries.
-prepare' :: MonadIO m => QueryEnv -> m ()
-prepare' qe =
+prepare :: MonadIO m => QueryEnv -> m ()
+prepare qe =
   liftIO $ void $ invokeHelper qe []
-
-writeAutogenFiles :: MonadIO m
-                  => (FilePath -> [String] -> String -> IO String)
-                  -> FilePath
-                  -- ^ Path to project directory, i.e. the one containing the
-                  -- @project.cabal@ file
-                  -> FilePath
-                  -- ^ Path to the @dist/@ directory
-                  -> m ()
-writeAutogenFiles readProc projdir distdir = liftIO $ do
-  exe  <- findLibexecExe
-  void $ readProc exe [projdir, distdir, "write-autogen-files"] ""
-
-{-# DEPRECATED writeAutogenFiles
-  "Will be replaced by writeAutogenFiles' in the next major release" #-}
 
 -- | Create @cabal_macros.h@ and @Paths_\<pkg\>@ possibly other generated files
 -- in the usual place.
-writeAutogenFiles' :: MonadIO m => QueryEnv -> m ()
-writeAutogenFiles' qe  =
+writeAutogenFiles :: MonadIO m => QueryEnv -> m ()
+writeAutogenFiles qe  =
   liftIO $ void $ invokeHelper qe ["write-autogen-files"]
 
 -- | Get the path to the sandbox package-db in a project
