@@ -90,7 +90,7 @@ runReadP p i = case filter ((=="") . snd) $ readP_to_S p i of
 
 appCacheDir :: IO FilePath
 appCacheDir =
-    (</> "ghc-mod") <$> getEnvDefault "XDG_CACHE_HOME" (homeRel cache)
+    (</> "cabal-helper") <$> getEnvDefault "XDG_CACHE_HOME" (homeRel cache)
  where
     getEnvDefault var def = lookupEnv var >>= \m -> case m of Nothing -> def; Just x -> return x
     homeRel path = (</> path) <$> getHomeDirectory
