@@ -10,7 +10,6 @@ import Data.Function
 import qualified Distribution.Compat.ReadP as Dist
 import Distribution.Version hiding (Version, showVersion)
 import Distribution.Text
-import Control.Exception as E
 import Control.Arrow
 import Control.Monad
 import Prelude
@@ -119,31 +118,18 @@ main = do
    isLeft' (Left _) = True
    isLeft' (Right _) = False
 
-data HEAD = HEAD deriving (Eq, Show)
-
 compilePrivatePkgDb :: Either HEAD Version -> IO (Either ExitCode FilePath)
-compilePrivatePkgDb (Left HEAD) = do
-    res <- (Right <$> installCabalHEAD defaultOptions { verbose = True })
-             `E.catch` \(SomeException ex) -> return $ Left $
-                 "ERROR: Installing cabal HEAD failed: " ++ show ex
-    case res of
-      Left err -> do
-          hPutStrLn stderr err
-          return $ Left $ ExitFailure 1
-      Right (db, commit) ->
-          compileWithPkg (Just db) (Left commit)
-compilePrivatePkgDb (Right cabalVer) = do
-    db <- installCabal defaultOptions { verbose = True } cabalVer `E.catch`
-        \(SomeException _) -> do
-            errorInstallCabal cabalVer "/does-not-exist"
-    compileWithPkg (Just db) (Right cabalVer)
+compilePrivatePkgDb eCabalVer = do
+    (db, e_commit_ver)
+        <- installCabal defaultOptions { verbose = True } eCabalVer
+    compileWithPkg (Just db) e_commit_ver
 
-compileWithPkg :: Maybe FilePath
+compileWithPkg :: Maybe PackageDbDir
                -> Either String Version
                -> IO (Either ExitCode FilePath)
-compileWithPkg mdb ver =
+compileWithPkg mdb eCabalVer =
     compile "/does-not-exist" defaultOptions { verbose = True } $
-      Compile Nothing mdb ver [cabalPkgId ver]
+      Compile Nothing mdb eCabalVer [cabalPkgId eCabalVer]
 
 cabalPkgId :: Either String Version -> String
 cabalPkgId (Left _commitid) = "Cabal"

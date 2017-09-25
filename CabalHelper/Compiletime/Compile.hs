@@ -28,12 +28,14 @@ import Data.List
 import Data.Maybe
 import Data.String
 import Data.Version
+import GHC.IO.Exception (IOErrorType(OtherError))
 import Text.Printf
 import System.Directory
 import System.FilePath
 import System.Process
 import System.Exit
 import System.IO
+import System.IO.Error
 import System.IO.Temp
 import Prelude
 
@@ -48,8 +50,8 @@ import CabalHelper.Shared.Common
 import CabalHelper.Shared.Sandbox (getSandboxPkgDb)
 
 data Compile = Compile {
-      compCabalSourceDir :: Maybe FilePath,
-      compPackageDb      :: Maybe FilePath,
+      compCabalSourceDir :: Maybe CabalSourceDir,
+      compPackageDb      :: Maybe PackageDbDir,
       compCabalVersion   :: Either String Version,
       compPackageDeps    :: [String]
     }
@@ -91,8 +93,10 @@ compileHelper opts cabalVer projdir distdir = do
    -- | Check if this version is available in the project sandbox
    compileSandbox :: MaybeT IO (Either ExitCode FilePath)
    compileSandbox = do
-       sandbox <- MaybeT $ getSandboxPkgDb projdir (display buildPlatform) =<< ghcVersion opts
-       ver <- MaybeT $ logSomeError opts "compileSandbox" $
+       let ghcVer = ghcVersion opts
+           mdb_path = getSandboxPkgDb projdir (display buildPlatform) =<< ghcVer
+       sandbox <- PackageDbDir <$> MaybeT mdb_path
+       ver <- MaybeT $ logIOError opts "compileSandbox" $
          find (== cabalVer) <$> listCabalVersions' opts (Just sandbox)
        vLog opts $ logMsg ++ "sandbox package-db"
        liftIO $ compileWithPkg (Just sandbox) ver
@@ -102,12 +106,13 @@ compileHelper opts cabalVer projdir distdir = do
    -- package-db
    cachedCabalPkg :: MaybeT IO (Either ExitCode FilePath)
    cachedCabalPkg = do
-       db_exists <- liftIO $ cabalPkgDbExists opts cabalVer
+       db_exists <- liftIO $ cabalVersionExistsInPkgDb opts cabalVer
        case db_exists of
          False -> mzero
          True -> do
-             db <- liftIO $ getPrivateCabalPkgDb opts (Right cabalVer)
-             vLog opts $ logMsg ++ "private package-db in " ++ db
+             db@(PackageDbDir db_path)
+                 <- liftIO $ getPrivateCabalPkgDb opts (Right cabalVer)
+             vLog opts $ logMsg ++ "private package-db in " ++ db_path
              liftIO $ compileWithPkg (Just db) cabalVer
 
    -- | See if we're in a cabal source tree
@@ -115,18 +120,19 @@ compileHelper opts cabalVer projdir distdir = do
    compileCabalSource = do
        let cabalFile = projdir </> "Cabal.cabal"
        cabalSrc <- liftIO $ doesFileExist cabalFile
+       let projdir' = CabalSourceDir projdir
        case cabalSrc of
          False -> mzero
          True -> liftIO $ do
            vLog opts $ "directory above distdir looks like cabal source tree (Cabal.cabal exists)"
            ver <- cabalFileVersion <$> readFile cabalFile
            vLog opts $ "compiling helper with local Cabal source tree"
-           compileWithCabalTree ver projdir
+           compileWithCabalTree ver projdir'
 
    -- | Compile the requested cabal version into an isolated package-db
    compilePrivatePkgDb :: IO (Either ExitCode FilePath)
    compilePrivatePkgDb = do
-       db <- installCabal opts cabalVer `E.catch`
+       db <- fst <$> installCabal opts (Right cabalVer) `E.catch`
              \(SomeException _) -> errorInstallCabal cabalVer distdir
        compileWithPkg (Just db) cabalVer
 
@@ -150,7 +156,8 @@ compileHelper opts cabalVer projdir distdir = do
 
 compile :: FilePath -> Options -> Compile -> IO (Either ExitCode FilePath)
 compile distdir opts@Options {..} Compile {..} = do
-    cnCabalSourceDir <- canonicalizePath `traverse` compCabalSourceDir
+    cnCabalSourceDir
+        <- (canonicalizePath . cabalSourceDir) `traverse` compCabalSourceDir
     appdir <- appCacheDir
 
     let (outdir, exedir, exe, mchsrcdir) =
@@ -187,7 +194,7 @@ compile distdir opts@Options {..} Compile {..} = do
                    \|| (major1) == "++show mj1++" && (major2)  < "++show mj2++"\
                    \|| (major1) == "++show mj1++" && (major2) == "++show mj2++" && (minor) <= "++show mi++")"
           ],
-          maybeToList $ ("-package-conf="++) <$> compPackageDb,
+          maybeToList $ ("-package-conf="++) <$> packageDbDir <$> compPackageDb,
           map ("-i"++) $ nub $ "":compCabalHelperSourceDir:maybeToList cnCabalSourceDir,
 
           if isNothing cnCabalSourceDir
@@ -208,11 +215,7 @@ compile distdir opts@Options {..} Compile {..} = do
           ]
          ]
 
-    vLog opts $ intercalate " " $ map (("'"++) . (++"'")) $ ghcProgram:ghc_opts
-
-    -- TODO: touch exe after, ghc doesn't do that if the input files didn't
-    -- actually change
-    rv <- callProcessStderr' Nothing ghcProgram ghc_opts
+    rv <- callProcessStderr' opts Nothing ghcProgram ghc_opts
     return $ case rv of
                ExitSuccess -> Right exe
                e@(ExitFailure _) -> Left e
@@ -227,30 +230,45 @@ exeName (Right compCabalVersion) = intercalate "-"
     , "Cabal" ++ showVersion compCabalVersion
     ]
 
-callProcessStderr' :: Maybe FilePath -> FilePath -> [String] -> IO ExitCode
-callProcessStderr' mwd exe args = do
+callProcessStderr'
+    :: Options -> Maybe FilePath -> FilePath -> [String] -> IO ExitCode
+callProcessStderr' opts mwd exe args = do
+  let cd = case mwd of
+             Nothing -> []; Just wd -> [ "cd", formatProcessArg wd++";" ]
+  vLog opts $ intercalate " " $ cd ++ map formatProcessArg (exe:args)
   (_, _, _, h) <- createProcess (proc exe args) { std_out = UseHandle stderr
                                                 , cwd = mwd }
   waitForProcess h
 
-callProcessStderr :: Maybe FilePath -> FilePath -> [String] -> IO ()
-callProcessStderr mwd exe args = do
-  rv <- callProcessStderr' mwd exe args
+callProcessStderr :: Options -> Maybe FilePath -> FilePath -> [String] -> IO ()
+callProcessStderr opts mwd exe args = do
+  rv <- callProcessStderr' opts mwd exe args
   case rv of
     ExitSuccess -> return ()
     ExitFailure v -> processFailedException "callProcessStderr" exe args v
 
 processFailedException :: String -> String -> [String] -> Int -> IO a
 processFailedException fn exe args rv =
-      panic $ concat [fn, ": ", exe, " "
-                     , intercalate " " (map show args)
-                     , " (exit " ++ show rv ++ ")"]
+    ioError $ mkIOError OtherError msg Nothing Nothing
+  where
+    msg = concat [ fn, ": ", exe, " "
+                 , intercalate " " (map formatProcessArg args)
+                 , " (exit " ++ show rv ++ ")"
+                 ]
 
-installCabal :: Options -> Version -> IO FilePath
-installCabal opts ver = do
+formatProcessArg :: String -> String
+formatProcessArg xs
+    | any isSpace xs = "'"++ xs ++"'"
+    | otherwise      = xs
+
+data HEAD = HEAD deriving (Eq, Show)
+
+installCabal :: Options -> Either HEAD Version -> IO (PackageDbDir, Either String Version)
+installCabal opts ever = do
   appdir <- appCacheDir
-  let sver = showVersion ver
-  hPutStr stderr $ printf "\
+  let message ver = do
+      let sver = showVersion ver
+      hPutStr stderr $ printf "\
 \cabal-helper-wrapper: Installing a private copy of Cabal because we couldn't\n\
 \find the right version in your global/user package-db, this might take a\n\
 \while but will only happen once per Cabal version you're using.\n\
@@ -265,24 +283,36 @@ installCabal opts ver = do
 \Installing Cabal %s ...\n" appdir sver sver sver
 
   withSystemTempDirectory "cabal-helper-Cabal-source" $ \tmpdir -> do
-    let
-        mpatch :: Maybe (FilePath -> IO ())
-        mpatch = snd <$> find ((ver`elem`) . fst) patchyCabalVersions
-    msrcdir <- sequenceA $ unpackPatchedCabal opts ver tmpdir <$> mpatch
-    db <- createPkgDb opts (Right ver)
-    cabalInstall opts db (maybe (Right ver) Left msrcdir)
-    return db
+    (srcdir, e_commit_ver) <- case ever of
+      Left HEAD -> do
+        second Left <$> unpackCabalHEAD tmpdir
+      Right ver -> do
+        message ver
+        let patch = fromMaybe nopCabalPatchDescription $
+              find ((ver`elem`) . cpdVersions) patchyCabalVersions
+        (,) <$> unpackPatchedCabal opts ver tmpdir patch <*> pure (Right ver)
 
-installCabalHEAD :: Options -> IO (FilePath, String)
-installCabalHEAD opts = do
-  withSystemTempDirectory "cabal-helper-CabalHEAD-source" $ \tmpdir -> do
-    (srcdir, commit) <- unpackCabalHEAD tmpdir
-    db <- createPkgDb opts (Left commit)
-    cabalInstall opts db (Left srcdir)
-    return (db, commit)
+    db <- createPkgDb opts e_commit_ver
 
-cabalInstall :: Options -> FilePath -> Either FilePath Version -> IO ()
-cabalInstall opts db e_ver_msrcdir = do
+    runCabalInstall opts db srcdir
+
+    return (db, e_commit_ver)
+
+{-
+TODO: If the Cabal version we want to install is less than or equal to one we
+have available, either through act-as-setup or in a package-db we should be able
+to use act-as-setup or build a default Setup.hs exe and patch the Cabal source
+to say build-type:simple. This will sidestep bugs in c-i>=1.24
+
+See conversation in
+https://github.com/haskell/cabal/commit/e2bf243300957321497353a2f85517e464f764ab
+
+Otherwise we might be able to use the shipped Setup.hs
+
+-}
+
+runCabalInstall :: Options -> PackageDbDir -> CabalSourceDir -> IO ()
+runCabalInstall opts (PackageDbDir db) (CabalSourceDir srcdir) = do
   cabalInstallVer <- cabalInstallVersion opts
   cabal_opts <- return $ concat
       [
@@ -290,46 +320,88 @@ cabalInstall opts db e_ver_msrcdir = do
         , "--package-db=global"
         , "--package-db=" ++ db
         , "--prefix=" ++ db </> "prefix"
-        , "--with-ghc=" ++ ghcProgram opts
         ]
+        , cabalOptions opts
         , if cabalInstallVer >= Version [1,20,0,0] []
              then ["--no-require-sandbox"]
              else []
-        , if ghcPkgProgram opts /= ghcPkgProgram defaultOptions
-            then [ "--with-ghc-pkg=" ++ ghcPkgProgram opts ]
+        , [ "install", srcdir ]
+        , if verbose opts
+            then ["-v"]
             else []
-        ,
-          case e_ver_msrcdir of
-            Right ver ->
-                [ "install", "Cabal-"++showVersion ver ]
-            Left srcdir ->
-                [ "install", srcdir ]
+        , [ "--only-dependencies" ]
       ]
 
-  vLog opts $ intercalate " "
-            $ map (("\""++) . (++"\""))
-            $ cabalProgram opts:cabal_opts
+  callProcessStderr opts (Just "/") (cabalProgram opts) cabal_opts
 
-  callProcessStderr (Just "/") (cabalProgram opts) cabal_opts
+  setupProgram <- compileSetupHs opts db srcdir
+  runSetupHs opts setupProgram db srcdir
+
   hPutStrLn stderr "done"
 
-patchyCabalVersions :: [([Version], FilePath -> IO ())]
+cabalOptions :: Options -> [String]
+cabalOptions opts =
+    concat [ [ "--with-ghc=" ++ ghcProgram opts ]
+           , if ghcPkgProgram opts /= ghcPkgProgram defaultOptions
+               then [ "--with-ghc-pkg=" ++ ghcPkgProgram opts ]
+               else []
+           ]
+
+runSetupHs :: Options -> SetupProgram -> FilePath -> FilePath -> IO ()
+runSetupHs opts SetupProgram {..} db srcdir = do
+  let run = callProcessStderr opts (Just srcdir) setupProgram
+  run $ [ "configure", "--package-db", db, "--prefix", db </> "prefix" ] ++ cabalOptions opts
+  run [ "build", "-j" ]
+  run [ "copy" ]
+  run [ "register" ]
+
+newtype SetupProgram = SetupProgram { setupProgram :: FilePath }
+compileSetupHs :: Options -> FilePath -> FilePath -> IO SetupProgram
+compileSetupHs opts db srcdir = do
+  ver <- ghcVersion opts
+  let no_version_macros
+        | ver >= Version [8] [] = [ "-fno-version-macros" ]
+        | otherwise             = []
+
+      file = srcdir </> "Setup"
+
+  callProcessStderr opts (Just srcdir) (ghcProgram opts) $ concat
+    [ [ "--make"
+      , "-package-conf", db
+      ]
+    , no_version_macros
+    , [ file <.> "hs"
+      , "-o", file
+      ]
+    ]
+  return $ SetupProgram file
+
+data CabalPatchDescription = CabalPatchDescription {
+      cpdVersions      :: [Version],
+      cpdUnpackVariant :: UnpackCabalVariant,
+      cpdPatchFn       :: FilePath -> IO ()
+    }
+nopCabalPatchDescription :: CabalPatchDescription
+nopCabalPatchDescription = CabalPatchDescription [] LatestRevision (const (return ()))
+
+patchyCabalVersions :: [CabalPatchDescription]
 patchyCabalVersions = [
-    ( [ Version [1,18,1] [] ]
-    , fixArrayConstraint
-    ),
+  let versions  = [ Version [1,18,1] [] ]
+      variant   = Pristine
+      patch     = fixArrayConstraint
+  in CabalPatchDescription versions variant patch,
 
-
-    ( [ Version [1,18,0] [] ]
-    , \dir -> do
+  let versions  = [ Version [1,18,0] [] ]
+      variant   = Pristine
+      patch dir = do
         fixArrayConstraint dir
         fixOrphanInstance dir
-    ),
+  in CabalPatchDescription versions variant patch,
 
-    -- just want the pristine version
-    ( [ Version [1,24,1,0] [] ]
-    , \_ -> return ()
-    )
+  let versions  = [ Version [1,24,1,0] [] ]
+      variant   = Pristine
+      patch _   = return ()
+  in CabalPatchDescription versions variant patch
   ]
  where
    fixArrayConstraint dir = do
@@ -364,30 +436,37 @@ patchyCabalVersions = [
 
      renameFile versionFileTmp versionFile
 
-unpackPatchedCabal ::
-    Options -> Version -> FilePath -> (FilePath -> IO ()) -> IO FilePath
-unpackPatchedCabal opts cabalVer tmpdir patch = do
-  dir <- unpackCabal opts cabalVer tmpdir
+unpackPatchedCabal
+    :: Options
+    -> Version
+    -> FilePath
+    -> CabalPatchDescription
+    -> IO CabalSourceDir
+unpackPatchedCabal opts cabalVer tmpdir (CabalPatchDescription _ variant patch) = do
+  res@(CabalSourceDir dir) <- unpackCabal opts cabalVer tmpdir variant
   patch dir
-  return dir
+  return res
 
-unpackCabal ::
-    Options -> Version -> FilePath -> IO FilePath
-unpackCabal opts cabalVer tmpdir = do
+data UnpackCabalVariant = Pristine | LatestRevision
+newtype CabalSourceDir = CabalSourceDir { cabalSourceDir :: FilePath }
+unpackCabal
+    :: Options -> Version -> FilePath -> UnpackCabalVariant -> IO CabalSourceDir
+unpackCabal opts cabalVer tmpdir variant = do
   let cabal = "Cabal-" ++ showVersion cabalVer
       dir = tmpdir </> cabal
-  callProcessStderr (Just tmpdir) (cabalProgram opts)
-                    [ "get", "--pristine", cabal ]
-  return dir
+      variant_opts = case variant of Pristine -> [ "--pristine" ]; _ -> []
+      args = [ "get", cabal ] ++ variant_opts
+  callProcessStderr opts (Just tmpdir) (cabalProgram opts) args
+  return $ CabalSourceDir dir
 
-unpackCabalHEAD :: FilePath -> IO (FilePath, String)
+unpackCabalHEAD :: FilePath -> IO (CabalSourceDir, String)
 unpackCabalHEAD tmpdir = do
   let dir = tmpdir </> "cabal-head.git"
       url = "https://github.com/haskell/cabal.git"
   ExitSuccess <- rawSystem "git" [ "clone", "--depth=1", url, dir]
   commit <-
       withDirectory_ dir $ trim <$> readProcess "git" ["rev-parse", "HEAD"] ""
-  return (dir </> "Cabal", commit)
+  return (CabalSourceDir $ dir </> "Cabal", commit)
  where
    withDirectory_ :: FilePath -> IO a -> IO a
    withDirectory_ dir action =
@@ -396,8 +475,8 @@ unpackCabalHEAD tmpdir = do
          (liftIO . setCurrentDirectory)
          (\_ -> liftIO (setCurrentDirectory dir) >> action)
 
-errorInstallCabal :: Version -> FilePath -> a
-errorInstallCabal cabalVer _distdir = panic $ printf "\
+errorInstallCabal :: Version -> FilePath -> IO a
+errorInstallCabal cabalVer _distdir = panicIO $ printf "\
 \Installing Cabal version %s failed.\n\
 \\n\
 \You have the following choices to fix this:\n\
@@ -442,19 +521,19 @@ listCabalVersions :: Options -> IO [Version]
 listCabalVersions opts = listCabalVersions' opts Nothing
 
 -- TODO: Include sandbox? Probably only relevant for build-type:custom projects.
-listCabalVersions' :: Options -> Maybe FilePath -> IO [Version]
+listCabalVersions' :: Options -> Maybe PackageDbDir -> IO [Version]
 listCabalVersions' Options {..} mdb = do
-  let mdbopt = ("--package-conf="++) <$> mdb
+  let mdbopt = ("--package-conf="++) <$> packageDbDir <$> mdb
       opts = ["list", "--simple-output", "Cabal"] ++ maybeToList mdbopt
 
   catMaybes . map (fmap snd . parsePkgId . fromString) . words
           <$> readProcess ghcPkgProgram opts ""
 
-cabalPkgDbExists :: Options -> Version -> IO Bool
-cabalPkgDbExists opts cabalVer = do
-  db <- getPrivateCabalPkgDb opts (Right cabalVer)
-  dexists <- doesDirectoryExist db
-  case dexists of
+cabalVersionExistsInPkgDb :: Options -> Version -> IO Bool
+cabalVersionExistsInPkgDb opts cabalVer = do
+  db@(PackageDbDir db_path) <- getPrivateCabalPkgDb opts (Right cabalVer)
+  exists <- doesDirectoryExist db_path
+  case exists of
     False -> return False
     True -> do
       vers <- listCabalVersions' opts (Just db)
@@ -476,18 +555,21 @@ cabalInstallVersion Options {..} = do
 trim :: String -> String
 trim = dropWhileEnd isSpace
 
-createPkgDb :: Options -> Either String Version -> IO FilePath
+createPkgDb :: Options -> Either String Version -> IO PackageDbDir
 createPkgDb opts@Options {..} cabalVer = do
-  db <- getPrivateCabalPkgDb opts cabalVer
-  exists <- doesDirectoryExist db
-  when (not exists) $ callProcessStderr Nothing ghcPkgProgram ["init", db]
+  db@(PackageDbDir db_path) <- getPrivateCabalPkgDb opts cabalVer
+  exists <- doesDirectoryExist db_path
+  when (not exists) $ callProcessStderr opts Nothing ghcPkgProgram ["init", db_path]
   return db
 
-getPrivateCabalPkgDb :: Options -> Either String Version -> IO FilePath
+getPrivateCabalPkgDb :: Options -> Either String Version -> IO PackageDbDir
 getPrivateCabalPkgDb opts cabalVer = do
   appdir <- appCacheDir
   ghcVer <- ghcVersion opts
-  return $ appdir </> exeName cabalVer ++ "-ghc" ++ showVersion ghcVer ++ ".package-db"
+  let db_path = appdir </> exeName cabalVer
+                ++ "-ghc" ++ showVersion ghcVer
+                ++ ".package-db"
+  return $ PackageDbDir db_path
 
 -- "Cabal" ++ ver ++ "-ghc" ++ showVersion ghcVer
 

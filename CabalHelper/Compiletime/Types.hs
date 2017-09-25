@@ -25,8 +25,10 @@ data Options = Options {
         , ghcPkgProgram :: FilePath
         , cabalProgram  :: FilePath
         , cabalVersion  :: Maybe Version
-        , cabalPkgDb    :: Maybe FilePath
+        , cabalPkgDb    :: Maybe PackageDbDir
 }
+
+newtype PackageDbDir = PackageDbDir { packageDbDir :: FilePath }
 
 defaultOptions :: Options
 defaultOptions = Options False "ghc" "ghc-pkg" "cabal" Nothing Nothing

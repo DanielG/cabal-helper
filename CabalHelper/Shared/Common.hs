@@ -42,6 +42,9 @@ instance Exception Panic
 panic :: String -> a
 panic msg = throw $ Panic msg
 
+panicIO :: String -> IO a
+panicIO msg = throwIO $ Panic msg
+
 handlePanic :: IO a -> IO a
 handlePanic action =
     action `E.catch` \(Panic msg) -> errMsg msg >> exitFailure

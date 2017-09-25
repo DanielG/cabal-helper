@@ -80,7 +80,7 @@ globalArgSpec =
                reqArg "VERSION" $ \p o -> o { cabalVersion = Just $ parseVer p }
 
       , option "" ["with-cabal-pkg-db"] "package database to look for Cabal library in" $
-               reqArg "PKG_DB" $ \p o -> o { cabalPkgDb = Just p }
+               reqArg "PKG_DB" $ \p o -> o { cabalPkgDb = Just (PackageDbDir p) }
 
       ]
  where
