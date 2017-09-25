@@ -20,13 +20,3 @@ job-ghc7.8.4-cabal-install1.24.0.2:
   image: registry.gitlab.com/dxld/ghc-mod:ghc7.8.4-cabal-install1.24.0.2
   stage: build
   script: "$CI_PROJECT_DIR/scripts/ci/build.sh"
-
-job-ghc7.10.3-cabal-install1.22.9.0:
-  image: registry.gitlab.com/dxld/ghc-mod:ghc7.10.3-cabal-install1.22.8.0
-  stage: build
-  script: "$CI_PROJECT_DIR/scripts/ci/build.sh"
-
-job-ghc7.8.4-cabal-install1.18.2.0:
-  image: registry.gitlab.com/dxld/ghc-mod:ghc7.8.4-cabal-install1.18.2.0
-  stage: build
-  script: "$CI_PROJECT_DIR/scripts/ci/build.sh"
