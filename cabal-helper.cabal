@@ -78,9 +78,11 @@ executable cabal-helper-wrapper
                        CabalHelper.Compiletime.Log
                        CabalHelper.Compiletime.Types
                        CabalHelper.Shared.Common
+                       CabalHelper.Shared.InterfaceTypes
                        CabalHelper.Shared.Sandbox
                        Paths_cabal_helper
-  ghc-options:         -Wall
+  if flag(dev)
+    ghc-options:         -Wall
   scope:               private
   x-scope:             private
   build-depends:       base             < 5    && >= 4.5
@@ -113,7 +115,6 @@ test-suite compile-test
                        CabalHelper.Compiletime.Types
                        CabalHelper.Shared.Common
                        CabalHelper.Shared.Sandbox
-                       Distribution.Helper
                        Paths_cabal_helper
   hs-source-dirs:      .
   ghc-options:         -Wall
