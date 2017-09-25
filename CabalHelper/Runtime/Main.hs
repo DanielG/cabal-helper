@@ -183,7 +183,7 @@ main = do
 
   [cfile] <- filter isCabalFile <$> getDirectoryContents projdir
 
-  v <- maybe silent (const deafening) . lookup  "GHC_MOD_DEBUG" <$> getEnvironment
+  v <- maybe silent (const deafening) . lookup  "CABAL_HELPER_DEBUG" <$> getEnvironment
   lbi <- unsafeInterleaveIO $ getPersistBuildConfig distdir
   gpd <- unsafeInterleaveIO $ readPackageDescription v (projdir </> cfile)
   let pd = localPkgDescr lbi

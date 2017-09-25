@@ -112,7 +112,7 @@ guessProgramPaths opts = do
 
 overrideVerbosityEnvVar :: Options -> IO Options
 overrideVerbosityEnvVar opts = do
-  x <- lookup  "GHC_MOD_DEBUG" <$> getEnvironment
+  x <- lookup  "CABAL_HELPER_DEBUG" <$> getEnvironment
   return $ case x of
     Just _  -> opts { verbose = True }
     Nothing -> opts
