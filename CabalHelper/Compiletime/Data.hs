@@ -76,5 +76,5 @@ sourceFiles =
   , ("Runtime/Licenses.hs", $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "CabalHelper/Runtime/Licenses.hs")))
   , ("Shared/Common.hs",    $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "CabalHelper/Shared/Common.hs")))
   , ("Shared/Sandbox.hs",   $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "CabalHelper/Shared/Sandbox.hs")))
-  , ("Shared/Types.hs",     $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "CabalHelper/Shared/Types.hs")))
+  , ("Shared/InterfaceTypes.hs",     $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "CabalHelper/Shared/InterfaceTypes.hs")))
   ]

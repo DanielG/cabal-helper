@@ -57,8 +57,8 @@ library
   default-extensions:  NondecreasingIndentation
   exposed-modules:     Distribution.Helper
   other-modules:
+                       CabalHelper.Shared.InterfaceTypes
                        CabalHelper.Shared.Sandbox
-                       CabalHelper.Shared.Types
                        Paths_cabal_helper
   ghc-options:         -Wall
   build-depends:       base          < 5    && >= 4.5
@@ -82,9 +82,9 @@ executable cabal-helper-wrapper
                        CabalHelper.Compiletime.Data
                        CabalHelper.Compiletime.GuessGhc
                        CabalHelper.Compiletime.Log
+                       CabalHelper.Compiletime.Types
                        CabalHelper.Shared.Common
                        CabalHelper.Shared.Sandbox
-                       CabalHelper.Shared.Types
                        Paths_cabal_helper
   ghc-options:         -Wall
   scope:               private
@@ -116,9 +116,9 @@ test-suite compile-test
                        CabalHelper.Compiletime.Compile
                        CabalHelper.Compiletime.Data
                        CabalHelper.Compiletime.Log
+                       CabalHelper.Compiletime.Types
                        CabalHelper.Shared.Common
                        CabalHelper.Shared.Sandbox
-                       CabalHelper.Shared.Types
                        Distribution.Helper
                        Paths_cabal_helper
   hs-source-dirs:      .
@@ -157,8 +157,8 @@ executable cabal-helper-main
   other-modules:
                        CabalHelper.Runtime.Licenses
                        CabalHelper.Shared.Common
+                       CabalHelper.Shared.InterfaceTypes
                        CabalHelper.Shared.Sandbox
-                       CabalHelper.Shared.Types
   ghc-options:         -Wall -fno-warn-unused-imports
   build-depends:       base
                      , Cabal

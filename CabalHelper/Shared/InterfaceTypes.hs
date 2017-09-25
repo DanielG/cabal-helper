@@ -1,5 +1,5 @@
 -- cabal-helper: Simple interface to Cabal's configuration state
--- Copyright (C) 2015  Daniel Gröber <dxld ÄT darkboxed DOT org>
+-- Copyright (C) 2015,2017  Daniel Gröber <dxld ÄT darkboxed DOT org>
 --
 -- This program is free software: you can redistribute it and/or modify
 -- it under the terms of the GNU Affero General Public License as published by
@@ -15,22 +15,25 @@
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 {-# LANGUAGE DeriveGeneric, DeriveDataTypeable, DefaultSignatures #-}
-module CabalHelper.Shared.Types where
+
+{-|
+Module      : CabalHelper.Shared.InterfaceTypes
+Description : Types which are used by c-h library and executable to communicate
+License     : AGPL-3
+
+These types are used to communicate between the cabal-helper library and main
+executable, using Show/Read. If any types in this module change the major
+version must be bumped since this will be exposed in the @Distribution.Helper@
+module.
+
+The cached executables in @$XDG_CACHE_DIR/cabal-helper@ use the cabal-helper
+version (among other things) as a cache key so we don't need to worry about
+talking to an old executable.
+-}
+module CabalHelper.Shared.InterfaceTypes where
 
 import GHC.Generics
 import Data.Version
-
-newtype ChModuleName = ChModuleName String
-    deriving (Eq, Ord, Read, Show, Generic)
-
-data ChComponentName = ChSetupHsName
-                     | ChLibName
-                     | ChSubLibName String
-                     | ChFLibName String
-                     | ChExeName String
-                     | ChTestName String
-                     | ChBenchName String
-  deriving (Eq, Ord, Read, Show, Generic)
 
 data ChResponse
     = ChResponseCompList    [(ChComponentName, [String])]
@@ -42,6 +45,18 @@ data ChResponse
     | ChResponseLicenses    [(String, [(String, Version)])]
     | ChResponseFlags       [(String, Bool)]
   deriving (Eq, Ord, Read, Show, Generic)
+
+data ChComponentName = ChSetupHsName
+                     | ChLibName
+                     | ChSubLibName String
+                     | ChFLibName String
+                     | ChExeName String
+                     | ChTestName String
+                     | ChBenchName String
+  deriving (Eq, Ord, Read, Show, Generic)
+
+newtype ChModuleName = ChModuleName String
+    deriving (Eq, Ord, Read, Show, Generic)
 
 data ChEntrypoint = ChSetupEntrypoint -- ^ Almost like 'ChExeEntrypoint' but
                                       -- @main-is@ could either be @"Setup.hs"@
@@ -59,15 +74,3 @@ data ChPkgDb = ChPkgGlobal
              | ChPkgUser
              | ChPkgSpecific FilePath
                deriving (Eq, Ord, Read, Show, Generic)
-
-data Options = Options {
-          verbose       :: Bool
-        , ghcProgram    :: FilePath
-        , ghcPkgProgram :: FilePath
-        , cabalProgram  :: FilePath
-        , cabalVersion  :: Maybe Version
-        , cabalPkgDb    :: Maybe FilePath
-}
-
-defaultOptions :: Options
-defaultOptions = Options False "ghc" "ghc-pkg" "cabal" Nothing Nothing

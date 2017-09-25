@@ -122,7 +122,7 @@ import Text.Printf
 
 import CabalHelper.Shared.Sandbox
 import CabalHelper.Shared.Common
-import CabalHelper.Shared.Types hiding (Options(..))
+import CabalHelper.Shared.InterfaceTypes
 
 import CabalHelper.Runtime.Licenses
 

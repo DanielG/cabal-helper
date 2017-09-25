@@ -7,7 +7,7 @@ import Data.String
 import System.IO
 import Prelude
 
-import CabalHelper.Shared.Types
+import CabalHelper.Compiletime.Types
 
 vLog :: MonadIO m => Options -> String -> m ()
 vLog Options { verbose = True } msg =

@@ -18,8 +18,8 @@ import Prelude
 import CabalHelper.Compiletime.Compat.Environment
 import CabalHelper.Compiletime.Compat.Version
 import CabalHelper.Compiletime.Compile
+import CabalHelper.Compiletime.Types
 import CabalHelper.Shared.Common
-import CabalHelper.Shared.Types
 
 runReadP'Dist :: Dist.ReadP t t -> String -> t
 runReadP'Dist p i = case filter ((=="") . snd) $ Dist.readP_to_S p i of

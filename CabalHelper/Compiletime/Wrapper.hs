@@ -42,8 +42,9 @@ import Paths_cabal_helper (version)
 import CabalHelper.Compiletime.Compat.Version
 import CabalHelper.Compiletime.Compile
 import CabalHelper.Compiletime.GuessGhc
+import CabalHelper.Compiletime.Types
 import CabalHelper.Shared.Common
-import CabalHelper.Shared.Types
+import CabalHelper.Shared.InterfaceTypes
 
 usage :: IO ()
 usage = do

@@ -96,7 +96,7 @@ import GHC.Generics
 import Prelude
 
 import Paths_cabal_helper (getLibexecDir)
-import CabalHelper.Shared.Types hiding (Options(..))
+import CabalHelper.Shared.InterfaceTypes
 import CabalHelper.Shared.Sandbox
 
 -- | Paths or names of various programs we need.

@@ -43,9 +43,9 @@ import Distribution.Text (display)
 import Paths_cabal_helper (version)
 import CabalHelper.Compiletime.Data
 import CabalHelper.Compiletime.Log
+import CabalHelper.Compiletime.Types
 import CabalHelper.Shared.Common
 import CabalHelper.Shared.Sandbox (getSandboxPkgDb)
-import CabalHelper.Shared.Types
 
 data Compile = Compile {
       compCabalSourceDir :: Maybe FilePath,
