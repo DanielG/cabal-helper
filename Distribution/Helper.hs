@@ -1,5 +1,5 @@
 -- ghc-mod: Making Haskell development *more* fun
--- Copyright (C) 2015  Daniel Gröber <dxld ÄT darkboxed DOT org>
+-- Copyright (C) 2015,2017  Daniel Gröber <dxld ÄT darkboxed DOT org>
 --
 -- This program is free software: you can redistribute it and/or modify
 -- it under the terms of the GNU Affero General Public License as published by
@@ -16,6 +16,13 @@
 
 {-# LANGUAGE CPP, RecordWildCards, FlexibleContexts, ConstraintKinds #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, DeriveDataTypeable, DeriveGeneric #-}
+
+{-|
+Module      : Distribution.Helper
+License     : AGPL-3
+Maintainer  : dxld@darkboxed.org
+Portability : POSIX
+-}
 
 module Distribution.Helper (
     Programs(..)
@@ -34,7 +41,6 @@ module Distribution.Helper (
   , runQuery
 
   -- * Queries against Cabal\'s on disk state
-
   , packageDbStack
   , entrypoints
   , sourceDirs
