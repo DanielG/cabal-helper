@@ -14,8 +14,9 @@
 -- You should have received a copy of the GNU Affero General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-{-# LANGUAGE CPP, RecordWildCards, FlexibleContexts, ConstraintKinds #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving, DeriveDataTypeable, DeriveGeneric #-}
+{-# LANGUAGE CPP, RecordWildCards, FlexibleContexts, ConstraintKinds,
+  GeneralizedNewtypeDeriving, DeriveDataTypeable, DeriveGeneric, DeriveFunctor
+ #-}
 
 {-|
 Module      : Distribution.Helper
@@ -25,36 +26,50 @@ Portability : POSIX
 -}
 
 module Distribution.Helper (
-    Programs(..)
-  , mkPrograms
+  -- * Running Queries
+    Query
+  , runQuery
+
+  -- * Queries against Cabal\'s on disk state
+
+  -- ** Package queries
+  , packageId
+  , packageDbStack
+  , packageFlags
+  , packageLicenses
+  , compilerVersion
+
+  , ghcMergedPkgOptions
+
+  -- ** cabal-install queries
+  , configFlags
+  , nonDefaultConfigFlags
+
+
+  -- ** Component queries
+  , ComponentQuery
+  , components
+
+  , ghcSrcOptions
+  , ghcPkgOptions
+  , ghcLangOptions
+  , ghcOptions
+  , sourceDirs
+  , entrypoints
+
+  -- * Query environment
   , QueryEnv
+  , mkQueryEnv
   , qeReadProcess
   , qePrograms
   , qeProjectDir
   , qeDistDir
   , qeCabalPkgDb
   , qeCabalVer
-  , mkQueryEnv
 
-  -- * Running Queries
-  , Query
-  , runQuery
+  , Programs(..)
+  , defaultPrograms
 
-  -- * Queries against Cabal\'s on disk state
-  , packageDbStack
-  , entrypoints
-  , sourceDirs
-  , ghcOptions
-  , ghcSrcOptions
-  , ghcPkgOptions
-  , ghcMergedPkgOptions
-  , ghcLangOptions
-  , pkgLicenses
-  , flags
-  , configFlags
-  , nonDefaultConfigFlags
-  , packageId
-  , compilerVersion
 
   -- * Result types
   , ChModuleName(..)
@@ -76,6 +91,9 @@ module Distribution.Helper (
   -- * $libexec related error handling
   , LibexecNotFoundError(..)
   , libexecNotFoundError
+
+  -- * Reexports
+  , module Data.Functor.Apply
   ) where
 
 import Control.Applicative
@@ -89,9 +107,11 @@ import Data.List
 import Data.Maybe
 import Data.Version
 import Data.Typeable
+import Data.Functor.Apply
 import Distribution.Simple.BuildPaths (exeExtension)
 import System.Environment
-import System.FilePath
+import System.FilePath hiding ((<.>))
+import qualified System.FilePath as FP
 import System.Directory
 import System.Process
 import System.IO.Unsafe
@@ -105,45 +125,64 @@ import CabalHelper.Shared.Sandbox
 
 -- | Paths or names of various programs we need.
 data Programs = Programs {
+      -- | The path to the @cabal@ program.
       cabalProgram  :: FilePath,
+
+      -- | The path to the @ghc@ program.
       ghcProgram    :: FilePath,
+
+      -- | The path to the @ghc-pkg@ program. If
+      -- not changed it will be derived from the path to 'ghcProgram'.
       ghcPkgProgram :: FilePath
     } deriving (Eq, Ord, Show, Read, Generic, Typeable)
 
-mkPrograms :: Programs
-mkPrograms = Programs "cabal" "ghc" "ghc-pkg"
+-- | Default all programs to their unqualified names, i.e. they will be searched
+-- for on @PATH@.
+defaultPrograms :: Programs
+defaultPrograms = Programs "cabal" "ghc" "ghc-pkg"
 
+-- | Environment for running a 'Query'. The real constructor is not exposed,
+-- the field accessors are however. See below. Use the 'mkQueryEnv' smart
+-- constructor to construct one.
 data QueryEnv = QueryEnv {
-      -- | How to start the cabal-helper process. Useful if you need to
-      -- capture stderr output from the helper.
+      -- | Field accessor for 'QueryEnv'. Defines how to start the cabal-helper
+      --  process. Useful if you need to capture stderr output from the helper.
       qeReadProcess :: FilePath -> [String] -> String -> IO String,
 
+      -- | Field accessor for 'QueryEnv'.
       qePrograms    :: Programs,
 
-      -- | Path to project directory, i.e. the one containing the
-      -- @project.cabal@ file
+      -- | Field accessor for 'QueryEnv'. Defines path to the project directory,
+      -- i.e. a directory containing a @project.cabal@ file
       qeProjectDir  :: FilePath,
 
-      -- | Path to the @dist/@ directory
+
+      -- | Field accessor for 'QueryEnv'. Defines path to the @dist/@ directory,
+      -- /builddir/ in Cabal terminology.
       qeDistDir     :: FilePath,
 
-      -- | Where to look for the Cabal library when linking the helper
+      -- | Field accessor for 'QueryEnv'. Defines where to look for the Cabal
+      -- library when linking the helper.
       qeCabalPkgDb  :: Maybe FilePath,
 
-      -- | If @dist/setup-config@ wasn\'t written by this version of Cabal throw
-      -- an error
+      -- | Field accessor for 'QueryEnv'. If @dist/setup-config@ wasn\'t written
+      -- by this version of Cabal an error is thrown when running the query.
       qeCabalVer    :: Maybe Version
     }
 
+-- | @mkQueryEnv projdir distdir@. Smart constructor for 'QueryEnv'.
+-- Sets fields 'qeProjectDir' and 'qeDistDir' to @projdir@ and @distdir@
+-- respectively and provides sensible defaults for the other fields.
 mkQueryEnv :: FilePath
-           -- ^ Path to project directory, i.e. the one containing the
+           -- ^ Path to the project directory, i.e. the directory containing a
            -- @project.cabal@ file
            -> FilePath
-           -- ^ Path to the @dist/@ directory
-           -> QueryEnvgs
+           -- ^ Path to the @dist/@ directory, called /builddir/ in Cabal
+           -- terminology.
+           -> QueryEnv
 mkQueryEnv projdir distdir = QueryEnv {
     qeReadProcess = readProcess
-  , qePrograms    = mkPrograms
+  , qePrograms    = defaultPrograms
   , qeProjectDir  = projdir
   , qeDistDir     = distdir
   , qeCabalPkgDb  = Nothing
@@ -152,23 +191,26 @@ mkQueryEnv projdir distdir = QueryEnv {
 
 data SomeLocalBuildInfo = SomeLocalBuildInfo {
       slbiPackageDbStack      :: [ChPkgDb],
-      slbiEntrypoints         :: [(ChComponentName, ChEntrypoint)],
-      slbiSourceDirs          :: [(ChComponentName, [String])],
-      slbiGhcOptions          :: [(ChComponentName, [String])],
-      slbiGhcSrcOptions       :: [(ChComponentName, [String])],
-      slbiGhcPkgOptions       :: [(ChComponentName, [String])],
-      slbiGhcMergedPkgOptions :: [String],
-      slbiGhcLangOptions      :: [(ChComponentName, [String])],
+      slbiPackageFlags        :: [(String, Bool)],
       slbiPkgLicenses         :: [(String, [(String, Version)])],
-      slbiFlags               :: [(String, Bool)],
+      slbiCompilerVersion     :: (String, Version),
+
+      slbiGhcMergedPkgOptions :: [String],
+
       slbiConfigFlags         :: [(String, Bool)],
       slbiNonDefaultConfigFlags :: [(String, Bool)],
-      slbiCompilerVersion     :: (String, Version)
+
+      slbiGhcSrcOptions       :: [(ChComponentName, [String])],
+      slbiGhcPkgOptions       :: [(ChComponentName, [String])],
+      slbiGhcLangOptions      :: [(ChComponentName, [String])],
+      slbiGhcOptions          :: [(ChComponentName, [String])],
+
+      slbiSourceDirs          :: [(ChComponentName, [String])],
+      slbiEntrypoints         :: [(ChComponentName, ChEntrypoint)]
     } deriving (Eq, Ord, Read, Show)
 
--- | Caches helper executable result so it doesn't have to be run more than once
--- as reading in Cabal's @LocalBuildInfo@ datatype from disk is very slow but
--- running all possible queries against it at once is cheap.
+-- | A lazy, cached, query against a package's Cabal configuration. Use
+-- 'runQuery' to execute it.
 newtype Query m a = Query { unQuery :: StateT (Maybe SomeLocalBuildInfo)
                                          (ReaderT QueryEnv m) a }
     deriving (Functor, Applicative, Monad, MonadIO)
@@ -180,11 +222,29 @@ type MonadQuery m = ( MonadIO m
                     , MonadState (Maybe SomeLocalBuildInfo) m
                     , MonadReader QueryEnv m)
 
+-- | A 'Query' to run on all components of a package. Use 'components' to get a
+-- regular 'Query'.
+newtype ComponentQuery m a = ComponentQuery (Query m [(ChComponentName, a)])
+    deriving (Functor)
+
+instance Monad m => Apply (ComponentQuery m) where
+    ComponentQuery flab <.> ComponentQuery fla =
+        ComponentQuery $ liftM2 go flab fla
+      where
+        go :: [(ChComponentName, a -> b)]
+           -> [(ChComponentName, a)]
+           -> [(ChComponentName, b)]
+        go lab la =
+            [ (cn, ab a)
+            | (cn,  ab) <- lab
+            , (cn', a)  <- la
+            , cn == cn'
+            ]
+
 run :: Monad m => QueryEnv -> Maybe SomeLocalBuildInfo -> Query m a -> m a
 run e s action = flip runReaderT e (flip evalStateT s (unQuery action))
 
--- | @runQuery query distdir@. Run a 'Query'. @distdir@ is where Cabal's
--- @setup-config@ file is located.
+-- | @runQuery env query@. Run a 'Query' under a given 'QueryEnv'.
 runQuery :: Monad m
          => QueryEnv
          -> Query m a
@@ -204,35 +264,14 @@ getSlbi = do
 -- | List of package databases to use.
 packageDbStack :: MonadIO m => Query m [ChPkgDb]
 
--- | Modules or files Cabal would have the compiler build directly. Can be used
--- to compute the home module closure for a component.
-entrypoints   :: MonadIO m => Query m [(ChComponentName, ChEntrypoint)]
-
--- | A component's @source-dirs@ field, beware as if this is empty implicit
--- behaviour in GHC kicks in.
-sourceDirs    :: MonadIO m => Query m [(ChComponentName, [FilePath])]
-
--- | All options cabal would pass to GHC.
-ghcOptions    :: MonadIO m => Query m [(ChComponentName, [String])]
-
--- | Only search path related GHC options.
-ghcSrcOptions :: MonadIO m => Query m [(ChComponentName, [String])]
-
--- | Only package related GHC options, sufficient for things don't need to
--- access any home modules.
-ghcPkgOptions :: MonadIO m => Query m [(ChComponentName, [String])]
-
 -- | Like @ghcPkgOptions@ but for the whole package not just one component
 ghcMergedPkgOptions :: MonadIO m => Query m [String]
 
--- | Only language related options, i.e. @-XSomeExtension@
-ghcLangOptions :: MonadIO m => Query m [(ChComponentName, [String])]
-
 -- | Get the licenses of the packages the current project is linking against.
-pkgLicenses :: MonadIO m => Query m [(String, [(String, Version)])]
+packageLicenses :: MonadIO m => Query m [(String, [(String, Version)])]
 
 -- | Flag definitions from cabal file
-flags :: MonadIO m => Query m [(String, Bool)]
+packageFlags :: MonadIO m => Query m [(String, Bool)]
 
 -- | Flag assignments from setup-config
 configFlags :: MonadIO m => Query m [(String, Bool)]
@@ -248,21 +287,46 @@ compilerVersion :: MonadIO m => Query m (String, Version)
 -- | Package identifier, i.e. package name and version
 packageId :: MonadIO m => Query m (String, Version)
 
+-- | Run a ComponentQuery on all components of the package.
+components :: Monad m => ComponentQuery m (ChComponentName -> b) -> Query m [b]
+components (ComponentQuery sc) = map (\(cn, f) -> f cn) <$> sc
 
-packageDbStack      = Query $ slbiPackageDbStack      `liftM` getSlbi
-entrypoints         = Query $ slbiEntrypoints         `liftM` getSlbi
-sourceDirs          = Query $ slbiSourceDirs          `liftM` getSlbi
-ghcOptions          = Query $ slbiGhcOptions          `liftM` getSlbi
-ghcSrcOptions       = Query $ slbiGhcSrcOptions       `liftM` getSlbi
-ghcPkgOptions       = Query $ slbiGhcPkgOptions       `liftM` getSlbi
-ghcMergedPkgOptions = Query $ slbiGhcMergedPkgOptions `liftM` getSlbi
-ghcLangOptions      = Query $ slbiGhcLangOptions      `liftM` getSlbi
-pkgLicenses         = Query $ slbiPkgLicenses         `liftM` getSlbi
-flags               = Query $ slbiFlags               `liftM` getSlbi
-configFlags         = Query $ slbiConfigFlags         `liftM` getSlbi
+-- | Modules or files Cabal would have the compiler build directly. Can be used
+-- to compute the home module closure for a component.
+entrypoints   :: MonadIO m => ComponentQuery m ChEntrypoint
+
+-- | A component's @source-dirs@ field, beware since if this is empty implicit
+-- behaviour in GHC kicks in.
+sourceDirs    :: MonadIO m => ComponentQuery m [FilePath]
+
+-- | All options Cabal would pass to GHC.
+ghcOptions    :: MonadIO m => ComponentQuery m [String]
+
+-- | Only search path related GHC options.
+ghcSrcOptions :: MonadIO m => ComponentQuery m [String]
+
+-- | Only package related GHC options, sufficient for things don't need to
+-- access any home modules.
+ghcPkgOptions :: MonadIO m => ComponentQuery m [String]
+
+-- | Only language related options, i.e. @-XSomeExtension@
+ghcLangOptions :: MonadIO m => ComponentQuery m [String]
+
+packageId             = Query $ getPackageId
+packageDbStack        = Query $ slbiPackageDbStack        `liftM` getSlbi
+packageFlags          = Query $ slbiPackageFlags          `liftM` getSlbi
+packageLicenses       = Query $ slbiPkgLicenses           `liftM` getSlbi
+compilerVersion       = Query $ slbiCompilerVersion       `liftM` getSlbi
+ghcMergedPkgOptions   = Query $ slbiGhcMergedPkgOptions   `liftM` getSlbi
+configFlags           = Query $ slbiConfigFlags           `liftM` getSlbi
 nonDefaultConfigFlags = Query $ slbiNonDefaultConfigFlags `liftM` getSlbi
-compilerVersion     = Query $ slbiCompilerVersion     `liftM` getSlbi
-packageId           = Query $ getPackageId
+
+ghcSrcOptions  = ComponentQuery $ Query $ slbiGhcSrcOptions  `liftM` getSlbi
+ghcPkgOptions  = ComponentQuery $ Query $ slbiGhcPkgOptions  `liftM` getSlbi
+ghcOptions     = ComponentQuery $ Query $ slbiGhcOptions     `liftM` getSlbi
+ghcLangOptions = ComponentQuery $ Query $ slbiGhcLangOptions `liftM` getSlbi
+sourceDirs     = ComponentQuery $ Query $ slbiSourceDirs     `liftM` getSlbi
+entrypoints    = ComponentQuery $ Query $ slbiEntrypoints    `liftM` getSlbi
 
 -- | Run @cabal configure@
 reconfigure :: MonadIO m
@@ -309,47 +373,53 @@ invokeHelper QueryEnv {..} args = do
                  , " failed"
                  ]
 
-
 getPackageId :: MonadQuery m => m (String, Version)
 getPackageId = ask >>= \QueryEnv {..} -> do
   [ Just (ChResponseVersion pkgName pkgVer) ] <- readHelper [ "package-id" ]
   return (pkgName, pkgVer)
 
-
 getSomeConfigState :: MonadQuery m => m SomeLocalBuildInfo
 getSomeConfigState = ask >>= \QueryEnv {..} -> do
   res <- readHelper
          [ "package-db-stack"
-         , "entrypoints"
-         , "source-dirs"
-         , "ghc-options"
-         , "ghc-src-options"
-         , "ghc-pkg-options"
-         , "ghc-merged-pkg-options"
-         , "ghc-lang-options"
-         , "licenses"
          , "flags"
+         , "licenses"
+         , "compiler-version"
+
+         , "ghc-merged-pkg-options"
+
          , "config-flags"
          , "non-default-config-flags"
-         , "compiler-version"
-         ]
-  let [ Just (ChResponsePkgDbs pkgDbs),
-        Just (ChResponseEntrypoints eps),
-        Just (ChResponseCompList srcDirs),
-        Just (ChResponseCompList ghcOpts),
-        Just (ChResponseCompList ghcSrcOpts),
-        Just (ChResponseCompList ghcPkgOpts),
-        Just (ChResponseList     ghcMergedPkgOpts),
-        Just (ChResponseCompList ghcLangOpts),
-        Just (ChResponseLicenses pkgLics),
-        Just (ChResponseFlags fls),
-        Just (ChResponseFlags cfls),
-        Just (ChResponseFlags ndcfls),
-        Just (ChResponseVersion comp compVer)
-        ] = res
 
-  return $ SomeLocalBuildInfo
-    pkgDbs eps srcDirs ghcOpts ghcSrcOpts ghcPkgOpts ghcMergedPkgOpts ghcLangOpts pkgLics fls cfls ndcfls (comp, compVer)
+         , "ghc-src-options"
+         , "ghc-pkg-options"
+         , "ghc-lang-options"
+         , "ghc-options"
+
+         , "source-dirs"
+         , "entrypoints"
+         ]
+  let [ Just (ChResponsePkgDbs      slbiPackageDbStack),
+        Just (ChResponseFlags       slbiPackageFlags),
+        Just (ChResponseLicenses    slbiPkgLicenses),
+        Just (ChResponseVersion     comp compVer),
+
+        Just (ChResponseList        slbiGhcMergedPkgOptions),
+
+        Just (ChResponseFlags       slbiConfigFlags),
+        Just (ChResponseFlags       slbiNonDefaultConfigFlags),
+
+        Just (ChResponseCompList    slbiGhcSrcOptions),
+        Just (ChResponseCompList    slbiGhcPkgOptions),
+        Just (ChResponseCompList    slbiGhcLangOptions),
+        Just (ChResponseCompList    slbiGhcOptions),
+
+        Just (ChResponseCompList    slbiSourceDirs),
+        Just (ChResponseEntrypoints slbiEntrypoints)
+        ] = res
+      slbiCompilerVersion = (comp, compVer)
+  return $ SomeLocalBuildInfo {..}
+
 
 -- | Make sure the appropriate helper executable for the given project is
 -- installed and ready to run queries.
@@ -393,7 +463,7 @@ findLibexecExe :: IO FilePath
 findLibexecExe = do
     libexecdir <- getLibexecDir
     let exeName = "cabal-helper-wrapper"
-        exe = libexecdir </> exeName <.> exeExtension'
+        exe = libexecdir </> exeName FP.<.> exeExtension'
 
     exists <- doesFileExist exe
 
