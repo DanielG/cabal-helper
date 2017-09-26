@@ -92,8 +92,9 @@ appCacheDir :: IO FilePath
 appCacheDir =
     (</> "cabal-helper") <$> getEnvDefault "XDG_CACHE_HOME" (homeRel cache)
  where
-    lookupEnv var = do env <- getEnvironment; return (lookup var env)
-    getEnvDefault var def = lookupEnv var >>= \m -> case m of Nothing -> def; Just x -> return x
+    -- for GHC 7.4
+    lookupEnv' var = do env <- getEnvironment; return (lookup var env)
+    getEnvDefault var def = lookupEnv' var >>= \m -> case m of Nothing -> def; Just x -> return x
     homeRel path = (</> path) <$> getHomeDirectory
     cache =
         case System.Info.os of
