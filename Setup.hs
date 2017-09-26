@@ -23,18 +23,9 @@ import Distribution.Simple.LocalBuildInfo
 import Distribution.Simple.Program
 import Distribution.PackageDescription
 
-import qualified Data.Map as M
-import Data.Map (Map)
-
-import Control.Arrow
-import Control.Applicative
 import Control.Monad
 import Data.List
 import Data.Maybe
-import Data.Version
-import Data.Monoid
-import System.Process
-import System.Exit
 import System.FilePath
 import System.Directory (renameFile)
 

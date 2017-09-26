@@ -41,13 +41,9 @@ source-repository head
 
 custom-setup
   setup-depends:         base
-                       , Cabal (>= 1.14 && < 1.25) || (>= 2.0 && < 2.1)
-                       , containers
-                       , filepath
-                       , directory
-                       , process
-                       , template-haskell
-                       , transformers
+                       , Cabal          < 2.1 && >= 2.0 || < 1.25 && >= 1.14
+                       , filepath       < 1.5
+                       , directory      < 1.4
 
 library
   default-language:    Haskell2010
