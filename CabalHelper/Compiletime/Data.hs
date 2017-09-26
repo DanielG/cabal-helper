@@ -1,5 +1,4 @@
--- cabal-helper: Simple interface to Cabal's configuration state
--- Copyright (C) 2015  Daniel Gröber <dxld ÄT darkboxed DOT org>
+-- Copyright (C) 2015,2017  Daniel Gröber <dxld ÄT darkboxed DOT org>
 --
 -- This program is free software: you can redistribute it and/or modify
 -- it under the terms of the GNU Affero General Public License as published by
@@ -16,6 +15,13 @@
 
 {-# LANGUAGE TemplateHaskell, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fforce-recomp #-}
+
+{-|
+Module      : CabalHelper.Compiletime.Data
+Description : Embeds source code for runtime component using TH
+License     : AGPL-3
+-}
+
 module CabalHelper.Compiletime.Data where
 
 import Control.Monad

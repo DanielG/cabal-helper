@@ -1,4 +1,3 @@
--- cabal-helper: Simple interface to Cabal's configuration state
 -- Copyright (C) 2015  Daniel Gröber <dxld ÄT darkboxed DOT org>
 --
 -- This program is free software: you can redistribute it and/or modify
@@ -13,6 +12,12 @@
 --
 -- You should have received a copy of the GNU Affero General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+{-|
+Module      : CabalHelper.Shared.Common
+Description : Shared utility functions
+License     : AGPL-3
+-}
 
 {-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
 module CabalHelper.Shared.Common where

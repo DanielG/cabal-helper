@@ -1,11 +1,3 @@
-module CabalHelper.Compiletime.GuessGhc (guessToolFromGhcPath) where
-
-import Data.Maybe
-import Data.Char
-import Distribution.Simple.BuildPaths
-import System.Directory
-import System.FilePath
-
 -- Copyright (c) 2003-2014, Isaac Jones, Simon Marlow, Martin Sjögren,
 --                          Bjorn Bringert, Krasimir Angelov,
 --                          Malcolm Wallace, Ross Patterson, Ian Lynagh,
@@ -40,6 +32,20 @@ import System.FilePath
 -- THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 -- (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 -- OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+{-|
+Module      : CabalHelper.Compiletime.GuessGhc
+Description : Logic for finding @ghc-pkg@ based on path to @ghc@
+License     : BSD3
+-}
+
+module CabalHelper.Compiletime.GuessGhc (guessToolFromGhcPath) where
+
+import Data.Maybe
+import Data.Char
+import Distribution.Simple.BuildPaths
+import System.Directory
+import System.FilePath
 
 guessToolFromGhcPath :: FilePath -- ^ Tool name
                      -> FilePath -- ^ GHC exe path

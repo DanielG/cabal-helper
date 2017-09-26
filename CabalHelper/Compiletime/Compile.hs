@@ -1,5 +1,4 @@
--- cabal-helper: Simple interface to Cabal's configuration state
--- Copyright (C) 2015  Daniel Gröber <dxld ÄT darkboxed DOT org>
+-- Copyright (C) 2015,2017  Daniel Gröber <dxld ÄT darkboxed DOT org>
 --
 -- This program is free software: you can redistribute it and/or modify
 -- it under the terms of the GNU Affero General Public License as published by
@@ -14,6 +13,13 @@
 -- You should have received a copy of the GNU Affero General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 {-# LANGUAGE RecordWildCards, FlexibleContexts #-}
+
+{-|
+Module      : CabalHelper.Compiletime.Compile
+Description : Runtime compilation machinery
+License     : AGPL-3
+-}
+
 module CabalHelper.Compiletime.Compile where
 
 import Control.Applicative
