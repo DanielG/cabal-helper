@@ -14,21 +14,22 @@
 -- You should have received a copy of the GNU Affero General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fforce-recomp #-}
 module CabalHelper.Compiletime.Data where
 
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.Functor
-import Data.Time.Clock
-import Data.Time.Clock.POSIX
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.UTF8 as UTF8
 import Language.Haskell.TH
 import System.Directory
 import System.FilePath
 import System.IO.Temp
+import System.Posix.Files
+import System.Posix.Time
+import System.Posix.Types
 import Prelude
 
 import CabalHelper.Compiletime.Compat.Environment
@@ -49,20 +50,19 @@ withHelperSources mdir action = withDir mdir $ \dir -> do
       createDirectoryIfMissing True $ chdir </> "Runtime"
       createDirectoryIfMissing True $ chdir </> "Shared"
 
-    let modtime = read
+    let modtime :: EpochTime
+        modtime = fromIntegral $ (read :: String -> Integer)
           -- See https://reproducible-builds.org/specs/source-date-epoch/
           $(runIO $ do
-             msde <- lookupEnv "SOURCE_DATE_EPOCH"
-             let parse :: String -> POSIXTime
-                 parse = fromInteger . read
-             utctime <- getCurrentTime
-             return $ LitE . StringL $ show $
-                 maybe utctime (posixSecondsToUTCTime . parse) msde)
+             msde :: Maybe Integer
+                  <- fmap read <$> lookupEnv "SOURCE_DATE_EPOCH"
+             (current_time :: Integer) <- round . toRational <$> epochTime
+             return $ LitE . StringL $ show $ maybe current_time id msde)
 
     liftIO $ forM_ sourceFiles $ \(fn, src) -> do
         let path = chdir </> fn
         BS.writeFile path $ UTF8.fromString src
-        setModificationTime path modtime
+        setFileTimes path modtime modtime
 
     action dir
   where
