@@ -66,11 +66,7 @@ compileHelper :: Options -> Version -> FilePath -> FilePath -> IO (Either ExitCo
 compileHelper opts cabalVer projdir distdir = do
   case cabalPkgDb opts of
     Nothing ->
-      run [
-            -- TODO: here ghc's caching fails and it always recompiles, probably
-            -- because we write the sources to a tempdir and they always look
-            -- newer than the Cabal sources, not sure if we can fix this
-            compileCabalSource
+      run [ compileCabalSource
           , Right <$> MaybeT (cachedExe cabalVer)
           , compileSandbox
           , compileGlobal
