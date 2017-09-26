@@ -62,7 +62,6 @@ library
                      , mtl           < 2.3  && >= 2.0
                      , process       < 1.7  && >= 1.1.0.1
                      , unix          < 2.8  && >= 2.5.1.1
-                     , ghc-prim
 
 executable cabal-helper-wrapper
   default-language:    Haskell2010
@@ -99,7 +98,6 @@ executable cabal-helper-wrapper
                      , unix             < 2.8  && >= 2.5.1.1
 
                      , template-haskell
-                     , ghc-prim
 
 test-suite compile-test
   default-language:    Haskell2010
@@ -135,7 +133,6 @@ test-suite compile-test
                      , unix             < 2.8  && >= 2.5.1.1
 
                      , template-haskell
-                     , ghc-prim
 
 -- TODO: Use cabal_macros.h to replace -D flags by including it in
 -- CabalHelper.Data
