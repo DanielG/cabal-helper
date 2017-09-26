@@ -26,7 +26,7 @@ Portability : POSIX
 
 module Distribution.Helper (
     Programs(..)
-  , defaultPrograms
+  , mkPrograms
   , QueryEnv
   , qeReadProcess
   , qePrograms
@@ -34,7 +34,7 @@ module Distribution.Helper (
   , qeDistDir
   , qeCabalPkgDb
   , qeCabalVer
-  , defaultQueryEnv
+  , mkQueryEnv
 
   -- * Running Queries
   , Query
@@ -110,8 +110,8 @@ data Programs = Programs {
       ghcPkgProgram :: FilePath
     } deriving (Eq, Ord, Show, Read, Generic, Typeable)
 
-defaultPrograms :: Programs
-defaultPrograms = Programs "cabal" "ghc" "ghc-pkg"
+mkPrograms :: Programs
+mkPrograms = Programs "cabal" "ghc" "ghc-pkg"
 
 data QueryEnv = QueryEnv {
       -- | How to start the cabal-helper process. Useful if you need to
@@ -135,15 +135,15 @@ data QueryEnv = QueryEnv {
       qeCabalVer    :: Maybe Version
     }
 
-defaultQueryEnv :: FilePath
-                -- ^ Path to project directory, i.e. the one containing the
-                -- @project.cabal@ file
-                -> FilePath
-                -- ^ Path to the @dist/@ directory
-                -> QueryEnv
-defaultQueryEnv projdir distdir = QueryEnv {
+mkQueryEnv :: FilePath
+           -- ^ Path to project directory, i.e. the one containing the
+           -- @project.cabal@ file
+           -> FilePath
+           -- ^ Path to the @dist/@ directory
+           -> QueryEnvgs
+mkQueryEnv projdir distdir = QueryEnv {
     qeReadProcess = readProcess
-  , qePrograms    = defaultPrograms
+  , qePrograms    = mkPrograms
   , qeProjectDir  = projdir
   , qeDistDir     = distdir
   , qeCabalPkgDb  = Nothing
