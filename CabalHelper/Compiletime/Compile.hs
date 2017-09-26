@@ -294,7 +294,7 @@ installCabal opts ever = do
 
     db <- createPkgDb opts e_commit_ver
 
-    runCabalInstall opts db srcdir
+    runCabalInstall opts db srcdir ever
 
     return (db, e_commit_ver)
 
@@ -311,8 +311,9 @@ Otherwise we might be able to use the shipped Setup.hs
 
 -}
 
-runCabalInstall :: Options -> PackageDbDir -> CabalSourceDir -> IO ()
-runCabalInstall opts (PackageDbDir db) (CabalSourceDir srcdir) = do
+runCabalInstall
+    :: Options -> PackageDbDir -> CabalSourceDir -> Either HEAD Version-> IO ()
+runCabalInstall opts (PackageDbDir db) (CabalSourceDir srcdir) ever = do
   cabalInstallVer <- cabalInstallVersion opts
   cabal_opts <- return $ concat
       [
@@ -335,7 +336,7 @@ runCabalInstall opts (PackageDbDir db) (CabalSourceDir srcdir) = do
   callProcessStderr opts (Just "/") (cabalProgram opts) cabal_opts
 
   setupProgram <- compileSetupHs opts db srcdir
-  runSetupHs opts setupProgram db srcdir
+  runSetupHs opts setupProgram db srcdir ever
 
   hPutStrLn stderr "done"
 
@@ -347,11 +348,21 @@ cabalOptions opts =
                else []
            ]
 
-runSetupHs :: Options -> SetupProgram -> FilePath -> FilePath -> IO ()
-runSetupHs opts SetupProgram {..} db srcdir = do
+runSetupHs
+    :: Options
+    -> SetupProgram
+    -> FilePath
+    -> FilePath
+    -> Either HEAD Version
+    -> IO ()
+runSetupHs opts SetupProgram {..} db srcdir ever = do
   let run = callProcessStderr opts (Just srcdir) setupProgram
+      parmake_opt
+          | Right ver <- ever,  ver >= Version [1,20] [] = ["-j"]
+          | otherwise = []
+
   run $ [ "configure", "--package-db", db, "--prefix", db </> "prefix" ] ++ cabalOptions opts
-  run [ "build", "-j" ]
+  run $ [ "build" ] ++ parmake_opt
   run [ "copy" ]
   run [ "register" ]
 
