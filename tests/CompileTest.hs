@@ -11,7 +11,7 @@ import Data.Version
 import Data.Functor
 import Data.Function
 import qualified Distribution.Compat.ReadP as Dist
-import Distribution.Version hiding (Version, showVersion)
+import Distribution.Version (VersionRange, withinRange)
 import Distribution.Text
 import Control.Arrow
 import Control.Monad
