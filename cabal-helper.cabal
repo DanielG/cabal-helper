@@ -33,7 +33,7 @@ category:            Distribution
 build-type:          Custom
 cabal-version:       >=1.14
 extra-source-files:  README.md
-                     CabalHelper/Runtime/*.hs
+                     src/CabalHelper/Runtime/*.hs
 
 source-repository head
   type:     git
@@ -48,6 +48,7 @@ custom-setup
 library
   default-language:    Haskell2010
   default-extensions:  NondecreasingIndentation
+  hs-source-dirs:      lib, src
   exposed-modules:     Distribution.Helper
   other-modules:
                        CabalHelper.Shared.InterfaceTypes
@@ -69,6 +70,7 @@ executable cabal-helper-wrapper
   default-extensions:  NondecreasingIndentation
   other-extensions:    TemplateHaskell
   main-is:             CabalHelper/Compiletime/Wrapper.hs
+  hs-source-dirs:      src
   other-modules:
                        CabalHelper.Compiletime.Compat.Environment
                        CabalHelper.Compiletime.Compat.Version
@@ -105,7 +107,8 @@ test-suite compile-test
   default-language:    Haskell2010
   default-extensions:  NondecreasingIndentation
   type:                exitcode-stdio-1.0
-  main-is:             tests/CompileTest.hs
+  main-is:             CompileTest.hs
+  hs-source-dirs:      tests, src
   other-modules:
                        CabalHelper.Compiletime.Compat.Environment
                        CabalHelper.Compiletime.Compat.Version
@@ -116,7 +119,6 @@ test-suite compile-test
                        CabalHelper.Shared.Common
                        CabalHelper.Shared.Sandbox
                        Paths_cabal_helper
-  hs-source-dirs:      .
   ghc-options:         -Wall
   build-tools:         cabal
 
@@ -144,6 +146,7 @@ executable cabal-helper-main
   else
     buildable:         False
   main-is:             CabalHelper/Runtime/Main.hs
+  hs-source-dirs:      src
   other-modules:
                        CabalHelper.Runtime.Licenses
                        CabalHelper.Shared.Common
