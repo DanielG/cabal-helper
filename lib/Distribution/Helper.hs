@@ -227,7 +227,7 @@ type MonadQuery m = ( MonadIO m
 newtype ComponentQuery m a = ComponentQuery (Query m [(ChComponentName, a)])
     deriving (Functor)
 
-instance Monad m => Apply (ComponentQuery m) where
+instance (Functor m, Monad m) => Apply (ComponentQuery m) where
     ComponentQuery flab <.> ComponentQuery fla =
         ComponentQuery $ liftM2 go flab fla
       where
@@ -289,7 +289,7 @@ packageId :: MonadIO m => Query m (String, Version)
 
 -- | Run a ComponentQuery on all components of the package.
 components :: Monad m => ComponentQuery m (ChComponentName -> b) -> Query m [b]
-components (ComponentQuery sc) = map (\(cn, f) -> f cn) <$> sc
+components (ComponentQuery sc) = map (\(cn, f) -> f cn) `liftM` sc
 
 -- | Modules or files Cabal would have the compiler build directly. Can be used
 -- to compute the home module closure for a component.
