@@ -64,6 +64,10 @@ library
                      , process       < 1.7  && >= 1.1.0.1
                      , unix          < 2.8  && >= 2.5.1.1
                      , semigroupoids < 5.3  && >= 5.2.1
+                     , ghc-prim
+
+-- [Note ghc-prim]
+-- Exports GHC.Generics in GHC-7.4
 
 executable cabal-helper-wrapper
   default-language:    Haskell2010
@@ -102,6 +106,7 @@ executable cabal-helper-wrapper
                      , transformers     < 0.6  && >= 0.3.0.0
                      , unix             < 2.8  && >= 2.5.1.1
                      , utf8-string      < 1.1  && >= 1.0.1.1
+                     , ghc-prim
 
 test-suite compile-test
   default-language:    Haskell2010
@@ -136,7 +141,7 @@ test-suite compile-test
                      , transformers     < 0.6  && >= 0.3.0.0
                      , unix             < 2.8  && >= 2.5.1.1
                      , utf8-string      < 1.1  && >= 1.0.1.1
-
+                     , ghc-prim
 
 executable cabal-helper-main
   default-language:    Haskell2010
@@ -159,6 +164,7 @@ executable cabal-helper-main
                      , bytestring
                      , filepath
                      , directory
+                     , ghc-prim
 
 flag dev
   description: Build development components
