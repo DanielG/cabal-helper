@@ -23,6 +23,7 @@ import Distribution.Simple.LocalBuildInfo
 import Distribution.Simple.Program
 import Distribution.PackageDescription
 
+import Control.Applicative -- for GHC<7.10
 import Control.Monad
 import Data.List
 import Data.Maybe
