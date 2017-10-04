@@ -316,7 +316,7 @@ Otherwise we might be able to use the shipped Setup.hs
 runCabalInstall
     :: Options -> PackageDbDir -> CabalSourceDir -> Either HEAD Version-> IO ()
 runCabalInstall opts (PackageDbDir db) (CabalSourceDir srcdir) ever = do
-  cabalInstallVer <- cabalInstallVersion opts
+  civ@CabalInstallVersion {..} <- cabalInstallVersion opts
   cabal_opts <- return $ concat
       [
         [ "--package-db=clear"
@@ -337,8 +337,7 @@ runCabalInstall opts (PackageDbDir db) (CabalSourceDir srcdir) ever = do
 
   callProcessStderr opts (Just "/") (cabalProgram opts) cabal_opts
 
-  setupProgram <- compileSetupHs opts db srcdir
-  runSetupHs opts setupProgram db srcdir ever
+  runSetupHs opts db srcdir ever civ
 
   hPutStrLn stderr "done"
 
@@ -352,21 +351,32 @@ cabalOptions opts =
 
 runSetupHs
     :: Options
-    -> SetupProgram
     -> FilePath
     -> FilePath
     -> Either HEAD Version
+    -> CabalInstallVersion
     -> IO ()
-runSetupHs opts SetupProgram {..} db srcdir ever = do
-  let run = callProcessStderr opts (Just srcdir) setupProgram
-      parmake_opt
-          | Right ver <- ever,  ver >= Version [1,20] [] = ["-j"]
-          | otherwise = []
+runSetupHs opts@Options {..} db srcdir ever CabalInstallVersion {..}
+    | cabalInstallVer >= parseVer "1.24" = do
+      go $ \args -> callProcessStderr opts (Just srcdir) cabalProgram $
+        [ "act-as-setup", "--" ] ++ args
+    | otherwise = do
+      SetupProgram {..} <- compileSetupHs opts db srcdir
+      go $ callProcessStderr opts (Just srcdir) setupProgram
+  where
+    parmake_opt
+        | Right ver <- ever,  ver >= Version [1,20] [] = ["-j"]
+        | otherwise = []
 
-  run $ [ "configure", "--package-db", db, "--prefix", db </> "prefix" ] ++ cabalOptions opts
-  run $ [ "build" ] ++ parmake_opt
-  run [ "copy" ]
-  run [ "register" ]
+    go :: ([String] -> IO ()) -> IO ()
+    go run = do
+      run $ [ "configure", "--package-db", db, "--prefix", db </> "prefix" ] ++ cabalOptions opts
+      run $ [ "build" ] ++ parmake_opt
+      run [ "copy" ]
+      run [ "register" ]
+
+
+
 
 newtype SetupProgram = SetupProgram { setupProgram :: FilePath }
 compileSetupHs :: Options -> FilePath -> FilePath -> IO SetupProgram
@@ -552,7 +562,6 @@ cabalVersionExistsInPkgDb opts cabalVer = do
       vers <- listCabalVersions' opts (Just db)
       return $ cabalVer `elem` vers
 
-
 ghcVersion :: Options -> IO Version
 ghcVersion Options {..} = do
     parseVer . trim <$> readProcess ghcProgram ["--numeric-version"] ""
@@ -561,9 +570,11 @@ ghcPkgVersion :: Options -> IO Version
 ghcPkgVersion Options {..} = do
     parseVer . trim . dropWhile (not . isDigit) <$> readProcess ghcPkgProgram ["--version"] ""
 
-cabalInstallVersion :: Options -> IO Version
+newtype CabalInstallVersion = CabalInstallVersion { cabalInstallVer :: Version }
+cabalInstallVersion :: Options -> IO CabalInstallVersion
 cabalInstallVersion Options {..} = do
-    parseVer . trim <$> readProcess cabalProgram ["--numeric-version"] ""
+    CabalInstallVersion . parseVer . trim
+      <$> readProcess cabalProgram ["--numeric-version"] ""
 
 createPkgDb :: Options -> Either String Version -> IO PackageDbDir
 createPkgDb opts@Options {..} cabalVer = do
