@@ -565,9 +565,6 @@ cabalInstallVersion :: Options -> IO Version
 cabalInstallVersion Options {..} = do
     parseVer . trim <$> readProcess cabalProgram ["--numeric-version"] ""
 
-trim :: String -> String
-trim = dropWhileEnd isSpace
-
 createPkgDb :: Options -> Either String Version -> IO PackageDbDir
 createPkgDb opts@Options {..} cabalVer = do
   db@(PackageDbDir db_path) <- getPrivateCabalPkgDb opts cabalVer

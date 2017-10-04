@@ -25,6 +25,7 @@ module CabalHelper.Shared.Common where
 import Control.Applicative
 import Control.Exception as E
 import Control.Monad
+import Data.Char
 import Data.List
 import Data.Maybe
 import Data.Version
@@ -81,6 +82,9 @@ parsePkgId bs =
 
 parseVer :: String -> Version
 parseVer vers = runReadP parseVersion vers
+
+trim :: String -> String
+trim = dropWhileEnd isSpace
 
 majorVer :: Version -> Version
 majorVer (Version b _) = Version (take 2 b) []
