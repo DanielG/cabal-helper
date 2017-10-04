@@ -111,7 +111,7 @@ main = do
         where  ver = case cv of Left _ -> "HEAD"; Right v -> showVersion v
                status = case rv of
                          Right _ ->
-                             "suceeded"
+                             "succeeded"
                          Left rvc ->
                              "failed (exit code "++show rvc++")"
 
