@@ -14,7 +14,6 @@
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 {-# LANGUAGE CPP, BangPatterns, RecordWildCards, RankNTypes, ViewPatterns #-}
-{-# OPTIONS_GHC -fno-warn-deprecations #-}
 
 #ifdef MIN_VERSION_Cabal
 #undef CH_MIN_VERSION_Cabal
@@ -23,82 +22,142 @@
 
 import Distribution.Simple.Utils (cabalVersion)
 import Distribution.Simple.Configure
-
-import Distribution.Package (PackageIdentifier, InstalledPackageId, PackageId,
-                             packageName, packageVersion)
-import Distribution.PackageDescription (PackageDescription,
-                                        GenericPackageDescription(..),
-                                        Flag(..),
-                                        FlagName(..),
-                                        FlagAssignment,
-                                        Executable(..),
-                                        Library(..),
-                                        TestSuite(..),
-                                        Benchmark(..),
-                                        BuildInfo(..),
-                                        TestSuiteInterface(..),
-                                        BenchmarkInterface(..),
-                                        withLib)
-#if CH_MIN_VERSION_Cabal(1,25,0)
--- CPP CABAL_MAJOR == 1 && CABAL_MINOR >= 25
-import Distribution.PackageDescription (unFlagName, mkFlagName)
-#endif
-import Distribution.PackageDescription.Parse (readPackageDescription)
-import Distribution.PackageDescription.Configuration (flattenPackageDescription)
-
-import Distribution.Simple.Program (requireProgram, ghcProgram)
-import Distribution.Simple.Program.Types (ConfiguredProgram(..))
-import Distribution.Simple.Configure (getPersistBuildConfig)
-import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(..),
-                                           Component(..),
-                                           ComponentName(..),
-                                           ComponentLocalBuildInfo(..),
-                                           componentBuildInfo,
-                                           externalPackageDeps,
-                                           withComponentsLBI,
-                                           withLibLBI)
-#if CH_MIN_VERSION_Cabal(1,23,0)
--- >= 1.23
-import Distribution.Simple.LocalBuildInfo (localUnitId)
-#else
--- <= 1.22
-import Distribution.Simple.LocalBuildInfo (inplacePackageId)
-#endif
-
-import Distribution.Simple.GHC (componentGhcOptions)
-import Distribution.Simple.Program.GHC (GhcOptions(..), renderGhcOptions)
-
-import Distribution.Simple.Setup (ConfigFlags(..),Flag(..))
-import Distribution.Simple.Build (initialBuildSteps)
-import Distribution.Simple.BuildPaths (autogenModuleName, cppHeaderName, exeExtension)
-import Distribution.Simple.Compiler (PackageDB(..), compilerId)
-
-import Distribution.Compiler (CompilerId(..))
-import Distribution.ModuleName (components)
-import qualified Distribution.ModuleName as C (ModuleName)
-import Distribution.Text (display)
-import Distribution.Verbosity (Verbosity, silent, deafening, normal)
-
-import Distribution.Version (Version)
-#if CH_MIN_VERSION_Cabal(2,0,0)
--- CPP >= 2.0
-import Distribution.Version (versionNumbers, mkVersion)
-#endif
+import Distribution.Package
+  ( PackageIdentifier
+  , InstalledPackageId
+  , PackageId
+  , packageName
+  , packageVersion
+  )
+import Distribution.PackageDescription
+  ( PackageDescription
+  , GenericPackageDescription(..)
+  , Flag(..)
+  , FlagName(..)
+  , FlagAssignment
+  , Executable(..)
+  , Library(..)
+  , TestSuite(..)
+  , Benchmark(..)
+  , BuildInfo(..)
+  , TestSuiteInterface(..)
+  , BenchmarkInterface(..)
+  , withLib
+  )
+import Distribution.PackageDescription.Parse
+  ( readPackageDescription
+  )
+import Distribution.PackageDescription.Configuration
+  ( flattenPackageDescription
+  )
+import Distribution.Simple.Program
+  ( requireProgram
+  , ghcProgram
+  )
+import Distribution.Simple.Program.Types
+  ( ConfiguredProgram(..)
+  )
+import Distribution.Simple.Configure
+  ( getPersistBuildConfig
+  )
+import Distribution.Simple.LocalBuildInfo
+  ( LocalBuildInfo(..)
+  , Component(..)
+  , ComponentName(..)
+  , ComponentLocalBuildInfo(..)
+  , componentBuildInfo
+  , externalPackageDeps
+  , withComponentsLBI
+  , withLibLBI
+  )
+import Distribution.Simple.GHC
+  ( componentGhcOptions
+  )
+import Distribution.Simple.Program.GHC
+  ( GhcOptions(..)
+  , renderGhcOptions
+  )
+import Distribution.Simple.Setup
+  ( ConfigFlags(..)
+  , Flag(..)
+  )
+import Distribution.Simple.Build
+  ( initialBuildSteps
+  )
+import Distribution.Simple.BuildPaths
+  ( autogenModuleName
+  , cppHeaderName
+  , exeExtension
+  )
+import Distribution.Simple.Compiler
+  ( PackageDB(..)
+  , compilerId
+  )
+import Distribution.Compiler
+  ( CompilerId(..)
+  )
+import Distribution.ModuleName
+  ( components
+  )
+import qualified Distribution.ModuleName as C
+  ( ModuleName
+  )
+import Distribution.Text
+  ( display
+  )
+import Distribution.Verbosity
+  ( Verbosity
+  , silent
+  , deafening
+  , normal
+  )
+import Distribution.Version
+  ( Version
+  )
 
 #if CH_MIN_VERSION_Cabal(1,22,0)
 -- CPP >= 1.22
 import Distribution.Utils.NubList
 #endif
 
+#if CH_MIN_VERSION_Cabal(1,23,0)
+-- >= 1.23
+import Distribution.Simple.LocalBuildInfo
+  ( localUnitId
+  )
+#else
+-- <= 1.22
+import Distribution.Simple.LocalBuildInfo
+  ( inplacePackageId
+  )
+#endif
+
 #if CH_MIN_VERSION_Cabal(1,25,0)
--- CPP >= 1.25
-import Distribution.Types.ForeignLib (ForeignLib(..))
-import Distribution.Types.UnqualComponentName (unUnqualComponentName)
+-- >=1.25
+import Distribution.PackageDescription
+  ( unFlagName
+  -- , mkFlagName
+  )
+import Distribution.Types.ForeignLib
+  ( ForeignLib(..)
+  )
+import Distribution.Types.UnqualComponentName
+  ( unUnqualComponentName
+  )
 #endif
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
-import Distribution.Types.UnitId (UnitId)
-import Distribution.Types.MungedPackageId (MungedPackageId)
+-- CPP >= 2.0
+import Distribution.Version
+  ( versionNumbers
+  , mkVersion
+  )
+import Distribution.Types.UnitId
+  ( UnitId
+  )
+import Distribution.Types.MungedPackageId
+  ( MungedPackageId
+  )
 #endif
 
 import Control.Applicative ((<$>))
@@ -125,6 +184,7 @@ import CabalHelper.Shared.InterfaceTypes
 
 import CabalHelper.Runtime.Licenses
 
+usage :: IO ()
 usage = do
   prog <- getProgName
   hPutStr stderr $ "Usage: " ++ prog ++ " " ++ usageMsg
@@ -212,8 +272,8 @@ main = do
       exitSuccess
     else return ()
 
-  print =<< flip mapM cmds $$ \cmd -> do
-  case cmd of
+  print =<< flip mapM cmds $$ \x -> do
+  case x of
     "flags":[] -> do
       return $ Just $ ChResponseFlags $ sort $
         map (flagName' &&& flagDefault) $ genPackageFlags gpd
@@ -226,11 +286,11 @@ main = do
       let flagDefinitons = genPackageFlags gpd
           flagAssgnments = configConfigurationsFlags $ configFlags lbi
           nonDefaultFlags =
-              [ (fn, v)
-              | MkFlag {flagName=(unFlagName -> fn), flagDefault=dv} <- flagDefinitons
-              , (unFlagName -> fn', v) <- flagAssgnments
-              , fn == fn'
-              , v /= dv
+              [ (flag_name, val)
+              | MkFlag {flagName=(unFlagName -> flag_name'), flagDefault=def_val} <- flagDefinitons
+              , (unFlagName -> flag_name, val) <- flagAssgnments
+              , flag_name == flag_name'
+              , val /= def_val
               ]
       return $ Just $ ChResponseFlags $ sort nonDefaultFlags
 
@@ -269,7 +329,6 @@ main = do
       return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
 
     "ghc-merged-pkg-options":flags -> do
-      let pd = localPkgDescr lbi
       res <- mconcat . map snd <$> (componentOptions' lvd True flags (\_ _ o -> return o) $ \opts -> mempty {
                        ghcOptPackageDBs = [],
                        ghcOptHideAllPackages = NoFlag,
@@ -302,7 +361,7 @@ main = do
       return $ Just $ ChResponsePkgDbs $ map pkgDb $ withPackageDB lbi
 
     "entrypoints":[] -> do
-      eps <- componentsMap lbi v distdir $ \c clbi bi ->
+      eps <- componentsMap lbi v distdir $ \c _clbi _bi ->
                return $ componentEntrypoints c
       -- MUST append Setup component at the end otherwise CabalHelper gets
       -- confused
@@ -322,7 +381,7 @@ main = do
     "print-lbi":flags ->
       case flags of
         ["--human"] -> print lbi >> return Nothing
-        [] -> return $ Just $ ChResponseLbi $ show lbi
+        []          -> return $ Just $ ChResponseLbi $ show lbi
 
     cmd:_ | not (cmd `elem` commands) ->
             errMsg ("Unknown command: " ++ cmd) >> usage >> exitFailure
@@ -331,27 +390,11 @@ main = do
 
 flagName' = unFlagName . flagName
 
-#if !CH_MIN_VERSION_Cabal(1,25,0)
--- CPP < 1.25
-unFlagName (FlagName n) = n
-mkFlagName n = FlagName n
-#endif
-
-toDataVersion :: Version -> DataVersion.Version
---fromDataVersion :: DataVersion.Version -> Version
-#if CH_MIN_VERSION_Cabal(2,0,0)
-toDataVersion v = DataVersion.Version (versionNumbers v) []
---fromDataVersion (DataVersion.Version vs _) = mkVersion vs
-#else
-toDataVersion = id
-fromDataVersion = id
-#endif
-
-getLibrary :: PackageDescription -> Library
-getLibrary pd = unsafePerformIO $ do
-  lr <- newIORef (error "libraryMap: empty IORef")
-  withLib pd (writeIORef lr)
-  readIORef lr
+-- getLibrary :: PackageDescription -> Library
+-- getLibrary pd = unsafePerformIO $ do
+--   lr <- newIORef (error "libraryMap: empty IORef")
+--   withLib pd (writeIORef lr)
+--   readIORef lr
 
 getLibraryClbi pd lbi = unsafePerformIO $ do
   lr <- newIORef Nothing
@@ -370,7 +413,7 @@ componentsMap :: LocalBuildInfo
                   -> BuildInfo
                   -> IO a)
               -> IO [(ChComponentName, a)]
-componentsMap lbi v distdir f = do
+componentsMap lbi _v _distdir f = do
     let pd = localPkgDescr lbi
 
     lr <- newIORef []
@@ -402,6 +445,63 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
 
 componentOptions (lbi, v, distdir) inplaceFlag flags f =
     componentOptions' (lbi, v, distdir) inplaceFlag flags renderGhcOptions' f
+
+gmModuleName :: C.ModuleName -> ChModuleName
+gmModuleName = ChModuleName . intercalate "." . components
+
+exeOutDir :: LocalBuildInfo -> String -> FilePath
+exeOutDir lbi exeName' =
+  ----- Copied from Distribution/Simple/GHC.hs:buildOrReplExe
+  let targetDir = (buildDir lbi) </> exeName'
+      exeDir    = targetDir </> (exeName' ++ "-tmp")
+  in exeDir
+
+
+removeInplaceDeps :: Verbosity
+                  -> LocalBuildInfo
+                  -> PackageDescription
+                  -> ComponentLocalBuildInfo
+                  -> (ComponentLocalBuildInfo, GhcOptions)
+removeInplaceDeps _v lbi pd clbi = let
+    (ideps, deps) = partition (isInplaceDep lbi) (componentPackageDeps clbi)
+    hasIdeps = not $ null ideps
+    libopts =
+      case getLibraryClbi pd lbi of
+        Just (lib, libclbi) | hasIdeps ->
+          let
+            libbi = libBuildInfo lib
+            liboutdir = componentOutDir lbi (CLib lib)
+          in
+            (componentGhcOptions normal lbi libbi libclbi liboutdir) {
+                ghcOptPackageDBs = []
+            }
+        _ -> mempty
+    clbi' = clbi { componentPackageDeps = deps }
+  in (clbi', libopts)
+
+initialBuildStepsForAllComponents distdir pd lbi v =
+  initialBuildSteps distdir pd lbi v
+
+
+
+
+
+
+#if !CH_MIN_VERSION_Cabal(1,25,0)
+-- CPP < 1.25
+unFlagName (FlagName n) = n
+-- mkFlagName n = FlagName n
+#endif
+
+toDataVersion :: Version -> DataVersion.Version
+--fromDataVersion :: DataVersion.Version -> Version
+#if CH_MIN_VERSION_Cabal(2,0,0)
+toDataVersion v = DataVersion.Version (versionNumbers v) []
+--fromDataVersion (DataVersion.Version vs _) = mkVersion vs
+#else
+toDataVersion = id
+--fromDataVersion = id
+#endif
 
 componentNameToCh CLibName = ChLibName
 #if CH_MIN_VERSION_Cabal(1,25,0)
@@ -442,9 +542,6 @@ componentOutDir lbi (CTest TestSuite { testInterface = TestSuiteLibV09 _ _, ..})
 componentOutDir lbi (CBench Benchmark { benchmarkInterface = BenchmarkExeV10 _ _, ..})=
     exeOutDir lbi (unUnqualComponentName' benchmarkName)
 
-gmModuleName :: C.ModuleName -> ChModuleName
-gmModuleName = ChModuleName . intercalate "." . components
-
 componentEntrypoints :: Component -> ChEntrypoint
 componentEntrypoints (CLib Library {..})
     = ChLibEntrypoint
@@ -463,49 +560,18 @@ componentEntrypoints (CBench Benchmark { benchmarkInterface = BenchmarkExeV10 _ 
 componentEntrypoints (CBench Benchmark {})
     = ChLibEntrypoint [] []
 
-exeOutDir :: LocalBuildInfo -> String -> FilePath
-exeOutDir lbi exeName' =
-  ----- Copied from Distribution/Simple/GHC.hs:buildOrReplExe
-  let targetDir = (buildDir lbi) </> exeName'
-      exeDir    = targetDir </> (exeName' ++ "-tmp")
-  in exeDir
 
-
-removeInplaceDeps :: Verbosity
-                  -> LocalBuildInfo
-                  -> PackageDescription
-                  -> ComponentLocalBuildInfo
-                  -> (ComponentLocalBuildInfo, GhcOptions)
-removeInplaceDeps v lbi pd clbi = let
-    (ideps, deps) = partition isInplaceDep (componentPackageDeps clbi)
-    hasIdeps = not $ null ideps
-    libopts =
-      case getLibraryClbi pd lbi of
-        Just (lib, libclbi) | hasIdeps ->
-          let
-            libbi = libBuildInfo lib
-            liboutdir = componentOutDir lbi (CLib lib)
-          in
-            (componentGhcOptions normal lbi libbi libclbi liboutdir) {
-                ghcOptPackageDBs = []
-            }
-        _ -> mempty
-    clbi' = clbi { componentPackageDeps = deps }
-
-  in (clbi', libopts)
-
- where
 #if CH_MIN_VERSION_Cabal(2,0,0)
-   isInplaceDep :: (UnitId, MungedPackageId) -> Bool
-   isInplaceDep (mpid, pid) = localUnitId lbi == mpid
+isInplaceDep :: LocalBuildInfo -> (UnitId, MungedPackageId) -> Bool
+isInplaceDep lbi (mpid, pid) = localUnitId lbi == mpid
 #else
-   isInplaceDep :: (InstalledPackageId, PackageId) -> Bool
+isInplaceDep :: LocalBuildInfo -> (InstalledPackageId, PackageId) -> Bool
 #  if CH_MIN_VERSION_Cabal(1,23,0)
 -- CPP >= 1.23
-   isInplaceDep (ipid, pid) = localUnitId lbi == ipid
+isInplaceDep lbi (ipid, _pid) = localUnitId lbi == ipid
 #  else
 -- CPP <= 1.22
-   isInplaceDep (ipid, pid) = inplacePackageId pid == ipid
+isInplaceDep _lbi (ipid, pid) = inplacePackageId pid == ipid
 #  endif
 #endif
 
@@ -521,7 +587,7 @@ renderGhcOptions' :: LocalBuildInfo
                   -> Verbosity
                   -> GhcOptions
                   -> IO [String]
-renderGhcOptions' lbi v opts = do
+renderGhcOptions' lbi _v opts = do
 #if !CH_MIN_VERSION_Cabal(1,20,0)
 -- CPP < 1.20
   (ghcProg, _) <- requireProgram v ghcProgram (withPrograms lbi)
@@ -534,6 +600,3 @@ renderGhcOptions' lbi v opts = do
 -- CPP >= 1.24
   return $ renderGhcOptions (compiler lbi) (hostPlatform lbi) opts
 #endif
-
-initialBuildStepsForAllComponents distdir pd lbi v =
-  initialBuildSteps distdir pd lbi v
