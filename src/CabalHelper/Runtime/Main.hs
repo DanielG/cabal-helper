@@ -587,16 +587,18 @@ renderGhcOptions' :: LocalBuildInfo
                   -> Verbosity
                   -> GhcOptions
                   -> IO [String]
-renderGhcOptions' lbi _v opts = do
 #if !CH_MIN_VERSION_Cabal(1,20,0)
+renderGhcOptions' lbi v opts = do
 -- CPP < 1.20
   (ghcProg, _) <- requireProgram v ghcProgram (withPrograms lbi)
   let Just ghcVer = programVersion ghcProg
   return $ renderGhcOptions ghcVer opts
 #elif CH_MIN_VERSION_Cabal(1,20,0) && !CH_MIN_VERSION_Cabal(1,24,0)
+renderGhcOptions' lbi _v opts = do
 -- CPP >= 1.20 && < 1.24
   return $ renderGhcOptions (compiler lbi) opts
 #else
+renderGhcOptions' lbi _v opts = do
 -- CPP >= 1.24
   return $ renderGhcOptions (compiler lbi) (hostPlatform lbi) opts
 #endif
