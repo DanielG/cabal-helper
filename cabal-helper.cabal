@@ -63,7 +63,7 @@ library
                      , mtl           < 2.3  && >= 2.0
                      , process       < 1.7  && >= 1.1.0.1
                      , unix          < 2.8  && >= 2.5.1.1
-                     , semigroupoids < 5.3  && >= 5.2.1
+                     , semigroupoids < 5.3  && >= 5.2
                      , ghc-prim
 
 -- [Note ghc-prim]
