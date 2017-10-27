@@ -1,6 +1,8 @@
 module CabalHelper.Compiletime.Compat.Environment where
 
-import System.Environment
+import qualified System.Environment (getEnvironment)
 
 lookupEnv :: String -> IO (Maybe String)
-lookupEnv var = do env <- getEnvironment; return (lookup var env)
+lookupEnv var =
+  do env <- System.Environment.getEnvironment
+     return (lookup var env)
