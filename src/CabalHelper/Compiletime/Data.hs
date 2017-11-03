@@ -33,9 +33,9 @@ import Language.Haskell.TH
 import System.Directory
 import System.FilePath
 import System.IO.Temp
-import System.Posix.Files
-import System.Posix.Time
-import System.Posix.Types
+import System.PosixCompat.Files
+import System.PosixCompat.Time
+import System.PosixCompat.Types
 import Prelude
 
 import CabalHelper.Compiletime.Compat.Environment
