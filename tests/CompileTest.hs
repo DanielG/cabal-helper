@@ -1,6 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-import System.Posix.Env (setEnv)
 import System.Process
 import System.Exit
 import System.IO
@@ -36,7 +35,7 @@ withinRange'CH v r =
 
 main :: IO ()
 main = do
-  flip (setEnv "HOME") True =<< fromMaybe "/tmp" <$> lookupEnv "TMPDIR"
+  setEnv "HOME" =<< fromMaybe "/tmp" <$> lookupEnv "TMPDIR"
   _ <- rawSystem "cabal" ["update"]
 
   let parseVer' "HEAD" = Left HEAD
