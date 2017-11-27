@@ -19,7 +19,7 @@
 #undef CH_MIN_VERSION_Cabal
 #define CH_MIN_VERSION_Cabal MIN_VERSION_Cabal
 #endif
-
+import Distribution.Backpack (OpenUnitId(..))
 import Distribution.Simple.Utils (cabalVersion)
 import Distribution.Simple.Configure
 import Distribution.Package
@@ -69,6 +69,7 @@ import Distribution.Simple.LocalBuildInfo
   , externalPackageDeps
   , withComponentsLBI
   , withLibLBI
+  , withExeLBI
   )
 import Distribution.Simple.GHC
   ( componentGhcOptions
@@ -104,6 +105,12 @@ import qualified Distribution.ModuleName as C
   )
 import Distribution.Text
   ( display
+  )
+import Distribution.Types.ModuleRenaming
+  ( ModuleRenaming(..)
+  )
+import Distribution.Types.UnitId
+  ( DefUnitId
   )
 import Distribution.Verbosity
   ( Verbosity
@@ -154,6 +161,7 @@ import Distribution.Version
   )
 import Distribution.Types.UnitId
   ( UnitId
+  , unDefUnitId
   )
 import Distribution.Types.MungedPackageId
   ( MungedPackageId
@@ -405,6 +413,15 @@ getLibraryClbi pd lbi = unsafePerformIO $ do
   readIORef lr
 
 
+getExeClbi pd lbi = unsafePerformIO $ do
+  lr <- newIORef Nothing
+
+  withExeLBI pd lbi $ \ exe clbi ->
+      writeIORef lr $ Just (exe,clbi)
+
+  readIORef lr
+
+
 componentsMap :: LocalBuildInfo
               -> Verbosity
               -> FilePath
@@ -430,6 +447,12 @@ componentsMap lbi _v _distdir f = do
 
     reverse <$> readIORef lr
 
+-- componentOptions' :: (LocalBuildInfo, Verbosity, FilePath)
+--                   -> Bool
+--                   -> [String]
+--                   -> (LocalBuildInfo -> Verbosity -> GhcOptions -> IO a)
+--                   -> (GhcOptions -> GhcOptions)
+--                   -> IO [(ChComponentName, a)]
 componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
   let pd = localPkgDescr lbi
   componentsMap lbi v distdir $ \c clbi bi -> let
@@ -442,7 +465,15 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
            opts' = f opts
 
          in rf lbi v $ nubPackageFlags $ opts' `mappend` adopts
+         -- in rf lbi v $ nubPackageFlags $ adopts
+         -- in rf lbi v $ nubPackageFlags $ opts'
+         -- in rf lbi v $ nubPackageFlags $ mempty
 
+componentOptions :: (LocalBuildInfo, Verbosity, FilePath)
+                 -> Bool
+                 -> [String]
+                 -> (GhcOptions -> GhcOptions)
+                 -> IO [(ChComponentName, [String])]
 componentOptions (lbi, v, distdir) inplaceFlag flags f =
     componentOptions' (lbi, v, distdir) inplaceFlag flags renderGhcOptions' f
 
@@ -463,11 +494,12 @@ removeInplaceDeps :: Verbosity
                   -> ComponentLocalBuildInfo
                   -> (ComponentLocalBuildInfo, GhcOptions)
 removeInplaceDeps _v lbi pd clbi = let
-    (ideps, deps) = partition (isInplaceDep lbi) (componentPackageDeps clbi)
+    (ideps, deps) = partition (isInplaceDep lbi clbi) (componentPackageDeps clbi)
+    (_,     incs) = partition (isInplaceCompInc clbi) (componentIncludes clbi)
     hasIdeps = not $ null ideps
     libopts =
-      case getLibraryClbi pd lbi of
-        Just (lib, libclbi) | hasIdeps ->
+      case (getLibraryClbi pd lbi,getExeClbi pd lbi) of
+        (Just (lib, libclbi),_) | hasIdeps ->
           let
             libbi = libBuildInfo lib
             liboutdir = componentOutDir lbi (CLib lib)
@@ -475,10 +507,20 @@ removeInplaceDeps _v lbi pd clbi = let
             (componentGhcOptions normal lbi libbi libclbi liboutdir) {
                 ghcOptPackageDBs = []
             }
+        (_,Just (exe,execlbi)) | hasIdeps ->
+          let
+            exebi = buildInfo exe
+            exeoutdir = componentOutDir lbi (CExe exe)
+          in
+            (componentGhcOptions normal lbi exebi execlbi exeoutdir) {
+                ghcOptPackageDBs = []
+            }
         _ -> mempty
-    clbi' = clbi { componentPackageDeps = deps }
+    clbi' = clbi { componentPackageDeps = deps
+                 , componentIncludes = incs }
   in (clbi', libopts)
-
+  -- in error $ "removeInplaceDeps:(clbi')=" ++ show (clbi' )
+ 
 initialBuildStepsForAllComponents distdir pd lbi v =
   initialBuildSteps distdir pd lbi v
 
@@ -560,10 +602,16 @@ componentEntrypoints (CBench Benchmark { benchmarkInterface = BenchmarkExeV10 _ 
 componentEntrypoints (CBench Benchmark {})
     = ChLibEntrypoint [] []
 
+#if CH_MIN_VERSION_Cabal(2,0,0)
+isInplaceCompInc :: ComponentLocalBuildInfo -> (OpenUnitId, ModuleRenaming) -> Bool
+isInplaceCompInc clbi (DefiniteUnitId uid, _mr) = unDefUnitId uid `elem` componentInternalDeps clbi
+isInplaceCompInc clbi (IndefFullUnitId _ _, _mmr) = False -- TODO: keep this for now, what in future?
+#endif
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
-isInplaceDep :: LocalBuildInfo -> (UnitId, MungedPackageId) -> Bool
-isInplaceDep lbi (mpid, pid) = localUnitId lbi == mpid
+isInplaceDep :: LocalBuildInfo -> ComponentLocalBuildInfo -> (UnitId, MungedPackageId) -> Bool
+isInplaceDep lbi clbi (uid, _mpid) = uid `elem` componentInternalDeps clbi
+-- isInplaceDep lbi clbi (uid, _mpid) = True
 #else
 isInplaceDep :: LocalBuildInfo -> (InstalledPackageId, PackageId) -> Bool
 #  if CH_MIN_VERSION_Cabal(1,23,0)
