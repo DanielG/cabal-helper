@@ -450,12 +450,6 @@ componentsMap lbi _v _distdir f = do
 
     reverse <$> readIORef lr
 
--- componentOptions' :: (LocalBuildInfo, Verbosity, FilePath)
---                   -> Bool
---                   -> [String]
---                   -> (LocalBuildInfo -> Verbosity -> GhcOptions -> IO a)
---                   -> (GhcOptions -> GhcOptions)
---                   -> IO [(ChComponentName, a)]
 componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
   let pd = localPkgDescr lbi
   includeDirs <- componentsMap lbi v distdir $ \_c clbi bi -> do
@@ -463,7 +457,6 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
            , (componentInternalDeps clbi, hsSourceDirs bi,componentIncludes clbi))
   let includeDirMap = Map.fromList $ map snd includeDirs
 
-  -- putStrLn $ "componentGhcOptions':includeDirMap=" ++ show includeDirMap
   componentsMap lbi v distdir $ \c clbi bi -> do
          let
            outdir = componentOutDir lbi c
@@ -474,15 +467,8 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
            opts = componentGhcOptions normal lbi bi clbi' outdir
            opts' = f opts
 
-         -- putStrLn $ "componentGhcOptions':opts'=" ++ show opts'
-         -- putStrLn $ "************************componentGhcOptions':adopts=" ++ show (ghcOptSourcePath adopts)
          rf lbi v $ nubPackageFlags $ opts' `mappend` adopts
 
-componentOptions :: (LocalBuildInfo, Verbosity, FilePath)
-                 -> Bool
-                 -> [String]
-                 -> (GhcOptions -> GhcOptions)
-                 -> IO [(ChComponentName, [String])]
 componentOptions (lbi, v, distdir) inplaceFlag flags f =
     componentOptions' (lbi, v, distdir) inplaceFlag flags renderGhcOptions' f
 
@@ -508,45 +494,44 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
       let
         (ideps, deps) = partition (isInplaceDep lbi c) (componentPackageDeps c)
         (_,     incs) = partition (isInplaceCompInc c) (componentIncludes c)
-        hasIdeps = not $ null ideps
+        hasIdeps' = not $ null ideps
         c' = c { componentPackageDeps  = deps
                , componentInternalDeps = []
                , componentIncludes     = incs }
-      in (hasIdeps,c')
+      in (hasIdeps',c')
+
+    cleanRecursiveOpts comp libbi libclbi =
+      let
+        -- libbi = libBuildInfo lib
+        liboutdir = componentOutDir lbi comp
+        (_,libclbi') = removeInplace libclbi
+        (extraIncludes,extraDeps') = recursiveIncludeDirs includeDirs (componentUnitId libclbi)
+        (_,extraDeps) = partition (isInplaceCompInc libclbi) extraDeps'
+        opts = (componentGhcOptions normal lbi libbi libclbi' liboutdir) {
+                  ghcOptPackageDBs = []
+               }
+      in
+        opts { ghcOptSourcePath = ghcOptSourcePath opts <> toNubListR extraIncludes
+             , ghcOptPackages   = ghcOptPackages   opts <> toNubListR extraDeps }
+
     (hasIdeps,clbi') = removeInplace clbi
     libopts =
       case (getLibraryClbi pd lbi,getExeClbi pd lbi) of
         (Just (lib, libclbi),_) | hasIdeps ->
           let
             libbi = libBuildInfo lib
-            liboutdir = componentOutDir lbi (CLib lib)
-            (_,libclbi') = removeInplace libclbi
-            (extraIncludes,extraDeps') = recursiveIncludeDirs includeDirs (componentUnitId libclbi)
-            (_,extraDeps) = partition (isInplaceCompInc libclbi) extraDeps'
-            opts = (componentGhcOptions normal lbi libbi libclbi' liboutdir) {
-                      ghcOptPackageDBs = []
-                   }
           in
-            opts { ghcOptSourcePath = ghcOptSourcePath opts <> toNubListR extraIncludes
-                 , ghcOptPackages   = ghcOptPackages   opts <> toNubListR extraDeps }
+            cleanRecursiveOpts (CLib lib) libbi libclbi
         (_,Just (exe,execlbi)) | hasIdeps ->
           let
             exebi = buildInfo exe
-            exeoutdir = componentOutDir lbi (CExe exe)
-            (_,execlbi') = removeInplace execlbi
-            (extraIncludes,extraDeps') = recursiveIncludeDirs includeDirs (componentUnitId execlbi)
-            (_,extraDeps) = partition (isInplaceCompInc execlbi) extraDeps'
-            opts = (componentGhcOptions normal lbi exebi execlbi' exeoutdir) {
-                     ghcOptPackageDBs = []
-                   }
           in
-            opts { ghcOptSourcePath = ghcOptSourcePath opts <> toNubListR extraIncludes
-                 , ghcOptPackages   = ghcOptPackages   opts <> toNubListR extraDeps }
+            cleanRecursiveOpts (CExe exe) exebi execlbi
         _ -> mempty
   in (clbi', libopts)
-  -- in error $ "removeInplaceDeps:(clbi')=" ++ show (clbi' )
 
--- TODO: Is this valid? It assumes a tree, will never return for a graph
+
+#if CH_MIN_VERSION_Cabal(2,0,0)
 recursiveIncludeDirs :: Map.Map UnitId ([UnitId],[FilePath], [(OpenUnitId, ModuleRenaming)])
                      -> UnitId -> ([FilePath],[(OpenUnitId, ModuleRenaming)])
 recursiveIncludeDirs includeDirs unit = go ([],[]) [unit]
@@ -555,6 +540,7 @@ recursiveIncludeDirs includeDirs unit = go ([],[]) [unit]
     go (acp,acd) (u:us) = case Map.lookup u includeDirs of
       Nothing -> go (acp,acd) us
       Just (us',fps,pds) -> go (acp++fps,acd++pds) (us++us')
+#endif
 
 initialBuildStepsForAllComponents distdir pd lbi v =
   initialBuildSteps distdir pd lbi v
@@ -624,6 +610,10 @@ componentEntrypoints (CLib Library {..})
     = ChLibEntrypoint
         (map gmModuleName exposedModules)
         (map gmModuleName $ otherModules libBuildInfo)
+#if CH_MIN_VERSION_Cabal(2,0,0)
+componentEntrypoints (CFLib (ForeignLib{..}))
+    = error $ "componentEntrypoints:Need to process ForeignLib Component"
+#endif
 componentEntrypoints (CExe Executable {..})
     = ChExeEntrypoint modulePath (map gmModuleName $ otherModules buildInfo)
 componentEntrypoints (CTest TestSuite { testInterface = TestSuiteExeV10 _ fp, ..})
@@ -646,7 +636,6 @@ isInplaceCompInc clbi (IndefFullUnitId _ _, _mmr) = False -- TODO: keep this for
 #if CH_MIN_VERSION_Cabal(2,0,0)
 isInplaceDep :: LocalBuildInfo -> ComponentLocalBuildInfo -> (UnitId, MungedPackageId) -> Bool
 isInplaceDep lbi clbi (uid, _mpid) = uid `elem` componentInternalDeps clbi
--- isInplaceDep lbi clbi (uid, _mpid) = True
 #else
 isInplaceDep :: LocalBuildInfo -> (InstalledPackageId, PackageId) -> Bool
 #  if CH_MIN_VERSION_Cabal(1,23,0)

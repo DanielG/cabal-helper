@@ -27,9 +27,8 @@ main = do
   args <- getArgs
   topdir <- getCurrentDirectory
   res <- mapM (setup topdir test) $ case args of
-    [] -> [
-           -- ("tests/exelib"   , parseVer "1.10")
-           ("tests/exeintlib", parseVer "2.0")
+    [] -> [ ("tests/exelib"   , parseVer "1.10")
+          , ("tests/exeintlib", parseVer "2.0")
           ]
     xs -> map (,parseVer "0") xs
 
@@ -50,7 +49,6 @@ setup :: FilePath -> (FilePath -> IO [Bool]) -> (FilePath, Version) -> IO [Bool]
 setup topdir act (srcdir, min_cabal_ver) = do
     ci_ver <- cabalInstallVersion
     c_ver <- cabalInstallBuiltinCabalVersion
-    putStrLn $ "(ci_ver,c_ver)=" ++ show (ci_ver,c_ver) -- AZ-DEBUG
     let mreason
           | (ci_ver < parseVer "1.24") =
             Just $ "cabal-install-" ++ showVersion ci_ver ++ " is too old"
@@ -65,9 +63,7 @@ setup topdir act (srcdir, min_cabal_ver) = do
         putStrLn $ "Skipping test '" ++ srcdir ++ "' because " ++ reason ++ "."
         return []
       Nothing -> do
-        -- withSystemTempDirectory "cabal-helper.ghc-session.test" $ \dir -> do
-        let dir = "/tmp/xxx"
-        do
+        withSystemTempDirectory "cabal-helper.ghc-session.test" $ \dir -> do
           setCurrentDirectory $ topdir </> srcdir
           run "cabal" [ "sdist", "--output-dir", dir ]
 
@@ -80,9 +76,7 @@ setup topdir act (srcdir, min_cabal_ver) = do
     run x xs = do
       print $ x:xs
       o <- readProcess x xs ""
-      putStrLn "=======================output============" -- AZ-DEBUG
       putStrLn o
-      putStrLn "=======================output-done=======" -- AZ-DEBUG
       return ()
 
 test :: FilePath -> IO [Bool]
@@ -91,9 +85,7 @@ test dir = do
     cs <- runQuery qe $ components $ (,,) <$> entrypoints <.> ghcOptions
     forM cs $ \(ep, opts, cn) -> do
         let sopts = intercalate " " $ map formatArg $ "ghc" : opts
-        putStrLn "======================= cn ============" -- AZ-DEBUG
         putStrLn $ "\n" ++ show cn ++ ": " ++ sopts
-        putStrLn "======================= cn done =======" -- AZ-DEBUG
         compileModule ep opts
   where
     formatArg x
@@ -102,8 +94,6 @@ test dir = do
 
 compileModule :: ChEntrypoint -> [String] -> IO Bool
 compileModule ep opts = do
-
-    putStrLn $ "compileModule:ep=" ++ show ep
 
     E.handle (\(ec :: ExitCode) -> print ec >> return False) $ do
 
