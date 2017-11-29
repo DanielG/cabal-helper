@@ -19,7 +19,9 @@
 #undef CH_MIN_VERSION_Cabal
 #define CH_MIN_VERSION_Cabal MIN_VERSION_Cabal
 #endif
+#if CH_MIN_VERSION_Cabal(2,0,0)
 import Distribution.Backpack (OpenUnitId(..))
+#endif
 import Distribution.Simple.Utils (cabalVersion)
 import Distribution.Simple.Configure
 import Distribution.Package
@@ -106,6 +108,7 @@ import qualified Distribution.ModuleName as C
 import Distribution.Text
   ( display
   )
+#if CH_MIN_VERSION_Cabal(2,0,0)
 import Distribution.Types.ModuleRenaming
   ( ModuleRenaming(..)
   )
@@ -115,6 +118,7 @@ import Distribution.Types.UnitId
 import Distribution.Utils.NubList
     ( toNubListR
     )
+#endif
 import Distribution.Verbosity
   ( Verbosity
   , silent
@@ -452,22 +456,28 @@ componentsMap lbi _v _distdir f = do
 
 componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
   let pd = localPkgDescr lbi
+#if CH_MIN_VERSION_Cabal(2,0,0)
   includeDirs <- componentsMap lbi v distdir $ \_c clbi bi -> do
     return (componentUnitId clbi
            , (componentInternalDeps clbi, hsSourceDirs bi,componentIncludes clbi))
   let includeDirMap = Map.fromList $ map snd includeDirs
+#endif
 
-  componentsMap lbi v distdir $ \c clbi bi -> do
+  componentsMap lbi v distdir $ \c clbi bi ->
          let
            outdir = componentOutDir lbi c
            (clbi', adopts) = case flags of
                                _ | not inplaceFlag -> (clbi, mempty)
                                ["--with-inplace"] -> (clbi, mempty)
+#if CH_MIN_VERSION_Cabal(2,0,0)
                                [] -> removeInplaceDeps v lbi pd clbi includeDirMap
+#else
+                               [] -> removeInplaceDeps v lbi pd clbi
+#endif
            opts = componentGhcOptions normal lbi bi clbi' outdir
            opts' = f opts
 
-         rf lbi v $ nubPackageFlags $ opts' `mappend` adopts
+         in rf lbi v $ nubPackageFlags $ opts' `mappend` adopts
 
 componentOptions (lbi, v, distdir) inplaceFlag flags f =
     componentOptions' (lbi, v, distdir) inplaceFlag flags renderGhcOptions' f
@@ -483,6 +493,7 @@ exeOutDir lbi exeName' =
   in exeDir
 
 
+#if CH_MIN_VERSION_Cabal(2,0,0)
 removeInplaceDeps :: Verbosity
                   -> LocalBuildInfo
                   -> PackageDescription
@@ -529,6 +540,29 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
             cleanRecursiveOpts (CExe exe) exebi execlbi
         _ -> mempty
   in (clbi', libopts)
+#else
+removeInplaceDeps :: Verbosity
+                  -> LocalBuildInfo
+                  -> PackageDescription
+                  -> ComponentLocalBuildInfo
+                  -> (ComponentLocalBuildInfo, GhcOptions)
+removeInplaceDeps _v lbi pd clbi = let
+    (ideps, deps) = partition (isInplaceDep lbi) (componentPackageDeps clbi)
+    hasIdeps = not $ null ideps
+    libopts =
+      case getLibraryClbi pd lbi of
+        Just (lib, libclbi) | hasIdeps ->
+          let
+            libbi = libBuildInfo lib
+            liboutdir = componentOutDir lbi (CLib lib)
+          in
+            (componentGhcOptions normal lbi libbi libclbi liboutdir) {
+                ghcOptPackageDBs = []
+            }
+        _ -> mempty
+    clbi' = clbi { componentPackageDeps = deps }
+  in (clbi', libopts)
+#endif
 
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
