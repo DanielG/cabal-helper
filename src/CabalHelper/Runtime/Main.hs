@@ -112,6 +112,9 @@ import Distribution.Types.ModuleRenaming
 import Distribution.Types.UnitId
   ( DefUnitId
   )
+import Distribution.Utils.NubList
+    ( toNubListR
+    )
 import Distribution.Verbosity
   ( Verbosity
   , silent
@@ -455,19 +458,24 @@ componentsMap lbi _v _distdir f = do
 --                   -> IO [(ChComponentName, a)]
 componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
   let pd = localPkgDescr lbi
-  componentsMap lbi v distdir $ \c clbi bi -> let
+  includeDirs <- componentsMap lbi v distdir $ \_c clbi bi -> do
+    return (componentUnitId clbi, (componentInternalDeps clbi, hsSourceDirs bi))
+  let includeDirMap = Map.fromList $ map snd includeDirs
+
+  -- putStrLn $ "componentGhcOptions':includeDirMap=" ++ show includeDirMap
+  componentsMap lbi v distdir $ \c clbi bi -> do
+         let
            outdir = componentOutDir lbi c
            (clbi', adopts) = case flags of
                                _ | not inplaceFlag -> (clbi, mempty)
                                ["--with-inplace"] -> (clbi, mempty)
-                               [] -> removeInplaceDeps v lbi pd clbi
+                               [] -> removeInplaceDeps v lbi pd clbi includeDirMap
            opts = componentGhcOptions normal lbi bi clbi' outdir
            opts' = f opts
 
-         in rf lbi v $ nubPackageFlags $ opts' `mappend` adopts
-         -- in rf lbi v $ nubPackageFlags $ adopts
-         -- in rf lbi v $ nubPackageFlags $ opts'
-         -- in rf lbi v $ nubPackageFlags $ mempty
+         -- putStrLn $ "componentGhcOptions':opts'=" ++ show opts'
+         -- putStrLn $ "************************componentGhcOptions':adopts=" ++ show (ghcOptSourcePath adopts)
+         rf lbi v $ nubPackageFlags $ opts' `mappend` adopts
 
 componentOptions :: (LocalBuildInfo, Verbosity, FilePath)
                  -> Bool
@@ -492,35 +500,56 @@ removeInplaceDeps :: Verbosity
                   -> LocalBuildInfo
                   -> PackageDescription
                   -> ComponentLocalBuildInfo
+                  -> Map.Map UnitId ([UnitId],[FilePath])
                   -> (ComponentLocalBuildInfo, GhcOptions)
-removeInplaceDeps _v lbi pd clbi = let
-    (ideps, deps) = partition (isInplaceDep lbi clbi) (componentPackageDeps clbi)
-    (_,     incs) = partition (isInplaceCompInc clbi) (componentIncludes clbi)
-    hasIdeps = not $ null ideps
+removeInplaceDeps _v lbi pd clbi includeDirs = let
+    removeInplace c =
+      let
+        (ideps, deps) = partition (isInplaceDep lbi c) (componentPackageDeps c)
+        (_,     incs) = partition (isInplaceCompInc c) (componentIncludes c)
+        hasIdeps = not $ null ideps
+        c' = c { componentPackageDeps  = deps
+               , componentInternalDeps = []
+               , componentIncludes     = incs }
+      in (hasIdeps,c')
+    (hasIdeps,clbi') = removeInplace clbi
     libopts =
       case (getLibraryClbi pd lbi,getExeClbi pd lbi) of
         (Just (lib, libclbi),_) | hasIdeps ->
           let
             libbi = libBuildInfo lib
             liboutdir = componentOutDir lbi (CLib lib)
+            (_,libclbi') = removeInplace libclbi
+            extraIncludes = recursiveIncludeDirs includeDirs (componentUnitId libclbi)
+            opts = (componentGhcOptions normal lbi libbi libclbi' liboutdir) {
+                      ghcOptPackageDBs = []
+                   }
           in
-            (componentGhcOptions normal lbi libbi libclbi liboutdir) {
-                ghcOptPackageDBs = []
-            }
+            opts { ghcOptSourcePath = ghcOptSourcePath opts <> toNubListR extraIncludes }
         (_,Just (exe,execlbi)) | hasIdeps ->
           let
             exebi = buildInfo exe
             exeoutdir = componentOutDir lbi (CExe exe)
+            (_,execlbi') = removeInplace execlbi
+            extraIncludes = recursiveIncludeDirs includeDirs (componentUnitId execlbi)
+            opts = (componentGhcOptions normal lbi exebi execlbi' exeoutdir) {
+                     ghcOptPackageDBs = []
+                   }
           in
-            (componentGhcOptions normal lbi exebi execlbi exeoutdir) {
-                ghcOptPackageDBs = []
-            }
+            opts { ghcOptSourcePath = ghcOptSourcePath opts <> toNubListR extraIncludes }
         _ -> mempty
-    clbi' = clbi { componentPackageDeps = deps
-                 , componentIncludes = incs }
   in (clbi', libopts)
   -- in error $ "removeInplaceDeps:(clbi')=" ++ show (clbi' )
- 
+
+-- TODO: Is this valid? It assumes a tree, will never return for a graph
+recursiveIncludeDirs :: Map.Map UnitId ([UnitId],[FilePath]) -> UnitId -> [FilePath]
+recursiveIncludeDirs includeDirs unit = go [] [unit]
+  where
+    go acc [] = acc
+    go acc (u:us) = case Map.lookup u includeDirs of
+      Nothing -> go acc us
+      Just (us',fps) -> go (acc++fps) (us++us')
+
 initialBuildStepsForAllComponents distdir pd lbi v =
   initialBuildSteps distdir pd lbi v
 
