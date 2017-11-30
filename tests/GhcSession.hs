@@ -1,7 +1,10 @@
-{-# LANGUAGE TupleSections, ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections, ScopedTypeVariables, CPP #-}
 module Main where
 
 import GHC
+#if __GLASGOW_HASKELL__ <= 704
+import GhcMonad
+#endif
 import GHC.Paths (libdir)
 import DynFlags
 
@@ -97,41 +100,46 @@ compileModule ep opts = do
 
     E.handle (\(ec :: ExitCode) -> print ec >> return False) $ do
 
-    defaultErrorHandler defaultFatalMessager defaultFlushOut $ do
+      defaultErrorHandler defaultFatalMessager defaultFlushOut $ do
 
-    runGhc (Just libdir) $ do
+        runGhc (Just libdir) $ do
 
-    dflags0 <- getSessionDynFlags
-    let dflags1 = dflags0 {
-        ghcMode   = CompManager
-      , ghcLink   = LinkInMemory
-      , hscTarget = HscInterpreted
-      , optLevel  = 0
-      }
+          dflags0 <- getSessionDynFlags
+          let dflags1 = dflags0 {
+              ghcMode   = CompManager
+            , ghcLink   = LinkInMemory
+            , hscTarget = HscInterpreted
+            , optLevel  = 0
+            }
 
-    (dflags2, _, _) <- parseDynamicFlags dflags1 (map noLoc opts)
-    _ <- setSessionDynFlags dflags2
+          (dflags2, _, _) <- parseDynamicFlags dflags1 (map noLoc opts)
+          _ <- setSessionDynFlags dflags2
 
-    ts <- mapM (\t -> guessTarget t Nothing) $
-         case ep of
-           ChLibEntrypoint ms ms' -> map unChModuleName $ ms ++ ms'
-           ChExeEntrypoint m  ms  -> [m] ++ map unChModuleName ms
-           ChSetupEntrypoint      -> ["Setup.hs"]
-    let ts' = map (\t -> t { targetAllowObjCode = False }) ts
+          ts <- mapM (\t -> guessTarget t Nothing) $
+               case ep of
+                 ChLibEntrypoint ms ms' -> map unChModuleName $ ms ++ ms'
+                 ChExeEntrypoint m  ms  -> [m] ++ map unChModuleName ms
+                 ChSetupEntrypoint      -> ["Setup.hs"]
+          let ts' = map (\t -> t { targetAllowObjCode = False }) ts
 
-    setTargets ts'
-    _ <- load LoadAllTargets
+          setTargets ts'
+          _ <- load LoadAllTargets
 
-    setContext $ case ep of
-      ChLibEntrypoint ms ms' ->
-          map (IIModule . mkModuleName . unChModuleName) $ ms ++ ms'
-      ChExeEntrypoint _  ms  ->
-          map (IIModule . mkModuleName . unChModuleName) $ ChModuleName "Main" : ms
-      ChSetupEntrypoint      ->
-          map (IIModule . mkModuleName) ["Main"]
+          setContext $ case ep of
+            ChLibEntrypoint ms ms' ->
+                map (IIModule . mkModuleName . unChModuleName) $ ms ++ ms'
+            ChExeEntrypoint _  ms  ->
+                map (IIModule . mkModuleName . unChModuleName) $ ChModuleName "Main" : ms
+            ChSetupEntrypoint      ->
+                map (IIModule . mkModuleName) ["Main"]
 
-    liftIO $ print ExitSuccess
-    return True
+          liftIO $ print ExitSuccess
+          return True
 
 unChModuleName :: ChModuleName -> String
 unChModuleName (ChModuleName  mn) = mn
+
+#if __GLASGOW_HASKELL__ <= 704
+-- instance MonadIO (Ghc a) where
+--   liftIO 
+#endif
