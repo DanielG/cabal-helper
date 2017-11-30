@@ -100,7 +100,11 @@ compileModule ep opts = do
 
     E.handle (\(ec :: ExitCode) -> print ec >> return False) $ do
 
+#if __GLASGOW_HASKELL__ <= 704
+      defaultErrorHandler defaultLogAction $ do
+#else
       defaultErrorHandler defaultFatalMessager defaultFlushOut $ do
+#endif
 
         runGhc (Just libdir) $ do
 
