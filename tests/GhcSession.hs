@@ -2,7 +2,7 @@
 module Main where
 
 import GHC
-#if __GLASGOW_HASKELL__ <= 704
+#if __GLASGOW_HASKELL__ <= 706
 import GhcMonad
 #endif
 import GHC.Paths (libdir)
@@ -129,6 +129,7 @@ compileModule ep opts = do
           setTargets ts'
           _ <- load LoadAllTargets
 
+#if __GLASGOW_HASKELL__ >= 706
           setContext $ case ep of
             ChLibEntrypoint ms ms' ->
                 map (IIModule . mkModuleName . unChModuleName) $ ms ++ ms'
@@ -136,8 +137,9 @@ compileModule ep opts = do
                 map (IIModule . mkModuleName . unChModuleName) $ ChModuleName "Main" : ms
             ChSetupEntrypoint      ->
                 map (IIModule . mkModuleName) ["Main"]
+#endif
 
-#if __GLASGOW_HASKELL__ <= 704
+#if __GLASGOW_HASKELL__ <= 706
           GhcMonad.liftIO $ print ExitSuccess
 #else
           liftIO $ print ExitSuccess
