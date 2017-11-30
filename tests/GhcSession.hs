@@ -133,7 +133,11 @@ compileModule ep opts = do
             ChSetupEntrypoint      ->
                 map (IIModule . mkModuleName) ["Main"]
 
+#if __GLASGOW_HASKELL__ <= 704
+          GhcMonad.liftIO $ print ExitSuccess
+#else
           liftIO $ print ExitSuccess
+#endif
           return True
 
 unChModuleName :: ChModuleName -> String
