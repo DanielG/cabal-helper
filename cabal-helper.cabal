@@ -77,7 +77,7 @@ library
                      , process       < 1.7  && >= 1.1.0.1
   if !os(windows)
     build-depends:     unix          < 2.8  && >= 2.5.1.1
-  build-depends:       unix-compat   < 0.5  && >= 0.4.3.1
+  build-depends:       unix-compat   < 0.6  && >= 0.4.3.1
                      , semigroupoids < 5.3  && >= 5.2
                      , ghc-prim
 
@@ -123,7 +123,7 @@ executable cabal-helper-wrapper
                      , transformers     < 0.6  && >= 0.3.0.0
   if !os(windows)
     build-depends:     unix             < 2.8  && >= 2.5.1.1
-  build-depends:       unix-compat      < 0.5  && >= 0.4.3.1
+  build-depends:       unix-compat      < 0.6  && >= 0.4.3.1
                      , utf8-string      < 1.1  && >= 1.0.1.1
                      , ghc-prim
 
@@ -162,7 +162,7 @@ test-suite compile-test
                      , transformers     < 0.6  && >= 0.3.0.0
   if !os(windows)
     build-depends:     unix             < 2.8  && >= 2.5.1.1
-  build-depends:       unix-compat      < 0.5  && >= 0.4.3.1
+  build-depends:       unix-compat      < 0.6  && >= 0.4.3.1
                      , utf8-string      < 1.1  && >= 1.0.1.1
                      , ghc-prim
 
