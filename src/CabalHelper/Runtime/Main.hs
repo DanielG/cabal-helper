@@ -19,9 +19,7 @@
 #undef CH_MIN_VERSION_Cabal
 #define CH_MIN_VERSION_Cabal MIN_VERSION_Cabal
 #endif
-#if CH_MIN_VERSION_Cabal(2,0,0)
-import Distribution.Backpack (OpenUnitId(..))
-#endif
+
 import Distribution.Simple.Utils (cabalVersion)
 import Distribution.Simple.Configure
 import Distribution.Package
@@ -108,17 +106,6 @@ import qualified Distribution.ModuleName as C
 import Distribution.Text
   ( display
   )
-#if CH_MIN_VERSION_Cabal(2,0,0)
-import Distribution.Types.ModuleRenaming
-  ( ModuleRenaming(..)
-  )
-import Distribution.Types.UnitId
-  ( DefUnitId
-  )
-import Distribution.Utils.NubList
-    ( toNubListR
-    )
-#endif
 import Distribution.Verbosity
   ( Verbosity
   , silent
@@ -162,16 +149,26 @@ import Distribution.Types.UnqualComponentName
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
 -- CPP >= 2.0
-import Distribution.Version
-  ( versionNumbers
-  , mkVersion
+import Distribution.Backpack (OpenUnitId(..))
+import Distribution.Types.ModuleRenaming
+  ( ModuleRenaming(..)
+  )
+import Distribution.Types.MungedPackageId
+  ( MungedPackageId
   )
 import Distribution.Types.UnitId
   ( UnitId
   , unDefUnitId
   )
-import Distribution.Types.MungedPackageId
-  ( MungedPackageId
+import Distribution.Types.UnitId
+  ( DefUnitId
+  )
+import Distribution.Utils.NubList
+  ( toNubListR
+  )
+import Distribution.Version
+  ( versionNumbers
+  , mkVersion
   )
 #endif
 
@@ -503,10 +500,9 @@ removeInplaceDeps :: Verbosity
 removeInplaceDeps _v lbi pd clbi includeDirs = let
     removeInplace c =
       let
-        (ideps, deps) = partition (isInplaceDep lbi c) (componentPackageDeps c)
-        (_,     incs) = partition (isInplaceCompInc c) (componentIncludes c)
+        (ideps, incs) = partition (isInplaceCompInc c) (componentIncludes c)
         hasIdeps' = not $ null ideps
-        c' = c { componentPackageDeps  = deps
+        c' = c { componentPackageDeps  = error "using deprecated field:componentPackageDeps"
                , componentInternalDeps = []
                , componentIncludes     = incs }
       in (hasIdeps',c')
@@ -646,7 +642,7 @@ componentEntrypoints (CLib Library {..})
         (map gmModuleName $ otherModules libBuildInfo)
 #if CH_MIN_VERSION_Cabal(2,0,0)
 componentEntrypoints (CFLib (ForeignLib{..}))
-    = error $ "componentEntrypoints:Need to process ForeignLib Component"
+    = ChLibEntrypoint [] []
 #endif
 componentEntrypoints (CExe Executable {..})
     = ChExeEntrypoint modulePath (map gmModuleName $ otherModules buildInfo)
