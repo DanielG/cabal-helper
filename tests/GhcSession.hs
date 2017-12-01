@@ -148,8 +148,3 @@ compileModule ep opts = do
 
 unChModuleName :: ChModuleName -> String
 unChModuleName (ChModuleName  mn) = mn
-
-#if __GLASGOW_HASKELL__ <= 704
--- instance MonadIO (Ghc a) where
---   liftIO 
-#endif
