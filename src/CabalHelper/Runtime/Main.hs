@@ -642,7 +642,9 @@ componentEntrypoints (CLib Library {..})
         (map gmModuleName $ otherModules libBuildInfo)
 #if CH_MIN_VERSION_Cabal(2,0,0)
 componentEntrypoints (CFLib (ForeignLib{..}))
-    = ChLibEntrypoint [] []
+    = ChLibEntrypoint
+        []
+        (map gmModuleName $ otherModules foreignLibBuildInfo)
 #endif
 componentEntrypoints (CExe Executable {..})
     = ChExeEntrypoint modulePath (map gmModuleName $ otherModules buildInfo)
