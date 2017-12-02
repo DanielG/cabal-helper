@@ -13,3 +13,13 @@ executable exelib
   main-is:             Exe.hs
   build-depends:       base, exelib
   default-language:    Haskell2010
+
+test-suite exe-test
+    type:              exitcode-stdio-1.0
+    main-is:           Exe.hs
+    build-depends:     base, exelib
+
+benchmark exe-bench
+    type:              exitcode-stdio-1.0
+    main-is:           Exe.hs
+    build-depends:     base, exelib
