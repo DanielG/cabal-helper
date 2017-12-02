@@ -482,14 +482,6 @@ componentOptions (lbi, v, distdir) inplaceFlag flags f =
 gmModuleName :: C.ModuleName -> ChModuleName
 gmModuleName = ChModuleName . intercalate "." . components
 
-exeOutDir :: LocalBuildInfo -> String -> FilePath
-exeOutDir lbi exeName' =
-  ----- Copied from Distribution/Simple/GHC.hs:buildOrReplExe
-  let targetDir = (buildDir lbi) </> exeName'
-      exeDir    = targetDir </> (exeName' ++ "-tmp")
-  in exeDir
-
-
 #if CH_MIN_VERSION_Cabal(2,0,0)
 removeInplaceDeps :: Verbosity
                   -> LocalBuildInfo
@@ -626,14 +618,25 @@ componentNameFromComponent (CExe Executable {..}) = CExeName exeName
 componentNameFromComponent (CTest TestSuite {..}) = CTestName testName
 componentNameFromComponent (CBench Benchmark {..}) = CBenchName benchmarkName
 
-componentOutDir lbi (CLib Library {..})= buildDir lbi
-componentOutDir lbi (CExe Executable {..})= exeOutDir lbi (unUnqualComponentName' exeName)
+componentOutDir lbi (CLib Library {..})=
+    buildDir lbi
+componentOutDir lbi (CFLib ForeignLib {..}) =
+    componentOutDir' lbi (unUnqualComponentName foreignLibName)
+componentOutDir lbi (CExe Executable {..}) =
+    componentOutDir' lbi (unUnqualComponentName' exeName)
 componentOutDir lbi (CTest TestSuite { testInterface = TestSuiteExeV10 _ _, ..}) =
-    exeOutDir lbi (unUnqualComponentName' testName)
+    componentOutDir' lbi (unUnqualComponentName' testName)
 componentOutDir lbi (CTest TestSuite { testInterface = TestSuiteLibV09 _ _, ..}) =
-    exeOutDir lbi (unUnqualComponentName' testName ++ "Stub")
+    componentOutDir' lbi (unUnqualComponentName' testName ++ "Stub")
 componentOutDir lbi (CBench Benchmark { benchmarkInterface = BenchmarkExeV10 _ _, ..})=
-    exeOutDir lbi (unUnqualComponentName' benchmarkName)
+    componentOutDir' lbi (unUnqualComponentName' benchmarkName)
+
+componentOutDir' :: LocalBuildInfo -> String -> FilePath
+componentOutDir' lbi compName' =
+  ----- Copied from Distribution/Simple/GHC.hs:buildOrReplExe
+  let targetDir = (buildDir lbi) </> compName'
+      compDir    = targetDir </> (compName' ++ "-tmp")
+  in compDir
 
 componentEntrypoints :: Component -> ChEntrypoint
 componentEntrypoints (CLib Library {..})
