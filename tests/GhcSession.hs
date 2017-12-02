@@ -32,6 +32,7 @@ main = do
   res <- mapM (setup topdir test) $ case args of
     [] -> [ ("tests/exelib"   , parseVer "1.10")
           , ("tests/exeintlib", parseVer "2.0")
+          , ("tests/flib"     , parseVer "2.0")
           ]
     xs -> map (,parseVer "0") xs
 
