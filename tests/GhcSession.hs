@@ -88,9 +88,10 @@ test dir = do
     let qe = mkQueryEnv dir (dir </> "dist")
     cs <- runQuery qe $ components $ (,,) <$> entrypoints <.> ghcOptions
     forM cs $ \(ep, opts, cn) -> do
-        let sopts = intercalate " " $ map formatArg $ "ghc" : opts
+        let opts' = "-Werror" : opts
+        let sopts = intercalate " " $ map formatArg $ "ghc" : opts'
         putStrLn $ "\n" ++ show cn ++ ": " ++ sopts
-        compileModule ep opts
+        compileModule ep opts'
   where
     formatArg x
         | "-" `isPrefixOf` x = "\n  "++x
@@ -108,6 +109,8 @@ compileModule ep opts = do
 #endif
 
     runGhc (Just libdir) $ do
+
+    handleSourceError (\e -> GHC.printException e >> return False) $ do
 
     dflags0 <- getSessionDynFlags
     let dflags1 = dflags0 {
