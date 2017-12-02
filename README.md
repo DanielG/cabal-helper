@@ -1,4 +1,5 @@
 # cabal-helper
+[![build status](https://gitlab.com/dxld/cabal-helper/badges/master/build.svg)](https://gitlab.com/dxld/cabal-helper/commits/master)
 
 Cabal's little helper provides access to build information gathered by `cabal`
 when configuring a project. Specifically we're interested in retrieving enough
