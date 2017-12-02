@@ -82,8 +82,13 @@ main = do
   ghc_ver <- ghcVersion defaultOptions
 
   let constraint :: VersionRange
-      Just (_, constraint) =
+      constraint =
+          fromMaybe (snd $ last constraint_table) $
+          fmap snd $
           find (and . (zipWith (==) `on` versionBranch) ghc_ver . fst) $
+          constraint_table
+
+      constraint_table =
           map (parseVer *** runReadP'Dist parse) $
               [ ("7.4"  , ">= 1.14    && < 2")
               , ("7.6"  , ">= 1.16    && < 2")
