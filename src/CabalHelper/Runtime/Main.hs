@@ -150,6 +150,9 @@ import Distribution.Types.UnqualComponentName
 #if CH_MIN_VERSION_Cabal(2,0,0)
 -- CPP >= 2.0
 import Distribution.Backpack (OpenUnitId(..))
+import Distribution.ModuleName
+  ( ModuleName
+  )
 import Distribution.Types.ModuleRenaming
   ( ModuleRenaming(..)
   )
@@ -170,6 +173,7 @@ import Distribution.Version
   ( versionNumbers
   , mkVersion
   )
+import qualified Distribution.InstalledPackageInfo as Installed
 #endif
 
 import Control.Applicative ((<$>))
@@ -373,8 +377,14 @@ main = do
       return $ Just $ ChResponsePkgDbs $ map pkgDb $ withPackageDB lbi
 
     "entrypoints":[] -> do
-      eps <- componentsMap lbi v distdir $ \c _clbi _bi ->
-               return $ componentEntrypoints c
+      includeDirMap <- recursiveDepInfo lbi v distdir
+      eps <- componentsMap lbi v distdir $ \c clbi _bi -> do
+               let (_,_,ems,oms) = recursiveIncludeDirs includeDirMap (componentUnitId clbi)
+               let eps' = componentEntrypoints c
+               let
+                 nems = map (gmModuleName . Installed.exposedName) ems
+                 noms = map gmModuleName oms
+               return $ addDependentModules eps' nems noms
       -- MUST append Setup component at the end otherwise CabalHelper gets
       -- confused
       let eps' = eps ++ [(ChSetupHsName, ChSetupEntrypoint)]
@@ -453,12 +463,7 @@ componentsMap lbi _v _distdir f = do
 
 componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
   let pd = localPkgDescr lbi
-#if CH_MIN_VERSION_Cabal(2,0,0)
-  includeDirs <- componentsMap lbi v distdir $ \_c clbi bi -> do
-    return (componentUnitId clbi
-           , (componentInternalDeps clbi, hsSourceDirs bi,componentIncludes clbi))
-  let includeDirMap = Map.fromList $ map snd includeDirs
-#endif
+  includeDirMap <- recursiveDepInfo lbi v distdir
 
   componentsMap lbi v distdir $ \c clbi bi ->
          let
@@ -482,12 +487,13 @@ componentOptions (lbi, v, distdir) inplaceFlag flags f =
 gmModuleName :: C.ModuleName -> ChModuleName
 gmModuleName = ChModuleName . intercalate "." . components
 
+
 #if CH_MIN_VERSION_Cabal(2,0,0)
 removeInplaceDeps :: Verbosity
                   -> LocalBuildInfo
                   -> PackageDescription
                   -> ComponentLocalBuildInfo
-                  -> Map.Map UnitId ([UnitId],[FilePath], [(OpenUnitId, ModuleRenaming)])
+                  -> Map.Map UnitId SubDeps
                   -> (ComponentLocalBuildInfo, GhcOptions)
 removeInplaceDeps _v lbi pd clbi includeDirs = let
     removeInplace c =
@@ -504,9 +510,11 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
         -- libbi = libBuildInfo lib
         liboutdir = componentOutDir lbi comp
         (_,libclbi') = removeInplace libclbi
-        (extraIncludes,extraDeps') = recursiveIncludeDirs includeDirs (componentUnitId libclbi)
+        (extraIncludes,extraDeps',ems,oms) = recursiveIncludeDirs includeDirs (componentUnitId libclbi)
         (_,extraDeps) = partition (isInplaceCompInc libclbi) extraDeps'
-        opts = (componentGhcOptions normal lbi libbi libclbi' liboutdir) {
+        libbi' = libbi { otherModules = otherModules libbi ++ oms }
+        libclbi'' = libclbi' { componentExposedModules = componentExposedModules clbi' ++ ems }
+        opts = (componentGhcOptions normal lbi libbi' libclbi'' liboutdir) {
                   ghcOptPackageDBs = []
                }
       in
@@ -554,14 +562,27 @@ removeInplaceDeps _v lbi pd clbi = let
 
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
-recursiveIncludeDirs :: Map.Map UnitId ([UnitId],[FilePath], [(OpenUnitId, ModuleRenaming)])
-                     -> UnitId -> ([FilePath],[(OpenUnitId, ModuleRenaming)])
-recursiveIncludeDirs includeDirs unit = go ([],[]) [unit]
+recursiveDepInfo lbi v distdir = do
+  includeDirs <- componentsMap lbi v distdir $ \_c clbi bi -> do
+    return (componentUnitId clbi
+           , ( componentInternalDeps clbi
+             , hsSourceDirs bi
+             , componentIncludes clbi
+             , componentExposedModules clbi
+             , otherModules bi))
+  return $ Map.fromList $ map snd includeDirs
+
+type SubDeps = ([UnitId],[FilePath], [(OpenUnitId, ModuleRenaming)], [Installed.ExposedModule], [ModuleName])
+
+recursiveIncludeDirs :: Map.Map UnitId SubDeps
+                     -> UnitId -> ([FilePath], [(OpenUnitId, ModuleRenaming)]
+                                  ,[Installed.ExposedModule], [ModuleName])
+recursiveIncludeDirs includeDirs unit = go ([],[],[],[]) [unit]
   where
     go acc [] = acc
-    go (acp,acd) (u:us) = case Map.lookup u includeDirs of
-      Nothing -> go (acp,acd) us
-      Just (us',fps,pds) -> go (acp++fps,acd++pds) (us++us')
+    go acc@(afp,aci,aem,aom) (u:us) = case Map.lookup u includeDirs of
+      Nothing -> go acc us
+      Just (us',sfp,sci,sem,som) -> go (afp++sfp,aci++sci,aem++sem,aom++som) (us++us')
 #endif
 
 initialBuildStepsForAllComponents distdir pd lbi v =
@@ -661,6 +682,14 @@ componentEntrypoints (CBench Benchmark { benchmarkInterface = BenchmarkExeV10 _ 
     = ChExeEntrypoint fp (map gmModuleName $ otherModules benchmarkBuildInfo)
 componentEntrypoints (CBench Benchmark {})
     = ChLibEntrypoint [] []
+
+#if CH_MIN_VERSION_Cabal(2,0,0)
+addDependentModules ChSetupEntrypoint _ _ = ChSetupEntrypoint
+addDependentModules (ChLibEntrypoint ems oms) nems noms =
+  (ChLibEntrypoint (ems ++ nems) (oms ++ noms))
+addDependentModules (ChExeEntrypoint mf oms) nems noms =
+  (ChExeEntrypoint mf (oms ++ noms))
+#endif
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
 isInplaceCompInc :: ComponentLocalBuildInfo -> (OpenUnitId, ModuleRenaming) -> Bool
