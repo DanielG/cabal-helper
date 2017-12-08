@@ -46,6 +46,10 @@ extra-source-files:  README.md
                      tests/exeintlib/lib/*.hs
                      tests/exeintlib/intlib/*.hs
 
+                     tests/fliblib/*.hs
+                     tests/fliblib/*.cabal
+                     tests/fliblib/lib/*.hs
+
                      tests/bkpregex/*.cabal
                      tests/bkpregex/*.hs
                      tests/bkpregex/regex-example/*.hs
