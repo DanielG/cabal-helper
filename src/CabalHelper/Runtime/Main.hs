@@ -379,12 +379,8 @@ main = do
     "entrypoints":[] -> do
       includeDirMap <- recursiveDepInfo lbi v distdir
       eps <- componentsMap lbi v distdir $ \c clbi _bi -> do
-               let (_,_,ems,oms) = recursiveIncludeDirs includeDirMap (componentUnitId clbi)
-               let eps' = componentEntrypoints c
-               let
-                 nems = map (gmModuleName . Installed.exposedName) ems
-                 noms = map gmModuleName oms
-               return $ addDependentModules eps' nems noms
+               let (_,_,seps) = recursiveIncludeDirs includeDirMap (componentUnitId clbi)
+               return seps
       -- MUST append Setup component at the end otherwise CabalHelper gets
       -- confused
       let eps' = eps ++ [(ChSetupHsName, ChSetupEntrypoint)]
@@ -510,11 +506,9 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
         -- libbi = libBuildInfo lib
         liboutdir = componentOutDir lbi comp
         (_,libclbi') = removeInplace libclbi
-        (extraIncludes,extraDeps',ems,oms) = recursiveIncludeDirs includeDirs (componentUnitId libclbi)
+        (extraIncludes,extraDeps',_ems) = recursiveIncludeDirs includeDirs (componentUnitId libclbi)
         (_,extraDeps) = partition (isInplaceCompInc libclbi) extraDeps'
-        libbi' = libbi { otherModules = otherModules libbi ++ oms }
-        libclbi'' = libclbi' { componentExposedModules = componentExposedModules clbi' ++ ems }
-        opts = (componentGhcOptions normal lbi libbi' libclbi'' liboutdir) {
+        opts = (componentGhcOptions normal lbi libbi libclbi' liboutdir) {
                   ghcOptPackageDBs = []
                }
       in
@@ -563,26 +557,32 @@ removeInplaceDeps _v lbi pd clbi = let
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
 recursiveDepInfo lbi v distdir = do
-  includeDirs <- componentsMap lbi v distdir $ \_c clbi bi -> do
+  includeDirs <- componentsMap lbi v distdir $ \c clbi bi -> do
     return (componentUnitId clbi
            , ( componentInternalDeps clbi
              , hsSourceDirs bi
              , componentIncludes clbi
-             , componentExposedModules clbi
-             , otherModules bi))
+             , componentEntrypoints c))
   return $ Map.fromList $ map snd includeDirs
 
-type SubDeps = ([UnitId],[FilePath], [(OpenUnitId, ModuleRenaming)], [Installed.ExposedModule], [ModuleName])
+type SubDeps = ([UnitId],[FilePath], [(OpenUnitId, ModuleRenaming)], ChEntrypoint)
 
 recursiveIncludeDirs :: Map.Map UnitId SubDeps
                      -> UnitId -> ([FilePath], [(OpenUnitId, ModuleRenaming)]
-                                  ,[Installed.ExposedModule], [ModuleName])
-recursiveIncludeDirs includeDirs unit = go ([],[],[],[]) [unit]
+                                  , ChEntrypoint)
+recursiveIncludeDirs includeDirs unit = go ([],[],Nothing) [unit]
   where
-    go acc [] = acc
-    go acc@(afp,aci,aem,aom) (u:us) = case Map.lookup u includeDirs of
+    go (afp,aci,amep) [] = (afp,aci,maybe (error "recursiveIncludeDirs:no ChEntrypoint") id amep)
+    go acc@(afp,aci,amep) (u:us) = case Map.lookup u includeDirs of
       Nothing -> go acc us
-      Just (us',sfp,sci,sem,som) -> go (afp++sfp,aci++sci,aem++sem,aom++som) (us++us')
+      Just (us',sfp,sci,sep) -> go (afp++sfp,aci++sci,combineEp amep sep) (us++us')
+
+combineEp Nothing e = Just e
+combineEp (Just ChSetupEntrypoint) e = Just e
+combineEp (Just (ChLibEntrypoint es1 os1)) (ChLibEntrypoint es2 os2) = Just (ChLibEntrypoint (es2++es1) (os2++os1))
+combineEp (Just (ChLibEntrypoint es1 os1)) (ChExeEntrypoint  mi os2) = Just (ChExeEntrypoint mi (os2++es1++os1))
+combineEp (Just (ChExeEntrypoint   _ os1)) (ChLibEntrypoint es2 os2) = Just (ChLibEntrypoint es2 (os2++os1))
+combineEp (Just (ChExeEntrypoint   _ os1)) (ChExeEntrypoint  mi os2) = Just (ChExeEntrypoint mi (os2++os1))
 #endif
 
 initialBuildStepsForAllComponents distdir pd lbi v =
@@ -682,14 +682,6 @@ componentEntrypoints (CBench Benchmark { benchmarkInterface = BenchmarkExeV10 _ 
     = ChExeEntrypoint fp (map gmModuleName $ otherModules benchmarkBuildInfo)
 componentEntrypoints (CBench Benchmark {})
     = ChLibEntrypoint [] []
-
-#if CH_MIN_VERSION_Cabal(2,0,0)
-addDependentModules ChSetupEntrypoint _ _ = ChSetupEntrypoint
-addDependentModules (ChLibEntrypoint ems oms) nems noms =
-  (ChLibEntrypoint (ems ++ nems) (oms ++ noms))
-addDependentModules (ChExeEntrypoint mf oms) nems noms =
-  (ChExeEntrypoint mf (oms ++ noms))
-#endif
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
 isInplaceCompInc :: ComponentLocalBuildInfo -> (OpenUnitId, ModuleRenaming) -> Bool
