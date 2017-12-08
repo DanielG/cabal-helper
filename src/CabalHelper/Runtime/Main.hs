@@ -377,10 +377,15 @@ main = do
       return $ Just $ ChResponsePkgDbs $ map pkgDb $ withPackageDB lbi
 
     "entrypoints":[] -> do
+#if CH_MIN_VERSION_Cabal(2,0,0)
       includeDirMap <- recursiveDepInfo lbi v distdir
       eps <- componentsMap lbi v distdir $ \c clbi _bi -> do
                let (_,_,seps) = recursiveIncludeDirs includeDirMap (componentUnitId clbi)
                return seps
+#else
+      eps <- componentsMap lbi v distdir $ \c _clbi _bi ->
+               return $ componentEntrypoints c
+#endif
       -- MUST append Setup component at the end otherwise CabalHelper gets
       -- confused
       let eps' = eps ++ [(ChSetupHsName, ChSetupEntrypoint)]
@@ -459,7 +464,9 @@ componentsMap lbi _v _distdir f = do
 
 componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
   let pd = localPkgDescr lbi
+#if CH_MIN_VERSION_Cabal(2,0,0)
   includeDirMap <- recursiveDepInfo lbi v distdir
+#endif
 
   componentsMap lbi v distdir $ \c clbi bi ->
          let
