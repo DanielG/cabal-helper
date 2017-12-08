@@ -641,8 +641,10 @@ componentNameFromComponent (CBench Benchmark {..}) = CBenchName benchmarkName
 
 componentOutDir lbi (CLib Library {..})=
     buildDir lbi
+#if CH_MIN_VERSION_Cabal(2,0,0)
 componentOutDir lbi (CFLib ForeignLib {..}) =
     componentOutDir' lbi (unUnqualComponentName foreignLibName)
+#endif
 componentOutDir lbi (CExe Executable {..}) =
     componentOutDir' lbi (unUnqualComponentName' exeName)
 componentOutDir lbi (CTest TestSuite { testInterface = TestSuiteExeV10 _ _, ..}) =
