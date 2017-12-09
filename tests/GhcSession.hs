@@ -17,6 +17,7 @@ import System.Environment (getArgs)
 import System.Exit
 import System.FilePath ((</>))
 import System.Directory
+import System.IO
 import System.IO.Temp
 import System.Process (readProcess)
 
@@ -30,10 +31,11 @@ main = do
   args <- getArgs
   topdir <- getCurrentDirectory
   res <- mapM (setup topdir test) $ case args of
-    [] -> [ ("tests/exelib"   , parseVer "1.10")
-          , ("tests/exeintlib", parseVer "2.0")
-          , ("tests/fliblib"  , parseVer "2.0")
-          , ("tests/bkpregex" , parseVer "2.0")
+    [] -> [
+          --   ("tests/exelib"   , parseVer "1.10")
+          -- , ("tests/exeintlib", parseVer "2.0")
+          -- , ("tests/fliblib"  , parseVer "2.0")
+            ("tests/bkpregex" , parseVer "2.0")
           ]
     xs -> map (,parseVer "0") xs
 
@@ -87,11 +89,23 @@ setup topdir act (srcdir, min_cabal_ver) = do
 test :: FilePath -> IO [Bool]
 test dir = do
     let qe = mkQueryEnv dir (dir </> "dist")
+
+    cs <- runQuery qe $ components $ (,) <$> entrypoints
+    putStrLn "\n--------------------------------eps-----------------------------"
+    forM cs $ \(ep, cn) -> do
+        putStrLn $ "\n" ++ show (ep,cn)
+    putStrLn "\n--------------------------------eps end-----------------------------"
+
     cs <- runQuery qe $ components $ (,,) <$> entrypoints <.> ghcOptions
+    putStrLn "\n--------------------------------components-----------------------------"
+    forM cs $ \(ep, opts, cn) -> do
+        putStrLn $ "\n" ++ show cn ++ ": " ++ show opts
+    putStrLn "\n--------------------------------components end-------------------------"
     forM cs $ \(ep, opts, cn) -> do
         let opts' = "-Werror" : opts
         let sopts = intercalate " " $ map formatArg $ "ghc" : opts'
         putStrLn $ "\n" ++ show cn ++ ": " ++ sopts
+        hFlush stdout
         compileModule ep opts'
   where
     formatArg x
@@ -126,9 +140,9 @@ compileModule ep opts = do
 
     ts <- mapM (\t -> guessTarget t Nothing) $
          case ep of
-           ChLibEntrypoint ms ms' -> map unChModuleName $ ms ++ ms'
-           ChExeEntrypoint m  ms  -> [m] ++ map unChModuleName ms
-           ChSetupEntrypoint      -> ["Setup.hs"]
+           ChLibEntrypoint ms ms' ss -> map unChModuleName $ ms ++ ms' ++ ss
+           ChExeEntrypoint m  ms     -> [m] ++ map unChModuleName ms
+           ChSetupEntrypoint         -> ["Setup.hs"]
     let ts' = map (\t -> t { targetAllowObjCode = False }) ts
 
     setTargets ts'
@@ -136,8 +150,8 @@ compileModule ep opts = do
 
 #if __GLASGOW_HASKELL__ >= 706
     setContext $ case ep of
-      ChLibEntrypoint ms ms' ->
-          map (IIModule . mkModuleName . unChModuleName) $ ms ++ ms'
+      ChLibEntrypoint ms ms' ss ->
+          map (IIModule . mkModuleName . unChModuleName) $ ms ++ ms' ++ ss
       ChExeEntrypoint _  ms  ->
           map (IIModule . mkModuleName . unChModuleName) $ ChModuleName "Main" : ms
       ChSetupEntrypoint      ->

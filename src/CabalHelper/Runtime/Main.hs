@@ -153,6 +153,9 @@ import Distribution.Backpack (OpenUnitId(..))
 import Distribution.ModuleName
   ( ModuleName
   )
+import Distribution.Types.ComponentId
+  ( unComponentId
+  )
 import Distribution.Types.ModuleRenaming
   ( ModuleRenaming(..)
   )
@@ -162,6 +165,7 @@ import Distribution.Types.MungedPackageId
 import Distribution.Types.UnitId
   ( UnitId
   , unDefUnitId
+  , unUnitId
   )
 import Distribution.Types.UnitId
   ( DefUnitId
@@ -379,9 +383,14 @@ main = do
     "entrypoints":[] -> do
 #if CH_MIN_VERSION_Cabal(2,0,0)
       includeDirMap <- recursiveDepInfo lbi v distdir
+      appendFile "/tmp/cbli.txt" "\n--------------------------------------"
       eps <- componentsMap lbi v distdir $ \c clbi _bi -> do
+               appendFile "/tmp/cbli.txt" ("\n" ++ show clbi)
                let (_,_,seps) = recursiveIncludeDirs includeDirMap (componentUnitId clbi)
+               appendFile "/tmp/cbli.txt" ("\n" ++ show (componentEntrypoints c) )
+               appendFile "/tmp/cbli.txt" "\n-------"
                return seps
+      appendFile "/tmp/cbli.txt" "\n--------------------------------------"
 #else
       eps <- componentsMap lbi v distdir $ \c _clbi _bi ->
                return $ componentEntrypoints c
@@ -412,6 +421,9 @@ main = do
             errMsg "Invalid usage!" >> usage >> exitFailure
 
 flagName' = unFlagName . flagName
+
+
+logm str = appendFile "/tmp/cbli.txt" str
 
 -- getLibrary :: PackageDescription -> Library
 -- getLibrary pd = unsafePerformIO $ do
@@ -458,7 +470,11 @@ componentsMap lbi _v _distdir f = do
 
         l' <- readIORef lr
         r <- f c clbi bi
-        writeIORef lr $ (componentNameToCh name, r):l'
+#if CH_MIN_VERSION_Cabal(2,0,0)
+        writeIORef lr $ (componentNameToCh (ChUnitId $ unUnitId $ componentUnitId clbi) name, r):l'
+#else
+        writeIORef lr $ (componentNameToCh ChNoUnitId name, r):l'
+#endif
 
     reverse <$> readIORef lr
 
@@ -586,10 +602,10 @@ recursiveIncludeDirs includeDirs unit = go ([],[],Nothing) [unit]
 
 combineEp Nothing e = Just e
 combineEp (Just ChSetupEntrypoint) e = Just e
-combineEp (Just (ChLibEntrypoint es1 os1)) (ChLibEntrypoint es2 os2) = Just (ChLibEntrypoint (es2++es1) (os2++os1))
-combineEp (Just (ChLibEntrypoint es1 os1)) (ChExeEntrypoint  mi os2) = Just (ChExeEntrypoint mi (os2++es1++os1))
-combineEp (Just (ChExeEntrypoint   _ os1)) (ChLibEntrypoint es2 os2) = Just (ChLibEntrypoint es2 (os2++os1))
-combineEp (Just (ChExeEntrypoint   _ os1)) (ChExeEntrypoint  mi os2) = Just (ChExeEntrypoint mi (os2++os1))
+combineEp (Just (ChLibEntrypoint es1 os1 ss1)) (ChLibEntrypoint es2 os2 ss2) = Just (ChLibEntrypoint (nub $ es2++es1) (nub $ os2++os1) (nub $ ss2++ss1))
+combineEp (Just (ChLibEntrypoint es1 os1 ss1)) (ChExeEntrypoint  mi os2)     = Just (ChExeEntrypoint mi (nub $ os2++es1++os1++ss1))
+combineEp (Just (ChExeEntrypoint   _ os1))     (ChLibEntrypoint es2 os2 ss2) = Just (ChLibEntrypoint es2 (nub $ os2++os1) ss2)
+combineEp (Just (ChExeEntrypoint   _ os1))     (ChExeEntrypoint  mi os2)     = Just (ChExeEntrypoint mi  (nub $ os2++os1))
 #endif
 
 initialBuildStepsForAllComponents distdir pd lbi v =
@@ -616,15 +632,15 @@ toDataVersion = id
 --fromDataVersion = id
 #endif
 
-componentNameToCh CLibName = ChLibName
+componentNameToCh _uid CLibName = ChLibName
 #if CH_MIN_VERSION_Cabal(1,25,0)
 -- CPP >= 1.25
-componentNameToCh (CSubLibName n) = ChSubLibName $ unUnqualComponentName' n
-componentNameToCh (CFLibName   n) = ChFLibName $ unUnqualComponentName' n
+componentNameToCh uid (CSubLibName n) = ChSubLibName (unUnqualComponentName' n) uid
+componentNameToCh uid (CFLibName   n) = ChFLibName (unUnqualComponentName' n) uid
 #endif
-componentNameToCh (CExeName n) = ChExeName $ unUnqualComponentName' n
-componentNameToCh (CTestName n) = ChTestName $ unUnqualComponentName' n
-componentNameToCh (CBenchName n) = ChBenchName $ unUnqualComponentName' n
+componentNameToCh uid (CExeName n) = ChExeName (unUnqualComponentName' n) uid
+componentNameToCh uid (CTestName n) = ChTestName (unUnqualComponentName' n) uid
+componentNameToCh uid (CBenchName n) = ChBenchName (unUnqualComponentName' n) uid
 
 #if CH_MIN_VERSION_Cabal(1,25,0)
 -- CPP >= 1.25
@@ -674,28 +690,35 @@ componentEntrypoints (CLib Library {..})
         (map gmModuleName exposedModules)
         (map gmModuleName $ otherModules libBuildInfo)
 #if CH_MIN_VERSION_Cabal(2,0,0)
+        (map gmModuleName signatures)
+#else
+        [] -- no signatures prior to Cabal 2.0
+#endif
+#if CH_MIN_VERSION_Cabal(2,0,0)
 componentEntrypoints (CFLib (ForeignLib{..}))
     = ChLibEntrypoint
         []
         (map gmModuleName $ otherModules foreignLibBuildInfo)
+        []
 #endif
 componentEntrypoints (CExe Executable {..})
     = ChExeEntrypoint modulePath (map gmModuleName $ otherModules buildInfo)
 componentEntrypoints (CTest TestSuite { testInterface = TestSuiteExeV10 _ fp, ..})
     = ChExeEntrypoint fp (map gmModuleName $ otherModules testBuildInfo)
 componentEntrypoints (CTest TestSuite { testInterface = TestSuiteLibV09 _ mn, ..})
-    = ChLibEntrypoint [gmModuleName mn] (map gmModuleName $ otherModules testBuildInfo)
+    = ChLibEntrypoint [gmModuleName mn] (map gmModuleName $ otherModules testBuildInfo) []
 componentEntrypoints (CTest TestSuite {})
-    = ChLibEntrypoint [] []
+    = ChLibEntrypoint [] [] []
 componentEntrypoints (CBench Benchmark { benchmarkInterface = BenchmarkExeV10 _  fp, ..})
     = ChExeEntrypoint fp (map gmModuleName $ otherModules benchmarkBuildInfo)
 componentEntrypoints (CBench Benchmark {})
-    = ChLibEntrypoint [] []
+    = ChLibEntrypoint [] [] []
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
 isInplaceCompInc :: ComponentLocalBuildInfo -> (OpenUnitId, ModuleRenaming) -> Bool
-isInplaceCompInc clbi (DefiniteUnitId uid, _mr) = unDefUnitId uid `elem` componentInternalDeps clbi
-isInplaceCompInc clbi (IndefFullUnitId _ _, _mmr) = False -- TODO: keep this for now, what in future?
+isInplaceCompInc clbi (DefiniteUnitId uid, _mr)     = unDefUnitId uid `elem` componentInternalDeps clbi
+-- isInplaceCompInc clbi (IndefFullUnitId uid _, _mmr) = False
+isInplaceCompInc clbi (IndefFullUnitId uid _, _mmr) = unComponentId uid `elem` map unUnitId (componentInternalDeps clbi)
 #endif
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
