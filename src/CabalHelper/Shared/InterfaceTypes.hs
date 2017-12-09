@@ -47,11 +47,15 @@ data ChResponse
 
 data ChComponentName = ChSetupHsName
                      | ChLibName
-                     | ChSubLibName String
-                     | ChFLibName String
-                     | ChExeName String
-                     | ChTestName String
-                     | ChBenchName String
+                     | ChSubLibName String ChUnitId
+                     | ChFLibName   String ChUnitId
+                     | ChExeName    String ChUnitId
+                     | ChTestName   String ChUnitId
+                     | ChBenchName  String ChUnitId
+  deriving (Eq, Ord, Read, Show, Generic)
+
+data ChUnitId = ChNoUnitId
+              | ChUnitId String
   deriving (Eq, Ord, Read, Show, Generic)
 
 newtype ChModuleName = ChModuleName String
@@ -64,6 +68,7 @@ data ChEntrypoint = ChSetupEntrypoint -- ^ Almost like 'ChExeEntrypoint' but
                                       -- to find these files.
                   | ChLibEntrypoint { chExposedModules :: [ChModuleName]
                                     , chOtherModules   :: [ChModuleName]
+                                    , chSignatures     :: [ChModuleName] -- backpack only
                                     }
                   | ChExeEntrypoint { chMainIs         :: FilePath
                                     , chOtherModules   :: [ChModuleName]
