@@ -32,12 +32,12 @@ main = do
   topdir <- getCurrentDirectory
   res <- mapM (setup topdir test) $ case args of
     [] -> [
-          --   ("tests/exelib"   , parseVer "1.10")
-          -- , ("tests/exeintlib", parseVer "2.0")
-          -- , ("tests/fliblib"  , parseVer "2.0")
-            ("tests/bkpregex" , parseVer "2.0")
+          --   ("tests/exelib"   , parseVer "1.10",False)
+          -- , ("tests/exeintlib", parseVer "2.0", False)
+          -- , ("tests/fliblib"  , parseVer "2.0", False)
+            ("tests/bkpregex" , parseVer "2.0", True)
           ]
-    xs -> map (,parseVer "0") xs
+    xs -> map (,parseVer "0",False) xs
 
   if any (==False) $ concat res
     then exitFailure
@@ -52,8 +52,8 @@ cabalInstallBuiltinCabalVersion =
     parseVer . trim <$> readProcess "cabal"
         ["act-as-setup", "--", "--numeric-version"] ""
 
-setup :: FilePath -> (FilePath -> IO [Bool]) -> (FilePath, Version) -> IO [Bool]
-setup topdir act (srcdir, min_cabal_ver) = do
+setup :: FilePath -> (FilePath -> IO [Bool]) -> (FilePath, Version,Bool) -> IO [Bool]
+setup topdir act (srcdir, min_cabal_ver,invokeCabalBuild) = do
     ci_ver <- cabalInstallVersion
     c_ver <- cabalInstallBuiltinCabalVersion
     let mreason
@@ -70,13 +70,19 @@ setup topdir act (srcdir, min_cabal_ver) = do
         putStrLn $ "Skipping test '" ++ srcdir ++ "' because " ++ reason ++ "."
         return []
       Nothing -> do
-        withSystemTempDirectory "cabal-helper.ghc-session.test" $ \dir -> do
+        -- withSystemTempDirectory "cabal-helper.ghc-session.test" $ \dir -> do
+        let dir = "/tmp/xxxx"
+        e <- doesDirectoryExist dir
+        when e $ removeDirectoryRecursive dir
+        createDirectoryIfMissing True dir
+        do
           setCurrentDirectory $ topdir </> srcdir
           run "cabal" [ "sdist", "--output-dir", dir ]
 
           setCurrentDirectory dir
           run "cabal" [ "configure" ]
---          run "cabal" [ "build" ]
+          when invokeCabalBuild $ do
+            run "cabal" [ "build" ]
 
           act dir
   where
@@ -89,21 +95,20 @@ setup topdir act (srcdir, min_cabal_ver) = do
 test :: FilePath -> IO [Bool]
 test dir = do
     let qe = mkQueryEnv dir (dir </> "dist")
+    let packageDir = dir </> "dist" </> "package.conf.inplace"
+    cs <- runQuery qe $ components $ (,,,) <$> entrypoints <.> ghcOptions <.> needsBuildOutput
+    forM cs $ \(ep, opts, nb, cn) -> do
 
-    cs <- runQuery qe $ components $ (,) <$> entrypoints
-    putStrLn "\n--------------------------------eps-----------------------------"
-    forM cs $ \(ep, cn) -> do
-        putStrLn $ "\n" ++ show (ep,cn)
-    putStrLn "\n--------------------------------eps end-----------------------------"
+        putStrLn $ "\n" ++ show cn ++ ":::: " ++ show nb
 
-    cs <- runQuery qe $ components $ (,,) <$> entrypoints <.> ghcOptions
-    putStrLn "\n--------------------------------components-----------------------------"
-    forM cs $ \(ep, opts, cn) -> do
-        putStrLn $ "\n" ++ show cn ++ ": " ++ show opts
-    putStrLn "\n--------------------------------components end-------------------------"
-    forM cs $ \(ep, opts, cn) -> do
-        let opts' = "-Werror" : opts
-        let sopts = intercalate " " $ map formatArg $ "ghc" : opts'
+        exists <- doesDirectoryExist packageDir
+        let opts' = if exists
+              then ("-package-db " ++ packageDir) : "-Werror" : opts
+              else "-Werror" : opts
+
+        -- let opts' = "-Werror" : opts
+        -- let opts' = "-v 3" : "-Werror" : opts
+        let sopts = intercalate " " $ map formatArg $ "\nghc" : opts'
         putStrLn $ "\n" ++ show cn ++ ": " ++ sopts
         hFlush stdout
         compileModule ep opts'
@@ -114,6 +119,8 @@ test dir = do
 
 compileModule :: ChEntrypoint -> [String] -> IO Bool
 compileModule ep opts = do
+
+    putStrLn $ "compiling:" ++ show ep
 
     E.handle (\(ec :: ExitCode) -> print ec >> return False) $ do
 

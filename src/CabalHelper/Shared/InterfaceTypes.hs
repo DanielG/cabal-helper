@@ -37,6 +37,7 @@ import Data.Version
 data ChResponse
     = ChResponseCompList    [(ChComponentName, [String])]
     | ChResponseEntrypoints [(ChComponentName, ChEntrypoint)]
+    | ChResponseNeedsBuild  [(ChComponentName, NeedsBuildOutput)]
     | ChResponseList        [String]
     | ChResponsePkgDbs      [ChPkgDb]
     | ChResponseLbi         String
@@ -47,15 +48,11 @@ data ChResponse
 
 data ChComponentName = ChSetupHsName
                      | ChLibName
-                     | ChSubLibName String ChUnitId
-                     | ChFLibName   String ChUnitId
-                     | ChExeName    String ChUnitId
-                     | ChTestName   String ChUnitId
-                     | ChBenchName  String ChUnitId
-  deriving (Eq, Ord, Read, Show, Generic)
-
-data ChUnitId = ChNoUnitId
-              | ChUnitId String
+                     | ChSubLibName String
+                     | ChFLibName String
+                     | ChExeName String
+                     | ChTestName String
+                     | ChBenchName String
   deriving (Eq, Ord, Read, Show, Generic)
 
 newtype ChModuleName = ChModuleName String
@@ -77,4 +74,7 @@ data ChEntrypoint = ChSetupEntrypoint -- ^ Almost like 'ChExeEntrypoint' but
 data ChPkgDb = ChPkgGlobal
              | ChPkgUser
              | ChPkgSpecific FilePath
+               deriving (Eq, Ord, Read, Show, Generic)
+
+data NeedsBuildOutput = ProduceBuildOutput | NoBuildOutput
                deriving (Eq, Ord, Read, Show, Generic)

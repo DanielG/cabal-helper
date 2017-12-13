@@ -70,6 +70,8 @@ import Distribution.Simple.LocalBuildInfo
   , withComponentsLBI
   , withLibLBI
   , withExeLBI
+  , allLibModules
+  , componentBuildDir
   )
 import Distribution.Simple.GHC
   ( componentGhcOptions
@@ -149,15 +151,22 @@ import Distribution.Types.UnqualComponentName
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
 -- CPP >= 2.0
-import Distribution.Backpack (OpenUnitId(..))
+import Distribution.Backpack
+  ( OpenUnitId(..),
+    OpenModule(..)
+  )
 import Distribution.ModuleName
   ( ModuleName
   )
 import Distribution.Types.ComponentId
   ( unComponentId
   )
+import Distribution.Types.ComponentLocalBuildInfo
+  ( maybeComponentInstantiatedWith
+  )
 import Distribution.Types.ModuleRenaming
-  ( ModuleRenaming(..)
+  ( ModuleRenaming(..),
+    isDefaultRenaming
   )
 import Distribution.Types.MungedPackageId
   ( MungedPackageId
@@ -226,6 +235,7 @@ usage = do
      ++"  | ghc-lang-options [--with-inplace]\n"
      ++"  | package-db-stack\n"
      ++"  | entrypoints\n"
+     ++"  | needsbuildoutput\n"
      ++"  | source-dirs\n"
      ++"  | licenses\n"
      ++"  ) ...\n"
@@ -244,6 +254,7 @@ commands = [ "print-lbi"
            , "ghc-lang-options"
            , "package-db-stack"
            , "entrypoints"
+           , "needsbuildoutput"
            , "source-dirs"
            , "licenses"]
 
@@ -324,6 +335,7 @@ main = do
 
     "ghc-options":flags -> do
       res <- componentOptions lvd True flags id
+      -- putStrLn $ "\n*************ghc-options:" ++ show res
       return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
 
     "ghc-src-options":flags -> do
@@ -383,14 +395,9 @@ main = do
     "entrypoints":[] -> do
 #if CH_MIN_VERSION_Cabal(2,0,0)
       includeDirMap <- recursiveDepInfo lbi v distdir
-      appendFile "/tmp/cbli.txt" "\n--------------------------------------"
       eps <- componentsMap lbi v distdir $ \c clbi _bi -> do
-               appendFile "/tmp/cbli.txt" ("\n" ++ show clbi)
                let (_,_,seps) = recursiveIncludeDirs includeDirMap (componentUnitId clbi)
-               appendFile "/tmp/cbli.txt" ("\n" ++ show (componentEntrypoints c) )
-               appendFile "/tmp/cbli.txt" "\n-------"
                return seps
-      appendFile "/tmp/cbli.txt" "\n--------------------------------------"
 #else
       eps <- componentsMap lbi v distdir $ \c _clbi _bi ->
                return $ componentEntrypoints c
@@ -399,6 +406,17 @@ main = do
       -- confused
       let eps' = eps ++ [(ChSetupHsName, ChSetupEntrypoint)]
       return $ Just $ ChResponseEntrypoints eps'
+
+    "needsbuildoutput":[] -> do
+#if CH_MIN_VERSION_Cabal(2,0,0)
+      includeDirMap <- recursiveDepInfo lbi v distdir
+      nbs <- componentsMap lbi v distdir $ \c clbi _bi ->
+               return $ needsBuildOutput includeDirMap (componentUnitId clbi)
+#else
+      nbs <- componentsMap lbi v distdir $ \c _clbi _bi ->
+               return $ NoBuildOutput
+#endif
+      return $ Just $ ChResponseNeedsBuild nbs
 
     "source-dirs":[] -> do
       res <- componentsMap lbi v distdir $$ \_ _ bi -> return $ hsSourceDirs bi
@@ -471,9 +489,9 @@ componentsMap lbi _v _distdir f = do
         l' <- readIORef lr
         r <- f c clbi bi
 #if CH_MIN_VERSION_Cabal(2,0,0)
-        writeIORef lr $ (componentNameToCh (ChUnitId $ unUnitId $ componentUnitId clbi) name, r):l'
+        writeIORef lr $ (componentNameToCh (unUnitId $ componentUnitId clbi) name, r):l'
 #else
-        writeIORef lr $ (componentNameToCh ChNoUnitId name, r):l'
+        writeIORef lr $ (componentNameToCh "" name, r):l'
 #endif
 
     reverse <$> readIORef lr
@@ -482,11 +500,13 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
   let pd = localPkgDescr lbi
 #if CH_MIN_VERSION_Cabal(2,0,0)
   includeDirMap <- recursiveDepInfo lbi v distdir
+  -- putStrLn $ "\nincludeDirMap=" ++ show includeDirMap ++ "\n"
 #endif
 
   componentsMap lbi v distdir $ \c clbi bi ->
          let
-           outdir = componentOutDir lbi c
+           -- outdir = componentOutDir lbi c
+           outdir = componentBuildDir lbi clbi
            (clbi', adopts) = case flags of
                                _ | not inplaceFlag -> (clbi, mempty)
                                ["--with-inplace"] -> (clbi, mempty)
@@ -524,6 +544,8 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
                , componentIncludes     = incs }
       in (hasIdeps',c')
 
+    cleanRecursiveOpts :: Component
+                       -> BuildInfo -> ComponentLocalBuildInfo -> GhcOptions
     cleanRecursiveOpts comp libbi libclbi =
       let
         -- libbi = libBuildInfo lib
@@ -534,6 +556,7 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
         opts = (componentGhcOptions normal lbi libbi libclbi' liboutdir) {
                   ghcOptPackageDBs = []
                }
+
       in
         opts { ghcOptSourcePath = ghcOptSourcePath opts <> toNubListR extraIncludes
              , ghcOptPackages   = ghcOptPackages   opts <> toNubListR extraDeps }
@@ -544,8 +567,10 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
         (Just (lib, libclbi),_) | hasIdeps ->
           let
             libbi = libBuildInfo lib
+            opts = cleanRecursiveOpts (CLib lib) libbi libclbi
           in
-            cleanRecursiveOpts (CLib lib) libbi libclbi
+                      -- ghcOptInputModules = toNubListR $ allLibModules lib clbi,
+            opts { ghcOptInputModules = ghcOptInputModules opts <> (toNubListR $ allLibModules lib libclbi) }
         (_,Just (exe,execlbi)) | hasIdeps ->
           let
             exebi = buildInfo exe
@@ -588,7 +613,7 @@ recursiveDepInfo lbi v distdir = do
              , componentEntrypoints c))
   return $ Map.fromList $ map snd includeDirs
 
-type SubDeps = ([UnitId],[FilePath], [(OpenUnitId, ModuleRenaming)], ChEntrypoint)
+type SubDeps = ([UnitId], [FilePath], [(OpenUnitId, ModuleRenaming)], ChEntrypoint)
 
 recursiveIncludeDirs :: Map.Map UnitId SubDeps
                      -> UnitId -> ([FilePath], [(OpenUnitId, ModuleRenaming)]
@@ -600,12 +625,30 @@ recursiveIncludeDirs includeDirs unit = go ([],[],Nothing) [unit]
       Nothing -> go acc us
       Just (us',sfp,sci,sep) -> go (afp++sfp,aci++sci,combineEp amep sep) (us++us')
 
+needsBuildOutput :: Map.Map UnitId SubDeps
+                     -> UnitId -> NeedsBuildOutput
+needsBuildOutput includeDirs unit = go [unit]
+  where
+    isIndef (IndefFullUnitId _ _) = True
+    isIndef _                     = False
+    go [] = NoBuildOutput
+    go (u:us) = case Map.lookup u includeDirs of
+      Nothing -> go us
+      Just (us',sfp,sci,sep) ->
+        if any (isIndef . fst) sci
+          then ProduceBuildOutput
+          else go (us++us')
+
 combineEp Nothing e = Just e
 combineEp (Just ChSetupEntrypoint) e = Just e
 combineEp (Just (ChLibEntrypoint es1 os1 ss1)) (ChLibEntrypoint es2 os2 ss2) = Just (ChLibEntrypoint (nub $ es2++es1) (nub $ os2++os1) (nub $ ss2++ss1))
 combineEp (Just (ChLibEntrypoint es1 os1 ss1)) (ChExeEntrypoint  mi os2)     = Just (ChExeEntrypoint mi (nub $ os2++es1++os1++ss1))
 combineEp (Just (ChExeEntrypoint   _ os1))     (ChLibEntrypoint es2 os2 ss2) = Just (ChLibEntrypoint es2 (nub $ os2++os1) ss2)
 combineEp (Just (ChExeEntrypoint   _ os1))     (ChExeEntrypoint  mi os2)     = Just (ChExeEntrypoint mi  (nub $ os2++os1))
+
+instantiatedGhcPackage :: (ModuleName,OpenModule) -> [(OpenUnitId, ModuleRenaming)]
+instantiatedGhcPackage (_,OpenModule oui@(DefiniteUnitId _) _) = [(oui,DefaultRenaming)]
+instantiatedGhcPackage (_, _) = []
 #endif
 
 initialBuildStepsForAllComponents distdir pd lbi v =
@@ -635,12 +678,16 @@ toDataVersion = id
 componentNameToCh _uid CLibName = ChLibName
 #if CH_MIN_VERSION_Cabal(1,25,0)
 -- CPP >= 1.25
-componentNameToCh uid (CSubLibName n) = ChSubLibName (unUnqualComponentName' n) uid
-componentNameToCh uid (CFLibName   n) = ChFLibName (unUnqualComponentName' n) uid
+#if CH_MIN_VERSION_Cabal(2,0,0)
+componentNameToCh uid (CSubLibName n) = ChSubLibName uid
+#else
+componentNameToCh _uid (CSubLibName n) = ChSubLibName (unUnqualComponentName' n)
 #endif
-componentNameToCh uid (CExeName n) = ChExeName (unUnqualComponentName' n) uid
-componentNameToCh uid (CTestName n) = ChTestName (unUnqualComponentName' n) uid
-componentNameToCh uid (CBenchName n) = ChBenchName (unUnqualComponentName' n) uid
+componentNameToCh uid (CFLibName   n) = ChFLibName (unUnqualComponentName' n)
+#endif
+componentNameToCh _uid (CExeName n) = ChExeName (unUnqualComponentName' n)
+componentNameToCh _uid (CTestName n) = ChTestName (unUnqualComponentName' n)
+componentNameToCh _uid (CBenchName n) = ChBenchName (unUnqualComponentName' n)
 
 #if CH_MIN_VERSION_Cabal(1,25,0)
 -- CPP >= 1.25
@@ -717,8 +764,8 @@ componentEntrypoints (CBench Benchmark {})
 #if CH_MIN_VERSION_Cabal(2,0,0)
 isInplaceCompInc :: ComponentLocalBuildInfo -> (OpenUnitId, ModuleRenaming) -> Bool
 isInplaceCompInc clbi (DefiniteUnitId uid, _mr)     = unDefUnitId uid `elem` componentInternalDeps clbi
--- isInplaceCompInc clbi (IndefFullUnitId uid _, _mmr) = False
-isInplaceCompInc clbi (IndefFullUnitId uid _, _mmr) = unComponentId uid `elem` map unUnitId (componentInternalDeps clbi)
+isInplaceCompInc clbi (IndefFullUnitId uid _, _mmr) = False
+-- isInplaceCompInc clbi (IndefFullUnitId uid _, _mmr) = unComponentId uid `elem` map unUnitId (componentInternalDeps clbi)
 #endif
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
