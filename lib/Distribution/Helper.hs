@@ -56,6 +56,7 @@ module Distribution.Helper (
   , ghcOptions
   , sourceDirs
   , entrypoints
+  , needsBuildOutput
 
   -- * Query environment
   , QueryEnv
@@ -206,7 +207,8 @@ data SomeLocalBuildInfo = SomeLocalBuildInfo {
       slbiGhcOptions          :: [(ChComponentName, [String])],
 
       slbiSourceDirs          :: [(ChComponentName, [String])],
-      slbiEntrypoints         :: [(ChComponentName, ChEntrypoint)]
+      slbiEntrypoints         :: [(ChComponentName, ChEntrypoint)],
+      slbiNeedsBuildOutput    :: [(ChComponentName, NeedsBuildOutput)]
     } deriving (Eq, Ord, Read, Show)
 
 -- | A lazy, cached, query against a package's Cabal configuration. Use
@@ -295,6 +297,9 @@ components (ComponentQuery sc) = map (\(cn, f) -> f cn) `liftM` sc
 -- to compute the home module closure for a component.
 entrypoints   :: MonadIO m => ComponentQuery m ChEntrypoint
 
+-- | The component has a non-default module renaming, so needs build output ().
+needsBuildOutput :: MonadIO m => ComponentQuery m NeedsBuildOutput
+
 -- | A component's @source-dirs@ field, beware since if this is empty implicit
 -- behaviour in GHC kicks in.
 sourceDirs    :: MonadIO m => ComponentQuery m [FilePath]
@@ -321,12 +326,13 @@ ghcMergedPkgOptions   = Query $ slbiGhcMergedPkgOptions   `liftM` getSlbi
 configFlags           = Query $ slbiConfigFlags           `liftM` getSlbi
 nonDefaultConfigFlags = Query $ slbiNonDefaultConfigFlags `liftM` getSlbi
 
-ghcSrcOptions  = ComponentQuery $ Query $ slbiGhcSrcOptions  `liftM` getSlbi
-ghcPkgOptions  = ComponentQuery $ Query $ slbiGhcPkgOptions  `liftM` getSlbi
-ghcOptions     = ComponentQuery $ Query $ slbiGhcOptions     `liftM` getSlbi
-ghcLangOptions = ComponentQuery $ Query $ slbiGhcLangOptions `liftM` getSlbi
-sourceDirs     = ComponentQuery $ Query $ slbiSourceDirs     `liftM` getSlbi
-entrypoints    = ComponentQuery $ Query $ slbiEntrypoints    `liftM` getSlbi
+ghcSrcOptions    = ComponentQuery $ Query $ slbiGhcSrcOptions    `liftM` getSlbi
+ghcPkgOptions    = ComponentQuery $ Query $ slbiGhcPkgOptions    `liftM` getSlbi
+ghcOptions       = ComponentQuery $ Query $ slbiGhcOptions       `liftM` getSlbi
+ghcLangOptions   = ComponentQuery $ Query $ slbiGhcLangOptions   `liftM` getSlbi
+sourceDirs       = ComponentQuery $ Query $ slbiSourceDirs       `liftM` getSlbi
+entrypoints      = ComponentQuery $ Query $ slbiEntrypoints      `liftM` getSlbi
+needsBuildOutput = ComponentQuery $ Query $ slbiNeedsBuildOutput `liftM` getSlbi
 
 -- | Run @cabal configure@
 reconfigure :: MonadIO m
@@ -398,6 +404,7 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
 
          , "source-dirs"
          , "entrypoints"
+         , "needsbuildoutput"
          ]
   let [ Just (ChResponsePkgDbs      slbiPackageDbStack),
         Just (ChResponseFlags       slbiPackageFlags),
@@ -415,7 +422,8 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
         Just (ChResponseCompList    slbiGhcOptions),
 
         Just (ChResponseCompList    slbiSourceDirs),
-        Just (ChResponseEntrypoints slbiEntrypoints)
+        Just (ChResponseEntrypoints slbiEntrypoints),
+        Just (ChResponseNeedsBuild  slbiNeedsBuildOutput)
         ] = res
       slbiCompilerVersion = (comp, compVer)
   return $ SomeLocalBuildInfo {..}
