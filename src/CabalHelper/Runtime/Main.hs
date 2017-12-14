@@ -70,8 +70,11 @@ import Distribution.Simple.LocalBuildInfo
   , withComponentsLBI
   , withLibLBI
   , withExeLBI
+
+#if CH_MIN_VERSION_Cabal(2,0,0)
   , allLibModules
   , componentBuildDir
+#endif
   )
 import Distribution.Simple.GHC
   ( componentGhcOptions
@@ -396,8 +399,10 @@ main = do
 #if CH_MIN_VERSION_Cabal(2,0,0)
       includeDirMap <- recursiveDepInfo lbi v distdir
       eps <- componentsMap lbi v distdir $ \c clbi _bi -> do
-               let (_,_,seps) = recursiveIncludeDirs includeDirMap (componentUnitId clbi)
-               return seps
+               case needsBuildOutput includeDirMap (componentUnitId clbi) of
+                 ProduceBuildOutput -> return $ componentEntrypoints c
+                 NoBuildOutput -> return seps
+                   where (_,_,seps) = recursiveIncludeDirs includeDirMap (componentUnitId clbi)
 #else
       eps <- componentsMap lbi v distdir $ \c _clbi _bi ->
                return $ componentEntrypoints c
@@ -544,6 +549,8 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
                , componentIncludes     = incs }
       in (hasIdeps',c')
 
+    needsBuild = needsBuildOutput includeDirs (componentUnitId clbi)
+
     cleanRecursiveOpts :: Component
                        -> BuildInfo -> ComponentLocalBuildInfo -> GhcOptions
     cleanRecursiveOpts comp libbi libclbi =
@@ -563,15 +570,16 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
 
     (hasIdeps,clbi') = removeInplace clbi
     libopts =
+      -- AZ:TODO: we already have the clbi, use it rather
       case (getLibraryClbi pd lbi,getExeClbi pd lbi) of
-        (Just (lib, libclbi),_) | hasIdeps ->
+        (Just (lib, libclbi),_) | hasIdeps && (needsBuild == NoBuildOutput) ->
           let
             libbi = libBuildInfo lib
             opts = cleanRecursiveOpts (CLib lib) libbi libclbi
           in
                       -- ghcOptInputModules = toNubListR $ allLibModules lib clbi,
             opts { ghcOptInputModules = ghcOptInputModules opts <> (toNubListR $ allLibModules lib libclbi) }
-        (_,Just (exe,execlbi)) | hasIdeps ->
+        (_,Just (exe,execlbi)) | hasIdeps && (needsBuild == NoBuildOutput) ->
           let
             exebi = buildInfo exe
           in
