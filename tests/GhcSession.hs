@@ -32,12 +32,12 @@ main = do
   topdir <- getCurrentDirectory
   res <- mapM (setup topdir test) $ case args of
     [] -> [
-          --   ("tests/exelib"   , parseVer "1.10",False)
-          -- , ("tests/exeintlib", parseVer "2.0", False)
-          -- , ("tests/fliblib"  , parseVer "2.0", False)
-            ("tests/bkpregex" , parseVer "2.0", True)
+          --   ("tests/exelib"   , parseVer "1.10")
+          -- , ("tests/exeintlib", parseVer "2.0")
+          -- , ("tests/fliblib"  , parseVer "2.0")
+            ("tests/bkpregex" , parseVer "2.0")
           ]
-    xs -> map (,parseVer "0",False) xs
+    xs -> map (,parseVer "0") xs
 
   if any (==False) $ concat res
     then exitFailure
@@ -52,8 +52,8 @@ cabalInstallBuiltinCabalVersion =
     parseVer . trim <$> readProcess "cabal"
         ["act-as-setup", "--", "--numeric-version"] ""
 
-setup :: FilePath -> (FilePath -> IO [Bool]) -> (FilePath, Version,Bool) -> IO [Bool]
-setup topdir act (srcdir, min_cabal_ver,invokeCabalBuild) = do
+setup :: FilePath -> (FilePath -> IO [Bool]) -> (FilePath, Version) -> IO [Bool]
+setup topdir act (srcdir, min_cabal_ver) = do
     ci_ver <- cabalInstallVersion
     c_ver <- cabalInstallBuiltinCabalVersion
     let mreason
@@ -81,16 +81,15 @@ setup topdir act (srcdir, min_cabal_ver,invokeCabalBuild) = do
 
           setCurrentDirectory dir
           run "cabal" [ "configure" ]
-          when invokeCabalBuild $ do
-            run "cabal" [ "build" ]
 
           act dir
-  where
-    run x xs = do
-      print $ x:xs
-      o <- readProcess x xs ""
-      putStrLn o
-      return ()
+
+run :: String -> [String] -> IO ()
+run x xs = do
+  print $ x:xs
+  o <- readProcess x xs ""
+  putStrLn o
+  return ()
 
 test :: FilePath -> IO [Bool]
 test dir = do
@@ -100,6 +99,9 @@ test dir = do
     forM cs $ \(ep, opts, nb, cn) -> do
 
         putStrLn $ "\n" ++ show cn ++ ":::: " ++ show nb
+
+        when (nb == ProduceBuildOutput) $ do
+          run "cabal" [ "build" ]
 
         exists <- doesDirectoryExist packageDir
         let opts' = if exists
@@ -111,16 +113,16 @@ test dir = do
         let sopts = intercalate " " $ map formatArg $ "\nghc" : opts'
         putStrLn $ "\n" ++ show cn ++ ": " ++ sopts
         hFlush stdout
-        compileModule ep opts'
+        compileModule nb ep opts'
   where
     formatArg x
         | "-" `isPrefixOf` x = "\n  "++x
         | otherwise          = x
 
-compileModule :: ChEntrypoint -> [String] -> IO Bool
-compileModule ep opts = do
+compileModule :: NeedsBuildOutput -> ChEntrypoint -> [String] -> IO Bool
+compileModule nb ep opts = do
 
-    putStrLn $ "compiling:" ++ show ep
+    putStrLn $ "compiling:" ++ show ep ++ " (" ++ show nb ++ ")"
 
     E.handle (\(ec :: ExitCode) -> print ec >> return False) $ do
 
@@ -134,11 +136,15 @@ compileModule ep opts = do
 
     handleSourceError (\e -> GHC.printException e >> return False) $ do
 
+    let target = case nb of
+          ProduceBuildOutput -> HscNothing -- AZ: what should this be?
+          NoBuildOutput      -> HscInterpreted
+
     dflags0 <- getSessionDynFlags
     let dflags1 = dflags0 {
         ghcMode   = CompManager
       , ghcLink   = LinkInMemory
-      , hscTarget = HscInterpreted
+      , hscTarget = target
       , optLevel  = 0
       }
 
@@ -150,19 +156,22 @@ compileModule ep opts = do
            ChLibEntrypoint ms ms' ss -> map unChModuleName $ ms ++ ms' ++ ss
            ChExeEntrypoint m  ms     -> [m] ++ map unChModuleName ms
            ChSetupEntrypoint         -> ["Setup.hs"]
-    let ts' = map (\t -> t { targetAllowObjCode = False }) ts
+    let ts' = case nb of
+                NoBuildOutput -> map (\t -> t { targetAllowObjCode = False }) ts
+                ProduceBuildOutput -> ts
 
     setTargets ts'
     _ <- load LoadAllTargets
 
 #if __GLASGOW_HASKELL__ >= 706
-    setContext $ case ep of
-      ChLibEntrypoint ms ms' ss ->
-          map (IIModule . mkModuleName . unChModuleName) $ ms ++ ms' ++ ss
-      ChExeEntrypoint _  ms  ->
-          map (IIModule . mkModuleName . unChModuleName) $ ChModuleName "Main" : ms
-      ChSetupEntrypoint      ->
-          map (IIModule . mkModuleName) ["Main"]
+    when (nb == NoBuildOutput) $ do
+      setContext $ case ep of
+        ChLibEntrypoint ms ms' ss ->
+            map (IIModule . mkModuleName . unChModuleName) $ ms ++ ms' ++ ss
+        ChExeEntrypoint _  ms  ->
+            map (IIModule . mkModuleName . unChModuleName) $ ChModuleName "Main" : ms
+        ChSetupEntrypoint      ->
+            map (IIModule . mkModuleName) ["Main"]
 #endif
 
 #if __GLASGOW_HASKELL__ <= 706

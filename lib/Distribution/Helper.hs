@@ -77,6 +77,7 @@ module Distribution.Helper (
   , ChComponentName(..)
   , ChPkgDb(..)
   , ChEntrypoint(..)
+  , NeedsBuildOutput(..)
 
   -- * General information
   , buildPlatform
