@@ -23,16 +23,6 @@ import System.Process (readProcess)
 
 import Distribution.Helper
 
-import Distribution.Types.Executable
-  ( Executable(..),
-    exeModules
-  )
-import qualified Distribution.ModuleName as ModuleName
-import Distribution.Types.BuildInfo
-import System.FilePath          ( (</>), takeExtension
-                                , takeDirectory, replaceExtension
-                                ,isRelative )
-
 import CabalHelper.Shared.Common
 
 
