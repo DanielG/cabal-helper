@@ -32,10 +32,10 @@ main = do
   topdir <- getCurrentDirectory
   res <- mapM (setup topdir test) $ case args of
     [] -> [
-          --   ("tests/exelib"   , parseVer "1.10")
-          -- , ("tests/exeintlib", parseVer "2.0")
-          -- , ("tests/fliblib"  , parseVer "2.0")
-            ("tests/bkpregex" , parseVer "2.0")
+            ("tests/exelib"   , parseVer "1.10")
+          , ("tests/exeintlib", parseVer "2.0")
+          , ("tests/fliblib"  , parseVer "2.0")
+          , ("tests/bkpregex" , parseVer "2.0")
           ]
     xs -> map (,parseVer "0") xs
 
@@ -70,12 +70,7 @@ setup topdir act (srcdir, min_cabal_ver) = do
         putStrLn $ "Skipping test '" ++ srcdir ++ "' because " ++ reason ++ "."
         return []
       Nothing -> do
-        -- withSystemTempDirectory "cabal-helper.ghc-session.test" $ \dir -> do
-        let dir = "/tmp/xxxx"
-        e <- doesDirectoryExist dir
-        when e $ removeDirectoryRecursive dir
-        createDirectoryIfMissing True dir
-        do
+        withSystemTempDirectory "cabal-helper.ghc-session.test" $ \dir -> do
           setCurrentDirectory $ topdir </> srcdir
           run "cabal" [ "sdist", "--output-dir", dir ]
 

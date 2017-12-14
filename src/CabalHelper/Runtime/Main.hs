@@ -444,9 +444,6 @@ main = do
 
 flagName' = unFlagName . flagName
 
-
-logm str = appendFile "/tmp/cbli.txt" str
-
 -- getLibrary :: PackageDescription -> Library
 -- getLibrary pd = unsafePerformIO $ do
 --   lr <- newIORef (error "libraryMap: empty IORef")
@@ -504,7 +501,6 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
   let pd = localPkgDescr lbi
 #if CH_MIN_VERSION_Cabal(2,0,0)
   includeDirMap <- recursiveDepInfo lbi v distdir
-  -- putStrLn $ "\nincludeDirMap=" ++ show includeDirMap ++ "\n"
 #endif
 
   componentsMap lbi v distdir $ \c clbi bi ->
@@ -532,7 +528,6 @@ componentOptions (lbi, v, distdir) inplaceFlag flags f =
 
 gmModuleName :: C.ModuleName -> ChModuleName
 gmModuleName = ChModuleName . intercalate "." . components
-
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
 removeInplaceDeps :: Verbosity
