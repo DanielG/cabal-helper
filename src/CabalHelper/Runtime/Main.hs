@@ -338,7 +338,6 @@ main = do
 
     "ghc-options":flags -> do
       res <- componentOptions lvd True flags id
-      -- putStrLn $ "\n*************ghc-options:" ++ show res
       return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
 
     "ghc-src-options":flags -> do
@@ -510,8 +509,11 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
 
   componentsMap lbi v distdir $ \c clbi bi ->
          let
-           -- outdir = componentOutDir lbi c
+#if CH_MIN_VERSION_Cabal(2,0,0)
            outdir = componentBuildDir lbi clbi
+#else
+           outdir = componentOutDir lbi c
+#endif
            (clbi', adopts) = case flags of
                                _ | not inplaceFlag -> (clbi, mempty)
                                ["--with-inplace"] -> (clbi, mempty)
@@ -568,18 +570,20 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
         opts { ghcOptSourcePath = ghcOptSourcePath opts <> toNubListR extraIncludes
              , ghcOptPackages   = ghcOptPackages   opts <> toNubListR extraDeps }
 
-    (hasIdeps,clbi') = removeInplace clbi
+    (hasIdeps,clbi') = case needsBuild of
+                         NoBuildOutput -> removeInplace clbi
+                         ProduceBuildOutput -> (False, clbi)
     libopts =
       -- AZ:TODO: we already have the clbi, use it rather
       case (getLibraryClbi pd lbi,getExeClbi pd lbi) of
-        (Just (lib, libclbi),_) | hasIdeps && (needsBuild == NoBuildOutput) ->
+        (Just (lib, libclbi),_) | hasIdeps ->
           let
             libbi = libBuildInfo lib
             opts = cleanRecursiveOpts (CLib lib) libbi libclbi
           in
                       -- ghcOptInputModules = toNubListR $ allLibModules lib clbi,
             opts { ghcOptInputModules = ghcOptInputModules opts <> (toNubListR $ allLibModules lib libclbi) }
-        (_,Just (exe,execlbi)) | hasIdeps && (needsBuild == NoBuildOutput) ->
+        (_,Just (exe,execlbi)) | hasIdeps ->
           let
             exebi = buildInfo exe
           in
@@ -757,7 +761,13 @@ componentEntrypoints (CFLib (ForeignLib{..}))
         []
 #endif
 componentEntrypoints (CExe Executable {..})
-    = ChExeEntrypoint modulePath (map gmModuleName $ otherModules buildInfo)
+    = ChExeEntrypoint
+#if CH_MIN_VERSION_Cabal(2,0,0)
+        ( head ((hsSourceDirs buildInfo) ++ ["."]) </> modulePath)
+#else
+        modulePath
+#endif
+        (map gmModuleName $ otherModules buildInfo)
 componentEntrypoints (CTest TestSuite { testInterface = TestSuiteExeV10 _ fp, ..})
     = ChExeEntrypoint fp (map gmModuleName $ otherModules testBuildInfo)
 componentEntrypoints (CTest TestSuite { testInterface = TestSuiteLibV09 _ mn, ..})
