@@ -405,7 +405,7 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
 
          , "source-dirs"
          , "entrypoints"
-         , "needsbuildoutput"
+         , "needs-build-output"
          ]
   let [ Just (ChResponsePkgDbs      slbiPackageDbStack),
         Just (ChResponseFlags       slbiPackageFlags),

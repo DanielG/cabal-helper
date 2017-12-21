@@ -70,11 +70,6 @@ import Distribution.Simple.LocalBuildInfo
   , withComponentsLBI
   , withLibLBI
   , withExeLBI
-
-#if CH_MIN_VERSION_Cabal(2,0,0)
-  , allLibModules
-  , componentBuildDir
-#endif
   )
 import Distribution.Simple.GHC
   ( componentGhcOptions
@@ -86,6 +81,7 @@ import Distribution.Simple.Program.GHC
 import Distribution.Simple.Setup
   ( ConfigFlags(..)
   , Flag(..)
+  , fromFlagOrDefault
   )
 import Distribution.Simple.Build
   ( initialBuildSteps
@@ -154,6 +150,10 @@ import Distribution.Types.UnqualComponentName
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
 -- CPP >= 2.0
+import Distribution.Simple.LocalBuildInfo
+  ( allLibModules
+  , componentBuildDir
+  )
 import Distribution.Backpack
   ( OpenUnitId(..),
     OpenModule(..)
@@ -238,7 +238,7 @@ usage = do
      ++"  | ghc-lang-options [--with-inplace]\n"
      ++"  | package-db-stack\n"
      ++"  | entrypoints\n"
-     ++"  | needsbuildoutput\n"
+     ++"  | needs-build-output\n"
      ++"  | source-dirs\n"
      ++"  | licenses\n"
      ++"  ) ...\n"
@@ -257,7 +257,7 @@ commands = [ "print-lbi"
            , "ghc-lang-options"
            , "package-db-stack"
            , "entrypoints"
-           , "needsbuildoutput"
+           , "needs-build-output"
            , "source-dirs"
            , "licenses"]
 
@@ -411,7 +411,7 @@ main = do
       let eps' = eps ++ [(ChSetupHsName, ChSetupEntrypoint)]
       return $ Just $ ChResponseEntrypoints eps'
 
-    "needsbuildoutput":[] -> do
+    "needs-build-output":[] -> do
 #if CH_MIN_VERSION_Cabal(2,0,0)
       includeDirMap <- recursiveDepInfo lbi v distdir
       nbs <- componentsMap lbi v distdir $ \c clbi _bi ->
@@ -500,7 +500,15 @@ componentsMap lbi _v _distdir f = do
 componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
   let pd = localPkgDescr lbi
 #if CH_MIN_VERSION_Cabal(2,0,0)
+  let distDir = fromFlagOrDefault ("." </> "dist") (configDistPref $ configFlags lbi)
+      packageDbDir = distDir </> "package.conf.inplace"
+  cd <- getCurrentDirectory
+  -- putStrLn $ "*****************componentOptions':(cd,packageDbDir)=" ++ show (cd,packageDbDir)
+  existsLocalPackageDb <- doesDirectoryExist packageDbDir
   includeDirMap <- recursiveDepInfo lbi v distdir
+#else
+  let existsLocalPackageDb = False
+      packageDbDir = "." -- never used
 #endif
 
   componentsMap lbi v distdir $ \c clbi bi ->
@@ -518,7 +526,11 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
 #else
                                [] -> removeInplaceDeps v lbi pd clbi
 #endif
-           opts = componentGhcOptions normal lbi bi clbi' outdir
+           opts1 = componentGhcOptions normal lbi bi clbi' outdir
+           opts = if existsLocalPackageDb
+                     then opts1 { ghcOptPackageDBs = ghcOptPackageDBs opts1
+                                                   <> [SpecificPackageDB packageDbDir] }
+                     else opts1
            opts' = f opts
 
          in rf lbi v $ nubPackageFlags $ opts' `mappend` adopts
@@ -552,7 +564,6 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
                        -> BuildInfo -> ComponentLocalBuildInfo -> GhcOptions
     cleanRecursiveOpts comp libbi libclbi =
       let
-        -- libbi = libBuildInfo lib
         liboutdir = componentOutDir lbi comp
         (_,libclbi') = removeInplace libclbi
         (extraIncludes,extraDeps',_ems) = recursiveIncludeDirs includeDirs (componentUnitId libclbi)
@@ -569,14 +580,12 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
                          NoBuildOutput -> removeInplace clbi
                          ProduceBuildOutput -> (False, clbi)
     libopts =
-      -- AZ:TODO: we already have the clbi, use it rather
       case (getLibraryClbi pd lbi,getExeClbi pd lbi) of
         (Just (lib, libclbi),_) | hasIdeps ->
           let
             libbi = libBuildInfo lib
             opts = cleanRecursiveOpts (CLib lib) libbi libclbi
           in
-                      -- ghcOptInputModules = toNubListR $ allLibModules lib clbi,
             opts { ghcOptInputModules = ghcOptInputModules opts <> (toNubListR $ allLibModules lib libclbi) }
         (_,Just (exe,execlbi)) | hasIdeps ->
           let
@@ -614,26 +623,32 @@ removeInplaceDeps _v lbi pd clbi = let
 recursiveDepInfo lbi v distdir = do
   includeDirs <- componentsMap lbi v distdir $ \c clbi bi -> do
     return (componentUnitId clbi
-           , ( componentInternalDeps clbi
-             , hsSourceDirs bi
-             , componentIncludes clbi
-             , componentEntrypoints c))
+           , ( SubDeps
+                { sdComponentInternalDeps = componentInternalDeps clbi
+                , sdHsSourceDirs          = hsSourceDirs bi
+                , sdComponentIncludes     = componentIncludes clbi
+                , sdComponentEntryPoints  = componentEntrypoints c})  )
   return $ Map.fromList $ map snd includeDirs
 
-type SubDeps = ([UnitId], [FilePath], [(OpenUnitId, ModuleRenaming)], ChEntrypoint)
+data SubDeps = SubDeps
+  { sdComponentInternalDeps :: [UnitId]
+  , sdHsSourceDirs          :: [FilePath]
+  , sdComponentIncludes     :: [(OpenUnitId, ModuleRenaming)]
+  , sdComponentEntryPoints  :: ChEntrypoint
+  }
 
 recursiveIncludeDirs :: Map.Map UnitId SubDeps
                      -> UnitId -> ([FilePath], [(OpenUnitId, ModuleRenaming)]
                                   , ChEntrypoint)
 recursiveIncludeDirs includeDirs unit = go ([],[],Nothing) [unit]
   where
-    go (afp,aci,amep) [] = (afp,aci,maybe (error "recursiveIncludeDirs:no ChEntrypoint") id amep)
+    go (afp,aci,Nothing  ) [] = (afp,aci,error "recursiveIncludeDirs:no ChEntrypoint")
+    go (afp,aci,Just amep) [] = (afp,aci,amep)
     go acc@(afp,aci,amep) (u:us) = case Map.lookup u includeDirs of
       Nothing -> go acc us
-      Just (us',sfp,sci,sep) -> go (afp++sfp,aci++sci,combineEp amep sep) (us++us')
+      Just (SubDeps us' sfp sci sep) -> go (afp++sfp,aci++sci,combineEp amep sep) (us++us')
 
-needsBuildOutput :: Map.Map UnitId SubDeps
-                     -> UnitId -> NeedsBuildOutput
+needsBuildOutput :: Map.Map UnitId SubDeps -> UnitId -> NeedsBuildOutput
 needsBuildOutput includeDirs unit = go [unit]
   where
     isIndef (IndefFullUnitId _ _) = True
@@ -641,7 +656,7 @@ needsBuildOutput includeDirs unit = go [unit]
     go [] = NoBuildOutput
     go (u:us) = case Map.lookup u includeDirs of
       Nothing -> go us
-      Just (us',sfp,sci,sep) ->
+      Just (SubDeps us' sfp sci sep) ->
         if any (isIndef . fst) sci
           then ProduceBuildOutput
           else go (us++us')
@@ -758,7 +773,9 @@ componentEntrypoints (CFLib (ForeignLib{..}))
 componentEntrypoints (CExe Executable {..})
     = ChExeEntrypoint
 #if CH_MIN_VERSION_Cabal(2,0,0)
+        -- 
         ( head ((hsSourceDirs buildInfo) ++ ["."]) </> modulePath)
+        -- modulePath
 #else
         modulePath
 #endif
@@ -778,7 +795,6 @@ componentEntrypoints (CBench Benchmark {})
 isInplaceCompInc :: ComponentLocalBuildInfo -> (OpenUnitId, ModuleRenaming) -> Bool
 isInplaceCompInc clbi (DefiniteUnitId uid, _mr)     = unDefUnitId uid `elem` componentInternalDeps clbi
 isInplaceCompInc clbi (IndefFullUnitId uid _, _mmr) = False
--- isInplaceCompInc clbi (IndefFullUnitId uid _, _mmr) = unComponentId uid `elem` map unUnitId (componentInternalDeps clbi)
 #endif
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
