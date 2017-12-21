@@ -31,8 +31,7 @@ main = do
   args <- getArgs
   topdir <- getCurrentDirectory
   res <- mapM (setup topdir test) $ case args of
-    [] -> [
-            ("tests/exelib"   , parseVer "1.10")
+    [] -> [ ("tests/exelib"   , parseVer "1.10")
           , ("tests/exeintlib", parseVer "2.0")
           , ("tests/fliblib"  , parseVer "2.0")
           , ("tests/bkpregex" , parseVer "2.0")
@@ -102,9 +101,8 @@ test dir = do
         let opts' = if exists
               then ("-package-db " ++ packageDir) : "-Werror" : opts
               else "-Werror" : opts
-
         -- let opts' = "-Werror" : opts
-        -- let opts' = "-v 3" : "-Werror" : opts
+
         let sopts = intercalate " " $ map formatArg $ "\nghc" : opts'
         putStrLn $ "\n" ++ show cn ++ ": " ++ sopts
         hFlush stdout
