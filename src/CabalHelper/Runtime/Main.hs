@@ -78,9 +78,6 @@ import Distribution.Simple.Program.GHC
   ( GhcOptions(..)
   , renderGhcOptions
   )
-import Distribution.Simple.Register
-  ( internalPackageDBPath
-  )
 import Distribution.Simple.Setup
   ( ConfigFlags(..)
   , Flag(..)
@@ -156,6 +153,9 @@ import Distribution.Types.UnqualComponentName
 import Distribution.Simple.LocalBuildInfo
   ( allLibModules
   , componentBuildDir
+  )
+import Distribution.Simple.Register
+  ( internalPackageDBPath
   )
 import Distribution.Backpack
   ( OpenUnitId(..),
