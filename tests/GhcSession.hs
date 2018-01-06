@@ -69,6 +69,7 @@ setup topdir act (srcdir, min_cabal_ver) = do
         putStrLn $ "Skipping test '" ++ srcdir ++ "' because " ++ reason ++ "."
         return []
       Nothing -> do
+        putStrLn $ "Running test '" ++ srcdir ++ "' ------------------------------"
         withSystemTempDirectory "cabal-helper.ghc-session.test" $ \dir -> do
           setCurrentDirectory $ topdir </> srcdir
           run "cabal" [ "sdist", "--output-dir", dir ]
@@ -88,7 +89,6 @@ run x xs = do
 test :: FilePath -> IO [Bool]
 test dir = do
     let qe = mkQueryEnv dir (dir </> "dist")
-    let packageDir = dir </> "dist" </> "package.conf.inplace"
     cs <- runQuery qe $ components $ (,,,) <$> entrypoints <.> ghcOptions <.> needsBuildOutput
     forM cs $ \(ep, opts, nb, cn) -> do
 
@@ -97,11 +97,7 @@ test dir = do
         when (nb == ProduceBuildOutput) $ do
           run "cabal" [ "build" ]
 
-        exists <- doesDirectoryExist packageDir
-        let opts' = if exists
-              then ("-package-db " ++ packageDir) : "-Werror" : opts
-              else "-Werror" : opts
-        -- let opts' = "-Werror" : opts
+        let opts' = "-Werror" : opts
 
         let sopts = intercalate " " $ map formatArg $ "\nghc" : opts'
         putStrLn $ "\n" ++ show cn ++ ": " ++ sopts

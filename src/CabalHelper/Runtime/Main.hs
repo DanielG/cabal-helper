@@ -78,6 +78,9 @@ import Distribution.Simple.Program.GHC
   ( GhcOptions(..)
   , renderGhcOptions
   )
+import Distribution.Simple.Register
+  ( internalPackageDBPath
+  )
 import Distribution.Simple.Setup
   ( ConfigFlags(..)
   , Flag(..)
@@ -500,15 +503,7 @@ componentsMap lbi _v _distdir f = do
 componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
   let pd = localPkgDescr lbi
 #if CH_MIN_VERSION_Cabal(2,0,0)
-  let distDir = fromFlagOrDefault ("." </> "dist") (configDistPref $ configFlags lbi)
-      packageDbDir = distDir </> "package.conf.inplace"
-  cd <- getCurrentDirectory
-  -- putStrLn $ "*****************componentOptions':(cd,packageDbDir)=" ++ show (cd,packageDbDir)
-  existsLocalPackageDb <- doesDirectoryExist packageDbDir
   includeDirMap <- recursiveDepInfo lbi v distdir
-#else
-  let existsLocalPackageDb = False
-      packageDbDir = "." -- never used
 #endif
 
   componentsMap lbi v distdir $ \c clbi bi ->
@@ -526,11 +521,7 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
 #else
                                [] -> removeInplaceDeps v lbi pd clbi
 #endif
-           opts1 = componentGhcOptions normal lbi bi clbi' outdir
-           opts = if existsLocalPackageDb
-                     then opts1 { ghcOptPackageDBs = ghcOptPackageDBs opts1
-                                                   <> [SpecificPackageDB packageDbDir] }
-                     else opts1
+           opts = componentGhcOptions normal lbi bi clbi' outdir
            opts' = f opts
 
          in rf lbi v $ nubPackageFlags $ opts' `mappend` adopts
@@ -576,9 +567,6 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
         opts { ghcOptSourcePath = ghcOptSourcePath opts <> toNubListR extraIncludes
              , ghcOptPackages   = ghcOptPackages   opts <> toNubListR extraDeps }
 
-    (hasIdeps,clbi') = case needsBuild of
-                         NoBuildOutput -> removeInplace clbi
-                         ProduceBuildOutput -> (False, clbi)
     libopts =
       case (getLibraryClbi pd lbi,getExeClbi pd lbi) of
         (Just (lib, libclbi),_) | hasIdeps ->
@@ -593,7 +581,16 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
           in
             cleanRecursiveOpts (CExe exe) exebi execlbi
         _ -> mempty
-  in (clbi', libopts)
+
+    distDir = fromFlagOrDefault ("." </> "dist") (configDistPref $ configFlags lbi)
+    packageDbDir = internalPackageDBPath lbi distDir
+    (hasIdeps,clbi') = case needsBuild of
+                         NoBuildOutput -> removeInplace clbi
+                         ProduceBuildOutput -> (False, clbi)
+    libopts' = case needsBuild of
+                 NoBuildOutput -> libopts
+                 ProduceBuildOutput -> mempty { ghcOptPackageDBs = [SpecificPackageDB packageDbDir] }
+  in (clbi', libopts')
 #else
 removeInplaceDeps :: Verbosity
                   -> LocalBuildInfo
