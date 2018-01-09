@@ -164,12 +164,14 @@ compileModule nb ep opts = do
             map (IIModule . mkModuleName) ["Main"]
 #endif
 
-#if __GLASGOW_HASKELL__ <= 706
-    GhcMonad.liftIO $ print ExitSuccess
-#else
-    liftIO $ print ExitSuccess
-#endif
+    liftIO'CH $ print ExitSuccess
     return True
 
 unChModuleName :: ChModuleName -> String
 unChModuleName (ChModuleName  mn) = mn
+
+#if __GLASGOW_HASKELL__ <= 706
+liftIO'CH = GhcMonad.liftIO
+#else
+liftIO'CH = liftIO
+#endif
