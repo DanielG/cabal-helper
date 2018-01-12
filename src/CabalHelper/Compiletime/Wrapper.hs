@@ -65,22 +65,22 @@ usage = do
 globalArgSpec :: [OptDescr (Options -> Options)]
 globalArgSpec =
       [ option "" ["verbose"] "Be more verbose" $
-              NoArg $ \o -> o { verbose = True }
+              NoArg $ \o -> o { oVerbose = True }
 
       , option "" ["with-ghc"] "GHC executable to use" $
-              reqArg "PROG" $ \p o -> o { ghcProgram = p }
+              reqArg "PROG" $ \p o -> o { oGhcProgram = p }
 
       , option "" ["with-ghc-pkg"] "ghc-pkg executable to use (only needed when guessing from GHC path fails)" $
-              reqArg "PROG" $ \p o -> o { ghcPkgProgram = p }
+              reqArg "PROG" $ \p o -> o { oGhcPkgProgram = p }
 
       , option "" ["with-cabal"] "cabal-install executable to use" $
-               reqArg "PROG" $ \p o -> o { cabalProgram = p }
+               reqArg "PROG" $ \p o -> o { oCabalProgram = p }
 
       , option "" ["with-cabal-version"] "Cabal library version to use" $
-               reqArg "VERSION" $ \p o -> o { cabalVersion = Just $ parseVer p }
+               reqArg "VERSION" $ \p o -> o { oCabalVersion = Just $ parseVer p }
 
       , option "" ["with-cabal-pkg-db"] "package database to look for Cabal library in" $
-               reqArg "PKG_DB" $ \p o -> o { cabalPkgDb = Just (PackageDbDir p) }
+               reqArg "PKG_DB" $ \p o -> o { oCabalPkgDb = Just (PackageDbDir p) }
 
       ]
  where
@@ -99,11 +99,11 @@ parseCommandArgs opts argv
 
 guessProgramPaths :: Options -> IO Options
 guessProgramPaths opts = do
-    if not (same ghcProgram opts dopts) && same ghcPkgProgram opts dopts
+    if not (same oGhcProgram opts dopts) && same oGhcPkgProgram opts dopts
        then do
-         mghcPkg <- guessToolFromGhcPath "ghc-pkg" (ghcProgram opts)
+         mghcPkg <- guessToolFromGhcPath "ghc-pkg" (oGhcProgram opts)
          return opts {
-           ghcPkgProgram = fromMaybe (ghcPkgProgram opts) mghcPkg
+           oGhcPkgProgram = fromMaybe (oGhcPkgProgram opts) mghcPkg
          }
        else return opts
  where
@@ -114,7 +114,7 @@ overrideVerbosityEnvVar :: Options -> IO Options
 overrideVerbosityEnvVar opts = do
   x <- lookup  "CABAL_HELPER_DEBUG" <$> getEnvironment
   return $ case x of
-    Just _  -> opts { verbose = True }
+    Just _  -> opts { oVerbose = True }
     Nothing -> opts
 
 main :: IO ()
@@ -130,7 +130,7 @@ main = handlePanic $ do
     "print-build-platform":[] -> putStrLn $ display buildPlatform
 
     projdir:_distdir:"package-id":[] -> do
-      let v | verbose opts = deafening
+      let v | oVerbose opts = deafening
             | otherwise    = silent
       -- ghc-mod will catch multiple cabal files existing before we get here
       [cfile] <- filter isCabalFile <$> getDirectoryContents projdir
@@ -147,7 +147,7 @@ main = handlePanic $ do
 \- Check first line of: %s\n\
 \- Maybe try: $ cabal configure" cfgf
         Just (hdrCabalVersion, _) -> do
-          case cabalVersion opts of
+          case oCabalVersion opts of
             Just ver | hdrCabalVersion /= ver -> panic $ printf "\
 \Cabal version %s was requested but setup configuration was\n\
 \written by version %s" (showVersion ver) (showVersion hdrCabalVersion)

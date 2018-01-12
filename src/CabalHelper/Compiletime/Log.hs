@@ -33,7 +33,7 @@ import Prelude
 import CabalHelper.Compiletime.Types
 
 vLog :: MonadIO m => Options -> String -> m ()
-vLog Options { verbose = True } msg =
+vLog Options { oVerbose = True } msg =
     liftIO $ hPutStrLn stderr msg
 vLog _ _ = return ()
 

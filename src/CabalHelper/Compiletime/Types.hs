@@ -26,12 +26,12 @@ module CabalHelper.Compiletime.Types where
 import Data.Version
 
 data Options = Options {
-          verbose       :: Bool
-        , ghcProgram    :: FilePath
-        , ghcPkgProgram :: FilePath
-        , cabalProgram  :: FilePath
-        , cabalVersion  :: Maybe Version
-        , cabalPkgDb    :: Maybe PackageDbDir
+          oVerbose       :: Bool
+        , oGhcProgram    :: FilePath
+        , oGhcPkgProgram :: FilePath
+        , oCabalProgram  :: FilePath
+        , oCabalVersion  :: Maybe Version
+        , oCabalPkgDb    :: Maybe PackageDbDir
 }
 
 newtype PackageDbDir = PackageDbDir { packageDbDir :: FilePath }

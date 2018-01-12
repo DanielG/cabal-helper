@@ -129,21 +129,21 @@ main = do
 
 compilePrivatePkgDb :: Either HEAD Version -> IO (Either ExitCode FilePath)
 compilePrivatePkgDb eCabalVer = do
-    res <- E.try $ installCabal defaultOptions { verbose = True } eCabalVer
+    res <- E.try $ installCabal defaultOptions { oVerbose = True } eCabalVer
     case res of
-      Right (db, e_commit_ver) ->
-          compileWithPkg (Just db) e_commit_ver
+      Right (db, cabalVer) ->
+          compileWithPkg (Just db) cabalVer
       Left (ioe :: IOException) -> do
           print ioe
           return $ Left (ExitFailure 1)
 
 compileWithPkg :: Maybe PackageDbDir
-               -> Either String Version
+               -> CabalVersion
                -> IO (Either ExitCode FilePath)
-compileWithPkg mdb eCabalVer =
-    compile "/does-not-exist" defaultOptions { verbose = True } $
-      Compile Nothing mdb eCabalVer [cabalPkgId eCabalVer]
+compileWithPkg mdb cabalVer =
+    compile "/does-not-exist" defaultOptions { oVerbose = True } $
+      Compile Nothing mdb cabalVer [cabalPkgId cabalVer]
 
-cabalPkgId :: Either String Version -> String
-cabalPkgId (Left _commitid) = "Cabal"
-cabalPkgId (Right v) = "Cabal-" ++ showVersion v
+cabalPkgId :: CabalVersion -> String
+cabalPkgId (CabalHEAD _commitid) = "Cabal"
+cabalPkgId (CabalVersion v) = "Cabal-" ++ showVersion v
