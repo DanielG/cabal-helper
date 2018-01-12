@@ -196,7 +196,7 @@ compile distdir opts@Options {..} Compile {..} = do
                    \|| (major1) == "++show mj1++" && (major2)  < "++show mj2++"\
                    \|| (major1) == "++show mj1++" && (major2) == "++show mj2++" && (minor) <= "++show mi++")"
           ],
-          maybeToList $ ("-package-conf="++) <$> packageDbDir <$> compPackageDb,
+          maybeToList $ ("-package-conf="++) <$> unPackageDbDir <$> compPackageDb,
           map ("-i"++) $ nub $ "":compCabalHelperSourceDir:maybeToList cnCabalSourceDir,
 
           if isNothing cnCabalSourceDir
@@ -550,7 +550,7 @@ listCabalVersions opts = listCabalVersions' opts Nothing
 -- TODO: Include sandbox? Probably only relevant for build-type:custom projects.
 listCabalVersions' :: Options -> Maybe PackageDbDir -> IO [Version]
 listCabalVersions' Options {..} mdb = do
-  let mdbopt = ("--package-conf="++) <$> packageDbDir <$> mdb
+  let mdbopt = ("--package-conf="++) <$> unPackageDbDir <$> mdb
       opts = ["list", "--simple-output", "Cabal"] ++ maybeToList mdbopt
 
   catMaybes . map (fmap snd . parsePkgId . fromString) . words

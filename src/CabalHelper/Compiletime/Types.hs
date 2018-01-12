@@ -34,7 +34,7 @@ data Options = Options {
         , oCabalPkgDb    :: Maybe PackageDbDir
 }
 
-newtype PackageDbDir = PackageDbDir { packageDbDir :: FilePath }
+newtype PackageDbDir = PackageDbDir { unPackageDbDir :: FilePath }
 
 defaultOptions :: Options
 defaultOptions = Options False "ghc" "ghc-pkg" "cabal" Nothing Nothing
