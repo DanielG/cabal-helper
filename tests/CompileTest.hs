@@ -1,5 +1,8 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, GADTs #-}
 
+import System.Environment (getArgs)
+import System.Directory
+import System.FilePath
 import System.Process
 import System.Exit
 import System.IO
@@ -33,14 +36,34 @@ withinRange'CH v r =
   where
     v' = either (const $ parseVer "1000000000") id v
 
+setupHOME :: IO ()
+setupHOME = do
+  tmp <- fromMaybe "/tmp" <$> lookupEnv "TMPDIR"
+  let home = tmp </> "compile-test-home"
+  _ <- rawSystem "rm" ["-r", home]
+  createDirectory    home
+  setEnv "HOME" home
+
 main :: IO ()
 main = do
-  setEnv "HOME" =<< fromMaybe "/tmp" <$> lookupEnv "TMPDIR"
+  args <- getArgs
+
+  let action
+       | null args = testAllCabalVersions
+       | otherwise = testCabalVersions $ map parseVer' args
+
+  setupHOME
+
   _ <- rawSystem "cabal" ["update"]
 
-  let parseVer' "HEAD" = Left HEAD
-      parseVer' v      = Right $ parseVer v
+  action
 
+parseVer' :: String -> Either HEAD Version
+parseVer' "HEAD" = Left HEAD
+parseVer' v      = Right $ parseVer v
+
+testAllCabalVersions :: IO ()
+testAllCabalVersions = do
   let cabal_versions :: [Either HEAD Version]
       cabal_versions = map parseVer'
            -- "1.14.0" -- not supported at runtime
@@ -105,7 +128,11 @@ main = do
       relevant_cabal_versions =
           reverse $ filter (flip withinRange'CH constraint) cabal_versions
 
-  rvs <- forM relevant_cabal_versions $ \ver -> do
+  testCabalVersions relevant_cabal_versions
+
+testCabalVersions :: [Either HEAD Version] -> IO ()
+testCabalVersions versions = do
+  rvs <- forM versions $ \ver -> do
            let sver = either show showVersion ver
            hPutStrLn stderr $ "\n\n\n\n\n\n====== Compiling with Cabal-" ++ sver
            compilePrivatePkgDb ver
@@ -118,9 +145,9 @@ main = do
                          Left rvc ->
                              "failed (exit code "++show rvc++")"
 
-  let drvs = relevant_cabal_versions `zip` rvs
+  let drvs = versions `zip` rvs
 
-  mapM_ printStatus (relevant_cabal_versions `zip` rvs)
+  mapM_ printStatus drvs
   if any isLeft' $ map snd $ filter ((/=Left HEAD) . fst) drvs
      then exitFailure
      else exitSuccess
@@ -143,8 +170,11 @@ compileWithPkg :: Maybe PackageDbDir
                -> CabalVersion
                -> IO (Either ExitCode FilePath)
 compileWithPkg mdb cabalVer =
-    compile "/does-not-exist" defaultOptions { oVerbose = True } $
-      Compile Nothing mdb cabalVer [cabalPkgId cabalVer]
+    compile
+      (CompileWithCabalPackage mdb cabalVer [cabalPkgId cabalVer] CPSGlobal)
+      "/does-not-exist"
+      defaultOptions { oVerbose = True }
+
 
 cabalPkgId :: CabalVersion -> String
 cabalPkgId (CabalHEAD _commitid) = "Cabal"

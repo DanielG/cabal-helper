@@ -49,8 +49,8 @@ withSystemTempDirectoryEnv tpl f = do
            tmpdir <- getCanonicalTemporaryDirectory
            f =<< createTempDirectory tmpdir tpl
 
-withHelperSources :: Maybe FilePath -> (FilePath -> IO a) -> IO a
-withHelperSources mdir action = withDir mdir $ \dir -> do
+createHelperSources :: FilePath -> IO ()
+createHelperSources dir = do
     let chdir = dir </> "CabalHelper"
     liftIO $ do
       createDirectoryIfMissing True $ chdir </> "Runtime"
@@ -69,11 +69,6 @@ withHelperSources mdir action = withDir mdir $ \dir -> do
         let path = chdir </> fn
         BS.writeFile path $ UTF8.fromString src
         setFileTimes path modtime modtime
-
-    action dir
-  where
-    withDir (Just dir) = \f -> f dir
-    withDir Nothing    = withSystemTempDirectoryEnv "cabal-helper-source"
 
 
 sourceFiles :: [(FilePath, String)]
