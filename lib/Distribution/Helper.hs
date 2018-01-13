@@ -36,7 +36,6 @@ module Distribution.Helper (
   , packageId
   , packageDbStack
   , packageFlags
-  , packageLicenses
   , compilerVersion
 
   , ghcMergedPkgOptions
@@ -194,7 +193,6 @@ mkQueryEnv projdir distdir = QueryEnv {
 data SomeLocalBuildInfo = SomeLocalBuildInfo {
       slbiPackageDbStack      :: [ChPkgDb],
       slbiPackageFlags        :: [(String, Bool)],
-      slbiPkgLicenses         :: [(String, [(String, Version)])],
       slbiCompilerVersion     :: (String, Version),
 
       slbiGhcMergedPkgOptions :: [String],
@@ -270,9 +268,6 @@ packageDbStack :: MonadIO m => Query m [ChPkgDb]
 -- | Like @ghcPkgOptions@ but for the whole package not just one component
 ghcMergedPkgOptions :: MonadIO m => Query m [String]
 
--- | Get the licenses of the packages the current project is linking against.
-packageLicenses :: MonadIO m => Query m [(String, [(String, Version)])]
-
 -- | Flag definitions from cabal file
 packageFlags :: MonadIO m => Query m [(String, Bool)]
 
@@ -321,7 +316,6 @@ ghcLangOptions :: MonadIO m => ComponentQuery m [String]
 packageId             = Query $ getPackageId
 packageDbStack        = Query $ slbiPackageDbStack        `liftM` getSlbi
 packageFlags          = Query $ slbiPackageFlags          `liftM` getSlbi
-packageLicenses       = Query $ slbiPkgLicenses           `liftM` getSlbi
 compilerVersion       = Query $ slbiCompilerVersion       `liftM` getSlbi
 ghcMergedPkgOptions   = Query $ slbiGhcMergedPkgOptions   `liftM` getSlbi
 configFlags           = Query $ slbiConfigFlags           `liftM` getSlbi
@@ -390,7 +384,6 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
   res <- readHelper
          [ "package-db-stack"
          , "flags"
-         , "licenses"
          , "compiler-version"
 
          , "ghc-merged-pkg-options"
@@ -409,7 +402,6 @@ getSomeConfigState = ask >>= \QueryEnv {..} -> do
          ]
   let [ Just (ChResponsePkgDbs      slbiPackageDbStack),
         Just (ChResponseFlags       slbiPackageFlags),
-        Just (ChResponseLicenses    slbiPkgLicenses),
         Just (ChResponseVersion     comp compVer),
 
         Just (ChResponseList        slbiGhcMergedPkgOptions),

@@ -217,8 +217,6 @@ import CabalHelper.Shared.Sandbox
 import CabalHelper.Shared.Common
 import CabalHelper.Shared.InterfaceTypes
 
-import CabalHelper.Runtime.Licenses
-
 usage :: IO ()
 usage = do
   prog <- getProgName
@@ -243,7 +241,6 @@ usage = do
      ++"  | entrypoints\n"
      ++"  | needs-build-output\n"
      ++"  | source-dirs\n"
-     ++"  | licenses\n"
      ++"  ) ...\n"
 
 commands :: [String]
@@ -262,7 +259,7 @@ commands = [ "print-lbi"
            , "entrypoints"
            , "needs-build-output"
            , "source-dirs"
-           , "licenses"]
+           ]
 
 main :: IO ()
 main = do
@@ -428,12 +425,6 @@ main = do
     "source-dirs":[] -> do
       res <- componentsMap lbi v distdir $$ \_ _ bi -> return $ hsSourceDirs bi
       return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
-
-    "licenses":[] -> do
-      return $ Just $ ChResponseLicenses $
-             map (second (map (second toDataVersion))) $
-                 displayDependencyLicenseList $
-                     groupByLicense $ getDependencyInstalledPackageInfos lbi
 
     "print-lbi":flags ->
       case flags of
@@ -770,7 +761,7 @@ componentEntrypoints (CFLib (ForeignLib{..}))
 componentEntrypoints (CExe Executable {..})
     = ChExeEntrypoint
 #if CH_MIN_VERSION_Cabal(2,0,0)
-        -- 
+        --
         ( head ((hsSourceDirs buildInfo) ++ ["."]) </> modulePath)
         -- modulePath
 #else
