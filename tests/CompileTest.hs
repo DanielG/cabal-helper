@@ -161,18 +161,21 @@ compilePrivatePkgDb eCabalVer = do
     res <- E.try $ installCabal defaultOptions { oVerbose = True } eCabalVer
     case res of
       Right (db, cabalVer) ->
-          compileWithPkg (Just db) cabalVer
+          compileWithPkg db cabalVer
       Left (ioe :: IOException) -> do
           print ioe
           return $ Left (ExitFailure 1)
 
-compileWithPkg :: Maybe PackageDbDir
+compileWithPkg :: PackageDbDir
                -> CabalVersion
                -> IO (Either ExitCode FilePath)
-compileWithPkg mdb cabalVer =
+compileWithPkg db cabalVer = do
+    appdir <- appCacheDir
+    let comp =
+          CompileWithCabalPackage (Just db) cabalVer [cabalPkgId cabalVer] CPSGlobal
     compile
-      (CompileWithCabalPackage mdb cabalVer [cabalPkgId cabalVer] CPSGlobal)
-      "/does-not-exist"
+      comp
+      (compPaths appdir (error "compile-test: distdir not available") comp)
       defaultOptions { oVerbose = True }
 
 
