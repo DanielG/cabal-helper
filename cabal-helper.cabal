@@ -261,16 +261,20 @@ test-suite ghc-session
 executable cabal-helper-main
   default-language:    Haskell2010
   default-extensions:  NondecreasingIndentation
-  if flag(dev)
-    buildable:         True
-  else
-    buildable:         False
   main-is:             CabalHelper/Runtime/Main.hs
   hs-source-dirs:      src
   other-modules:
                        CabalHelper.Shared.Common
                        CabalHelper.Shared.InterfaceTypes
                        CabalHelper.Shared.Sandbox
+
+  -- GHC 7.4 ships Cabal-1.14 which we can't compile with and since cabal can't
+  -- solve the component dependencies seperately in our case (because of too-old
+  -- cabal-install and build-type:custom) we can't build this on GHC 7.4
+  if flag(dev) && impl(ghc >= 7.6)
+    buildable:         True
+  else
+    buildable:         False
 
   -- Common c-h-main-fields -- See [Note test dependencies]
   ghc-options:         -Wall -fno-warn-unused-imports
