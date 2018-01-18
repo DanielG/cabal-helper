@@ -98,9 +98,6 @@ library
                        Paths_cabal_helper
   ghc-options:         -Wall
 
-  -- TODO: figure out where exactly to put this
-  build-tool-depends:  cabal-install:cabal
-
   build-depends:       base          < 5    && >= 4.5
   if os(windows)
     build-depends:     base                    >= 4.7
@@ -144,6 +141,7 @@ executable cabal-helper-wrapper
                        CabalHelper.Shared.InterfaceTypes
                        CabalHelper.Shared.Sandbox
                        Paths_cabal_helper
+  build-tool-depends:  cabal-install:cabal
   build-depends:       base             < 5    && >= 4.5
   if os(windows)
     build-depends:     base                       >= 4.7
@@ -189,6 +187,7 @@ test-suite compile-test
                        CabalHelper.Shared.InterfaceTypes
                        CabalHelper.Shared.Sandbox
                        Paths_cabal_helper
+  build-tool-depends:  cabal-install:cabal
   build-depends:       base             < 5    && >= 4.5
   if os(windows)
     build-depends:     base                       >= 4.7
@@ -237,6 +236,7 @@ test-suite ghc-session
                        CabalHelper.Shared.InterfaceTypes
                        CabalHelper.Shared.Sandbox
                        Paths_cabal_helper
+  build-tool-depends:  cabal-install:cabal
   build-depends:       base             < 5    && >= 4.5
   if os(windows)
     build-depends:     base                       >= 4.7
