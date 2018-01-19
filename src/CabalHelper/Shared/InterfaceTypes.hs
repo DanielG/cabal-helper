@@ -25,7 +25,7 @@ executable, using Show/Read. If any types in this module change the major
 version must be bumped since this will be exposed in the @Distribution.Helper@
 module.
 
-The cached executables in @$XDG_CACHE_DIR/cabal-helper@ use the cabal-helper
+The cached executables in @$XDG_CACHE_HOME/cabal-helper@ use the cabal-helper
 version (among other things) as a cache key so we don't need to worry about
 talking to an old executable.
 -}

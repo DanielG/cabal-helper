@@ -22,8 +22,8 @@ description:
     which is fairly likely since cabal-install is usually linked statically, we
     have support for compiling the Cabal library also. In this case the library
     is installed into a private, isolated, package database in
-    @$XDG_CACHE_DIR/cabal-helper@ so as to not interfere with the user's package
-    database.
+    @$XDG_CACHE_HOME/cabal-helper@ so as to not interfere with the user's
+    package database.
 license:             AGPL-3
 license-file:        LICENSE
 license-files:       LICENSE LICENSE.cabal-dependency-licenses

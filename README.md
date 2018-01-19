@@ -18,7 +18,7 @@ version of Cabal was used to write the on disk information for a given project.
 If this version of Cabal is not available on the users machine anymore, which is
 fairly likely since cabal-install is usually linked statically, we have support
 for compiling the Cabal library also. In this case the library is installed into
-a private, isolated, package database in `$XDG_CACHE_DIR/cabal-helper` so as to
+a private, isolated, package database in `$XDG_CACHE_HOME/cabal-helper` so as to
 not interfere with the user's package database.
 
 ## IRC
