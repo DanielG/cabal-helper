@@ -760,13 +760,7 @@ componentEntrypoints (CFLib (ForeignLib{..}))
 #endif
 componentEntrypoints (CExe Executable {..})
     = ChExeEntrypoint
-#if CH_MIN_VERSION_Cabal(2,0,0)
-        --
-        ( head ((hsSourceDirs buildInfo) ++ ["."]) </> modulePath)
-        -- modulePath
-#else
         modulePath
-#endif
         (map gmModuleName $ otherModules buildInfo)
 componentEntrypoints (CTest TestSuite { testInterface = TestSuiteExeV10 _ fp, ..})
     = ChExeEntrypoint fp (map gmModuleName $ otherModules testBuildInfo)
