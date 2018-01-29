@@ -144,8 +144,20 @@ compileModule nb ep opts = do
     ts <- mapM (\t -> guessTarget t Nothing) $
          case ep of
            ChLibEntrypoint ms ms' ss -> map unChModuleName $ ms ++ ms' ++ ss
-           ChExeEntrypoint m  ms     -> [m] ++ map unChModuleName ms
+           ChExeEntrypoint m'  ms    ->
+             let
+
+               -- The options first clear out includes, then put in the build dir. We want the
+               -- first one after that, so "regex-example" in the following case
+               --
+               -- ,"-i"
+               -- ,"-idist/build/regex-example"
+               -- ,"-iregex-example"
+               firstInclude = drop 2 $ head $ drop 2 $ filter (isPrefixOf "-i") opts
+               m = firstInclude </> m'
+             in [m] ++ map unChModuleName ms
            ChSetupEntrypoint         -> ["Setup.hs"]
+
     let ts' = case nb of
                 NoBuildOutput -> map (\t -> t { targetAllowObjCode = False }) ts
                 ProduceBuildOutput -> ts
