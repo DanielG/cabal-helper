@@ -634,7 +634,7 @@ recursiveIncludeDirs includeDirs unit = go ([],[],Nothing) [unit]
     go (afp,aci,Just amep) [] = (afp,aci,amep)
     go acc@(afp,aci,amep) (u:us) = case Map.lookup u includeDirs of
       Nothing -> go acc us
-      Just (SubDeps us' sfp sci sep) -> go (afp++sfp,aci++sci,combineEp amep sep) (us++us')
+      Just (SubDeps us' sfp sci sep) -> go (afp++sfp,aci++sci,Just (combineEp amep sep)) (us++us')
 
 needsBuildOutput :: Map.Map UnitId SubDeps -> UnitId -> NeedsBuildOutput
 needsBuildOutput includeDirs unit = go [unit]
@@ -649,12 +649,20 @@ needsBuildOutput includeDirs unit = go [unit]
           then ProduceBuildOutput
           else go (us++us')
 
-combineEp Nothing e = Just e
-combineEp (Just ChSetupEntrypoint) e = Just e
-combineEp (Just (ChLibEntrypoint es1 os1 ss1)) (ChLibEntrypoint es2 os2 ss2) = Just (ChLibEntrypoint (nub $ es2++es1) (nub $ os2++os1) (nub $ ss2++ss1))
-combineEp (Just (ChLibEntrypoint es1 os1 ss1)) (ChExeEntrypoint  mi os2)     = Just (ChExeEntrypoint mi (nub $ os2++es1++os1++ss1))
-combineEp (Just (ChExeEntrypoint   _ os1))     (ChLibEntrypoint es2 os2 ss2) = Just (ChLibEntrypoint es2 (nub $ os2++os1) ss2)
-combineEp (Just (ChExeEntrypoint   _ os1))     (ChExeEntrypoint  mi os2)     = Just (ChExeEntrypoint mi  (nub $ os2++os1))
+-- | combineEP is used to combine the entrypoints when recursively chasing
+-- through the dependencies of a given entry point. The first parameter is the
+-- current accumulated value, and the second one is the current sub-dependency
+-- being considered. So the bias should be to preserve the type of entrypoint
+-- from the first parameter.
+combineEp Nothing e = e
+combineEp (Just ChSetupEntrypoint) e = e
+combineEp (Just (ChLibEntrypoint es1 os1 ss1))   (ChLibEntrypoint es2 os2 ss2) = (ChLibEntrypoint (nub $ es2++es1) (nub $ os2++os1) (nub $ ss2++ss1))
+combineEp _                                    e@(ChExeEntrypoint  mi os2)     = error $ "combineEP: cannot have a sub exe:" ++ show e
+combineEp (Just (ChExeEntrypoint  mi os1))       (ChLibEntrypoint es2 os2 ss2) = (ChExeEntrypoint mi  (nub $ os1++es2++os2++ss2))
+
+-- no, you unconditionally always wrap the result in Just, so instead of `f x = Just y; f x = Just z` do `f x = y; f x = z` and use f as `Just . f`
+
+
 
 instantiatedGhcPackage :: (ModuleName,OpenModule) -> [(OpenUnitId, ModuleRenaming)]
 instantiatedGhcPackage (_,OpenModule oui@(DefiniteUnitId _) _) = [(oui,DefaultRenaming)]
