@@ -530,7 +530,10 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
            opts = componentGhcOptions normal lbi bi clbi' outdir
 #if CH_MIN_VERSION_Cabal(2,0,0)
            -- Add preprocessor output directory
-           opts'' = opts { ghcOptSourcePath = (ghcOptSourcePath opts) <> (toNubListR [outdir ++ "-tmp"]) }
+           preprocessorDir = case splitDirectories outdir of
+                               [] -> mempty -- Should never happen
+                               ds -> toNubListR [outdir </> last ds ++ "-tmp"]
+           opts'' = opts { ghcOptSourcePath = (ghcOptSourcePath opts) <> preprocessorDir }
 #else
            opts'' = opts
 #endif
