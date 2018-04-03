@@ -19,8 +19,13 @@ Description : Shared utility functions
 License     : AGPL-3
 -}
 
-{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, OverloadedStrings #-}
 module CabalHelper.Shared.Common where
+
+#ifdef MIN_VERSION_Cabal
+#undef CH_MIN_VERSION_Cabal
+#define CH_MIN_VERSION_Cabal MIN_VERSION_Cabal
+#endif
 
 import Control.Applicative
 import Control.Exception as E
@@ -33,6 +38,11 @@ import Data.Typeable
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
+#if CH_MIN_VERSION_Cabal(2,2,0)
+import qualified Distribution.PackageDescription.Parsec as P
+#else
+import qualified Distribution.PackageDescription.Parse as P
+#endif
 import System.Environment
 import System.IO
 import qualified System.Info
@@ -130,3 +140,10 @@ replace n r hs' = go "" hs'
            reverse acc ++ r ++ drop (length n) h
    go acc (h:hs) = go (h:acc) hs
    go acc [] = reverse acc
+
+
+#if CH_MIN_VERSION_Cabal(2,2,0)
+readPackageDescription = P.readGenericPackageDescription
+#else
+readPackageDescription = P.readPackageDescription
+#endif
