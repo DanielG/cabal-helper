@@ -44,9 +44,6 @@ import Distribution.PackageDescription
   , BenchmarkInterface(..)
   , withLib
   )
-import Distribution.PackageDescription.Parse
-  ( readPackageDescription
-  )
 import Distribution.PackageDescription.Configuration
   ( flattenPackageDescription
   )
@@ -195,6 +192,12 @@ import Distribution.Version
 import qualified Distribution.InstalledPackageInfo as Installed
 #endif
 
+#if CH_MIN_VERSION_Cabal(2,2,0)
+import Distribution.Types.GenericPackageDescription
+  ( unFlagAssignment
+  )
+#endif
+
 import Control.Applicative ((<$>))
 import Control.Arrow (first, second, (&&&))
 import Control.Monad
@@ -314,11 +317,23 @@ main = do
 
     "config-flags":[] -> do
       return $ Just $ ChResponseFlags $ sort $
-        map (first unFlagName) $ configConfigurationsFlags $ configFlags lbi
+        map (first unFlagName)
+#if CH_MIN_VERSION_Cabal(2,2,0)
+          $ unFlagAssignment $ configConfigurationsFlags
+#else
+          $ configConfigurationsFlags
+#endif
+          $ configFlags lbi
 
     "non-default-config-flags":[] -> do
       let flagDefinitons = genPackageFlags gpd
-          flagAssgnments = configConfigurationsFlags $ configFlags lbi
+          flagAssgnments =
+#if CH_MIN_VERSION_Cabal(2,2,0)
+            unFlagAssignment $ configConfigurationsFlags
+#else
+            configConfigurationsFlags
+#endif
+              $ configFlags lbi
           nonDefaultFlags =
               [ (flag_name, val)
               | MkFlag {flagName=(unFlagName -> flag_name'), flagDefault=def_val} <- flagDefinitons
