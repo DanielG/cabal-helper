@@ -499,11 +499,7 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
 
   componentsMap lbi v distdir $ \c clbi bi ->
          let
-#if CH_MIN_VERSION_Cabal(2,0,0)
            outdir = componentOutDir lbi c
-#else
-           outdir = componentBuildDir lbi clbi
-#endif
            (clbi', adopts) = case flags of
                                _ | not inplaceFlag -> (clbi, mempty)
                                ["--with-inplace"] -> (clbi, mempty)
