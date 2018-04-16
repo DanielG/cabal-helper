@@ -152,7 +152,7 @@ executable cabal-helper-wrapper
                      , filepath         < 1.5  && >= 1.3.0.0
                      , mtl              < 2.3  && >= 2.0
                      , process          < 1.7  && >= 1.1.0.1
-                     , template-haskell < 2.13 && >= 2.7.0.0
+                     , template-haskell < 2.14 && >= 2.7.0.0
                      , temporary        < 1.3  && >= 1.2.1
                      , transformers     < 0.6  && >= 0.3.0.0
   if !os(windows)
@@ -198,7 +198,7 @@ test-suite compile-test
                      , filepath         < 1.5  && >= 1.3.0.0
                      , mtl              < 2.3  && >= 2.0
                      , process          < 1.7  && >= 1.1.0.1
-                     , template-haskell < 2.13 && >= 2.7.0.0
+                     , template-haskell < 2.14 && >= 2.7.0.0
                      , temporary        < 1.3  && >= 1.2.1
                      , transformers     < 0.6  && >= 0.3.0.0
   if !os(windows)
@@ -215,7 +215,7 @@ test-suite ghc-session
   hs-source-dirs:      tests
   ghc-options:         -Wall
   build-depends:       base             < 5    && >= 4.5
-                     , ghc              < 8.3  && >= 7.4
+                     , ghc              < 8.5  && >= 7.4
                      , ghc-paths        < 0.2  && >= 0.1.0.9
                      , cabal-helper
 
@@ -247,7 +247,7 @@ test-suite ghc-session
                      , filepath         < 1.5  && >= 1.3.0.0
                      , mtl              < 2.3  && >= 2.0
                      , process          < 1.7  && >= 1.1.0.1
-                     , template-haskell < 2.13 && >= 2.7.0.0
+                     , template-haskell < 2.14 && >= 2.7.0.0
                      , temporary        < 1.3  && >= 1.2.1
                      , transformers     < 0.6  && >= 0.3.0.0
   if !os(windows)
