@@ -453,6 +453,7 @@ runSetupHs opts@Options {..} db srcdir ever CabalInstallVersion {..}
       go $ callProcessStderr opts (Just srcdir) setupProgram
   where
     parmake_opt
+        | Left _ <- ever = ["-j"]
         | Right ver <- ever,  ver >= Version [1,20] [] = ["-j"]
         | otherwise = []
 
