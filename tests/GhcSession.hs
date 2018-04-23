@@ -1,10 +1,7 @@
-{-# LANGUAGE TupleSections, ScopedTypeVariables, CPP #-}
+{-# LANGUAGE TupleSections, ScopedTypeVariables #-}
 module Main where
 
 import GHC
-#if __GLASGOW_HASKELL__ <= 706
-import GhcMonad
-#endif
 import GHC.Paths (libdir)
 import DynFlags
 
@@ -19,7 +16,7 @@ import System.FilePath ((</>))
 import System.Directory
 import System.IO
 import System.IO.Temp
-import System.Process (readProcess)
+import System.Process (rawSystem, readProcess)
 
 import Distribution.Helper
 
@@ -31,12 +28,13 @@ main = do
   args <- getArgs
   topdir <- getCurrentDirectory
   res <- mapM (setup topdir test) $ case args of
-    [] -> [ ("tests/exelib"   , parseVer "1.10")
-          , ("tests/exeintlib", parseVer "2.0")
-          , ("tests/fliblib"  , parseVer "2.0")
-          , ("tests/bkpregex" , parseVer "2.0")
+    [] -> [ ("tests/exelib"   , parseVer "1.10", parseVer "0")
+          , ("tests/exeintlib", parseVer "2.0",  parseVer "0")
+          , ("tests/fliblib"  , parseVer "2.0",  parseVer "0")
+          , ("tests/bkpregex" , parseVer "2.0",  parseVer "8.1")
+          --           min Cabal lib ver -^   min GHC ver -^
           ]
-    xs -> map (,parseVer "0") xs
+    xs -> map (, parseVer "0", parseVer "0") xs
 
   if any (==False) $ concat res
     then exitFailure
@@ -46,21 +44,29 @@ cabalInstallVersion :: IO Version
 cabalInstallVersion =
     parseVer . trim <$> readProcess "cabal" ["--numeric-version"] ""
 
+ghcVersion :: IO Version
+ghcVersion =
+    parseVer . trim <$> readProcess "ghc" ["--numeric-version"] ""
+
 cabalInstallBuiltinCabalVersion :: IO Version
 cabalInstallBuiltinCabalVersion =
     parseVer . trim <$> readProcess "cabal"
         ["act-as-setup", "--", "--numeric-version"] ""
 
-setup :: FilePath -> (FilePath -> IO [Bool]) -> (FilePath, Version) -> IO [Bool]
-setup topdir act (srcdir, min_cabal_ver) = do
+setup :: FilePath -> (FilePath -> IO [Bool]) -> (FilePath, Version, Version) -> IO [Bool]
+setup topdir act (srcdir, min_cabal_ver, min_ghc_ver) = do
     ci_ver <- cabalInstallVersion
     c_ver <- cabalInstallBuiltinCabalVersion
+    g_ver <- ghcVersion
     let mreason
           | (ci_ver < parseVer "1.24") =
             Just $ "cabal-install-" ++ showVersion ci_ver ++ " is too old"
           | c_ver < min_cabal_ver =
             Just $ "Cabal-" ++ showVersion c_ver
                    ++ " < " ++ showVersion min_cabal_ver
+          | g_ver < min_ghc_ver =
+            Just $ "ghc-" ++ showVersion g_ver
+                   ++ " < " ++ showVersion min_ghc_ver
           | otherwise =
             Nothing
 
@@ -82,8 +88,7 @@ setup topdir act (srcdir, min_cabal_ver) = do
 run :: String -> [String] -> IO ()
 run x xs = do
   print $ x:xs
-  o <- readProcess x xs ""
-  putStrLn o
+  ExitSuccess <- rawSystem x xs
   return ()
 
 test :: FilePath -> IO [Bool]
@@ -116,11 +121,7 @@ compileModule nb ep opts = do
 
     E.handle (\(ec :: ExitCode) -> print ec >> return False) $ do
 
-#if __GLASGOW_HASKELL__ <= 704
-    defaultErrorHandler defaultLogAction $ do
-#else
     defaultErrorHandler defaultFatalMessager defaultFlushOut $ do
-#endif
 
     runGhc (Just libdir) $ do
 
@@ -165,7 +166,6 @@ compileModule nb ep opts = do
     setTargets ts'
     _ <- load LoadAllTargets
 
-#if __GLASGOW_HASKELL__ >= 706
     when (nb == NoBuildOutput) $ do
       setContext $ case ep of
         ChLibEntrypoint ms ms' ss ->
@@ -174,16 +174,9 @@ compileModule nb ep opts = do
             map (IIModule . mkModuleName . unChModuleName) $ ChModuleName "Main" : ms
         ChSetupEntrypoint      ->
             map (IIModule . mkModuleName) ["Main"]
-#endif
 
-    liftIO'CH $ print ExitSuccess
+    liftIO $ print ExitSuccess
     return True
 
 unChModuleName :: ChModuleName -> String
 unChModuleName (ChModuleName  mn) = mn
-
-#if __GLASGOW_HASKELL__ <= 706
-liftIO'CH = GhcMonad.liftIO
-#else
-liftIO'CH = liftIO
-#endif
