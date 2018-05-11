@@ -668,8 +668,9 @@ needsBuildOutput includeDirs unit = go [unit]
 combineEp Nothing e = e
 combineEp (Just ChSetupEntrypoint) e = e
 combineEp (Just (ChLibEntrypoint es1 os1 ss1))   (ChLibEntrypoint es2 os2 ss2) = (ChLibEntrypoint (nub $ es2++es1) (nub $ os2++os1) (nub $ ss2++ss1))
-combineEp _                                    e@(ChExeEntrypoint  mi os2)     = error $ "combineEP: cannot have a sub exe:" ++ show e
+combineEp (Just (ChLibEntrypoint es1 os1 ss1))   (ChExeEntrypoint  mi os2)     = (ChLibEntrypoint es1 (nub $ os1++os2) ss1)
 combineEp (Just (ChExeEntrypoint  mi os1))       (ChLibEntrypoint es2 os2 ss2) = (ChExeEntrypoint mi  (nub $ os1++es2++os2++ss2))
+combineEp (Just (ChExeEntrypoint   _ os1))       (ChExeEntrypoint  mi os2)     = (ChExeEntrypoint mi  (nub $ os2++os1))
 
 -- no, you unconditionally always wrap the result in Just, so instead of `f x = Just y; f x = Just z` do `f x = y; f x = z` and use f as `Just . f`
 
