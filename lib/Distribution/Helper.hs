@@ -15,7 +15,8 @@
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 {-# LANGUAGE CPP, RecordWildCards, FlexibleContexts, ConstraintKinds,
-  GeneralizedNewtypeDeriving, DeriveDataTypeable, DeriveGeneric, DeriveFunctor
+  GeneralizedNewtypeDeriving, DeriveDataTypeable, DeriveGeneric, DeriveFunctor,
+  NamedFieldPuns, OverloadedStrings
  #-}
 
 {-|
@@ -97,6 +98,7 @@ module Distribution.Helper (
   , module Data.Functor.Apply
   ) where
 
+import Cabal.Plan
 import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class
@@ -106,8 +108,10 @@ import Control.Exception as E
 import Data.Char
 import Data.List
 import Data.Maybe
+import qualified Data.Map as Map
 import Data.Version
 import Data.Typeable
+import Data.Function
 import Data.Functor.Apply
 import Distribution.Simple.BuildPaths (exeExtension)
 import System.Environment
@@ -436,7 +440,7 @@ writeAutogenFiles qe  =
 
 -- | Get the path to the sandbox package-db in a project
 getSandboxPkgDb :: (FilePath -> [String] -> String -> IO String)
-             -> FilePath
+             -> String
              -- ^ Cabal build platform, i.e. @buildPlatform@
              -> Version
              -- ^ GHC version (@cProjectVersion@ is your friend)
@@ -471,25 +475,76 @@ findLibexecExe = do
     if exists
        then return exe
        else do
-         mdir <- tryFindCabalHelperTreeLibexecDir
-         case mdir of
+         mdir <- tryFindCabalHelperTreeDistDir
+         dir <- case mdir of
            Nothing ->
-               error $ throw $ LibexecNotFoundError exeName libexecdir
+               throwIO $ LibexecNotFoundError exeName libexecdir
            Just dir ->
-               return $ dir </> "dist" </> "build" </> exeName </> exeName
+               return dir
 
-tryFindCabalHelperTreeLibexecDir :: IO (Maybe FilePath)
-tryFindCabalHelperTreeLibexecDir = do
-  exe <- getExecutablePath'
-  dir <- case takeFileName exe of
-    "ghc" -> do -- we're probably in ghci; try CWD
-        getCurrentDirectory
-    _ ->
-        return $ (!!4) $ iterate takeDirectory exe
-  exists <- doesFileExist $ dir </> "cabal-helper.cabal"
-  return $ if exists
-             then Just dir
-             else Nothing
+         return $ dir </> "build" </> exeName </> exeName
+
+findPlanJson :: FilePath -> IO (Maybe FilePath)
+findPlanJson base =
+    findFile (map (</> "cache") $ parents base) "plan.json"
+
+parents :: FilePath -> [FilePath]
+parents path = takeWhile (not . (`elem` ["", "."]) . dropDrive) dirs
+  where dirs = iterate takeDirectory path
+
+data DistDir = DistDir { ddType :: DistDirType, unDistDir :: FilePath }
+  deriving (Eq, Ord, Read, Show)
+data DistDirType = NewBuildDist | OldBuildDist
+  deriving (Eq, Ord, Read, Show)
+
+tryFindCabalHelperTreeDistDir :: IO (Maybe FilePath)
+tryFindCabalHelperTreeDistDir = do
+  exe <- canonicalizePath =<< getExecutablePath'
+  mplan <- findPlanJson exe
+  cwd <- getCurrentDirectory
+
+  let candidates = sortBy (compare `on` ddType) $ concat
+        [ maybeToList $ DistDir NewBuildDist <$> mplan
+        , [ DistDir OldBuildDist $ (!!3) $ iterate takeDirectory exe ]
+        , if takeFileName exe == "ghc" -- we're probably in ghci; try CWD
+            then [ DistDir NewBuildDist $ cwd </> "dist-newstyle"
+                 , DistDir NewBuildDist $ cwd </> "dist"
+                 , DistDir OldBuildDist $ cwd </> "dist"
+                 ]
+            else []
+        ]
+
+  distdirs
+      <-  filterM isDistDir candidates
+      >>= mapM toOldBuildDistDir
+
+  return $ fmap unDistDir $ join $ listToMaybe $ distdirs
+
+isCabalHelperSourceDir :: FilePath -> IO Bool
+isCabalHelperSourceDir dir =
+    doesFileExist $ dir </> "cabal-helper.cabal"
+
+isDistDir :: DistDir -> IO Bool
+isDistDir (DistDir NewBuildDist dir) =
+    doesFileExist (dir </> "cache" </> "plan.json")
+isDistDir (DistDir OldBuildDist dir) =
+    doesFileExist (dir </> "setup-config")
+
+toOldBuildDistDir :: DistDir -> IO (Maybe DistDir)
+toOldBuildDistDir (DistDir NewBuildDist dir) = do
+    PlanJson {pjUnits} <- decodePlanJson $ dir </> "cache" </> "plan.json"
+    let munit = find isCabalHelperUnit $ Map.elems pjUnits
+    return $ DistDir OldBuildDist <$> join ((\Unit { uDistDir = mdistdir } -> mdistdir) <$> munit)
+  where
+    isCabalHelperUnit
+      Unit { uPId = PkgId (PkgName n) _
+           , uType = UnitTypeLocal
+           } | n == "cabal-helper" = True
+    isCabalHelperUnit _ = False
+toOldBuildDistDir x = return $ Just x
+
+
+
 
 libexecNotFoundError :: String   -- ^ Name of the executable we were trying to
                                  -- find
