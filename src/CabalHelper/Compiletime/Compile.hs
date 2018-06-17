@@ -36,10 +36,12 @@ import Data.String
 import Data.Version
 import GHC.IO.Exception (IOErrorType(OtherError))
 import Text.Printf
+import Text.Read
 import System.Directory
 import System.FilePath
 import System.Process
 import System.Exit
+import System.Environment
 import System.IO
 import System.IO.Error
 import System.IO.Temp
@@ -452,16 +454,20 @@ runSetupHs opts@Options {..} db srcdir ever CabalInstallVersion {..}
       SetupProgram {..} <- compileSetupHs opts db srcdir
       go $ callProcessStderr opts (Just srcdir) setupProgram
   where
-    parmake_opt
-        | Left _ <- ever = ["-j"]
-        | Right ver <- ever,  ver >= Version [1,20] [] = ["-j"]
+    parmake_opt :: Maybe Int -> [String]
+    parmake_opt nproc'
+        | Left _ <- ever = ["-j"++nproc]
+        | Right ver <- ever,  ver >= Version [1,20] [] = ["-j"++nproc]
         | otherwise = []
+      where
+        nproc = fromMaybe "" $ show <$> nproc'
 
     go :: ([String] -> IO ()) -> IO ()
     go run = do
       run $ [ "configure", "--package-db", db, "--prefix", db </> "prefix" ]
               ++ withGHCProgramOptions opts
-      run $ [ "build" ] ++ parmake_opt
+      mnproc <- join . fmap readMaybe <$> lookupEnv "NPROC"
+      run $ [ "build" ] ++ parmake_opt mnproc
       run [ "copy" ]
       run [ "register" ]
 
