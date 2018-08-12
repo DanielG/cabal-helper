@@ -86,7 +86,6 @@ import Distribution.Simple.Build
 import Distribution.Simple.BuildPaths
   ( autogenModuleName
   , cppHeaderName
-  , exeExtension
   )
 import Distribution.Simple.Compiler
   ( PackageDB(..)
