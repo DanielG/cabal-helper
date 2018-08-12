@@ -65,7 +65,9 @@ usage = do
 
 globalArgSpec :: [OptDescr (Options -> Options)]
 globalArgSpec =
-      [ option "" ["verbose"] "Be more verbose" $
+      [ option "h" ["help"] "Display help message" $
+              NoArg $ \o -> o { oHelp = True }
+      , option "" ["verbose"] "Be more verbose" $
               NoArg $ \o -> o { oVerbose = True }
 
       , option "" ["with-ghc"] "GHC executable to use" $
@@ -137,6 +139,7 @@ main = handlePanic $ do
   (opts', args) <- parseCommandArgs defaultOptions <$> getArgs
   opts <- overrideVerbosityEnvVar =<< guessProgramPaths opts'
   case args of
+    _ | oHelp opts -> usage
     [] -> usage
     "help":[] -> usage
     "version":[] -> putStrLn $ showVersion version

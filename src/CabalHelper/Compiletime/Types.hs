@@ -26,7 +26,8 @@ module CabalHelper.Compiletime.Types where
 import Data.Version
 
 data Options = Options {
-          oVerbose       :: Bool
+          oHelp          :: Bool
+        , oVerbose       :: Bool
         , oGhcProgram    :: FilePath
         , oGhcPkgProgram :: FilePath
         , oCabalProgram  :: FilePath
@@ -37,4 +38,4 @@ data Options = Options {
 newtype PackageDbDir = PackageDbDir { unPackageDbDir :: FilePath }
 
 defaultOptions :: Options
-defaultOptions = Options False "ghc" "ghc-pkg" "cabal" Nothing Nothing
+defaultOptions = Options False False "ghc" "ghc-pkg" "cabal" Nothing Nothing
