@@ -369,7 +369,7 @@ invokeHelper QueryEnv {..} args = do
                  , "--with-cabal="   ++ cabalProgram qePrograms
                  ]
   exe  <- findLibexecExe
-  let args' = progArgs ++ qeProjectDir:qeDistDir:args
+  let args' = progArgs ++ "v1-style":qeProjectDir:qeDistDir:args
   out <- qeReadProcess exe args' ""
   (Right <$> evaluate out) `E.catch` \(SomeException _) ->
       return $ Left $ concat

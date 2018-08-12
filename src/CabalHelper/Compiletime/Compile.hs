@@ -23,6 +23,7 @@ License     : AGPL-3
 
 module CabalHelper.Compiletime.Compile where
 
+import Cabal.Plan
 import Control.Applicative
 import Control.Arrow
 import Control.Exception as E
@@ -46,6 +47,10 @@ import System.IO
 import System.IO.Error
 import System.IO.Temp
 import Prelude
+
+
+import qualified Data.Text as Text
+import qualified Data.Map.Strict as Map
 
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
@@ -81,13 +86,15 @@ data CompPaths = CompPaths
 -- executable.
 data CompilationProductScope = CPSGlobal | CPSProject
 
-compileHelper :: Options -> Version -> FilePath -> FilePath -> IO (Either ExitCode FilePath)
-compileHelper opts hdrCabalVersion projdir distdir = do
+compileHelper :: Options -> Version -> FilePath -> Maybe (PlanJson, FilePath) -> FilePath -> IO (Either ExitCode FilePath)
+compileHelper opts hdrCabalVersion projdir mnewstyle distdir = do
+  ghcVer <- ghcVersion opts
   Just (prepare, comp) <- runMaybeT $ msum $
     case oCabalPkgDb opts of
       Nothing ->
         [ compileCabalSource
-        , compileSandbox
+        , compileNewBuild ghcVer
+        , compileSandbox ghcVer
         , compileGlobal
         , MaybeT $ Just <$> compileWithCabalInPrivatePkgDb
         ]
@@ -104,7 +111,7 @@ compileHelper opts hdrCabalVersion projdir distdir = do
       vLog opts $ "helper already compiled, using exe: "++compExePath
       return (Right compExePath)
     else do
-      vLog opts $ "helper exe does not exist, compiling"++compExePath
+      vLog opts $ "helper exe does not exist, compiling "++compExePath
       prepare >> compile comp cp opts
 
  where
@@ -115,20 +122,37 @@ compileHelper opts hdrCabalVersion projdir distdir = do
    -- | Check if this version is globally available
    compileGlobal :: MaybeT IO (IO (), Compile)
    compileGlobal = do
-       ver <- MaybeT $ find (== hdrCabalVersion) <$> listCabalVersions opts
+       cabal_versions <- listCabalVersions opts
+       ver <- MaybeT $ return $ find (== hdrCabalVersion) cabal_versions
        vLog opts $ logMsg ++ "user/global package-db"
        return $ (return (), compileWithPkg Nothing ver CPSGlobal)
 
    -- | Check if this version is available in the project sandbox
-   compileSandbox :: MaybeT IO (IO (), Compile)
-   compileSandbox = do
-       let ghcVer = ghcVersion opts
-           mdb_path = getSandboxPkgDb projdir (display buildPlatform) =<< ghcVer
+   compileSandbox :: Version -> MaybeT IO (IO (), Compile)
+   compileSandbox ghcVer = do
+       let mdb_path = getSandboxPkgDb projdir (display buildPlatform) ghcVer
        sandbox <- PackageDbDir <$> MaybeT mdb_path
-       ver <- MaybeT $ logIOError opts "compileSandbox" $
-         find (== hdrCabalVersion) <$> listCabalVersions' opts (Just sandbox)
+       cabal_versions <- listCabalVersions' opts (Just sandbox)
+       ver <- MaybeT $ return $ find (== hdrCabalVersion) cabal_versions
        vLog opts $ logMsg ++ "sandbox package-db"
        return $ (return (), compileWithPkg (Just sandbox) ver CPSProject)
+
+   compileNewBuild :: Version -> MaybeT IO (IO (), Compile)
+   compileNewBuild ghcVer = do
+       (PlanJson {pjUnits}, distdir_newstyle) <- maybe mzero pure mnewstyle
+       let cabal_pkgid =
+               PkgId (PkgName (Text.pack "Cabal"))
+                     (Ver $ versionBranch hdrCabalVersion)
+           mcabal_unit = listToMaybe $
+             Map.elems $ Map.filter (\Unit {..} -> uPId == cabal_pkgid) pjUnits
+       Unit {} <- maybe mzero pure mcabal_unit
+       let inplace_db_path = distdir_newstyle
+             </> "packagedb" </> ("ghc-" ++ showVersion ghcVer)
+           inplace_db = PackageDbDir inplace_db_path
+       cabal_versions <- listCabalVersions' opts (Just inplace_db)
+       ver <- MaybeT $ return $ find (== hdrCabalVersion) cabal_versions
+       vLog opts $ logMsg ++ "v2-build package-db " ++ inplace_db_path
+       return $ (return (), compileWithPkg (Just inplace_db) ver CPSProject)
 
    -- | Compile the requested Cabal version into an isolated package-db if it's
    -- not there already
@@ -322,6 +346,13 @@ exeName CabalVersion {cabalVersion} = intercalate "-"
     , "Cabal" ++ showVersion cabalVersion
     ]
 
+readProcess' :: Options -> FilePath -> [String] -> String -> IO String
+readProcess' opts@Options{..} exe args inp = do
+  vLog opts $ intercalate " " $ map formatProcessArg (oGhcPkgProgram:args)
+  outp <- readProcess exe args inp
+  vLog opts $ unlines $ map ("=> "++) $ lines outp
+  return outp
+
 callProcessStderr'
     :: Options -> Maybe FilePath -> FilePath -> [String] -> IO ExitCode
 callProcessStderr' opts mwd exe args = do
@@ -377,7 +408,7 @@ installCabal opts ever = do
   withSystemTempDirectory "cabal-helper-Cabal-source" $ \tmpdir -> do
     (srcdir, cabalVer) <- case ever of
       Left HEAD -> do
-        second CabalHEAD <$> unpackCabalHEAD tmpdir
+        second CabalHEAD <$> unpackCabalHEAD opts tmpdir
       Right ver -> do
         message ver
         let patch = fromMaybe nopCabalPatchDescription $
@@ -578,13 +609,13 @@ unpackCabal opts cabalVer tmpdir variant = do
   callProcessStderr opts (Just tmpdir) (oCabalProgram opts) args
   return $ CabalSourceDir dir
 
-unpackCabalHEAD :: FilePath -> IO (CabalSourceDir, CommitId)
-unpackCabalHEAD tmpdir = do
+unpackCabalHEAD :: Options -> FilePath -> IO (CabalSourceDir, CommitId)
+unpackCabalHEAD opts tmpdir = do
   let dir = tmpdir </> "cabal-head.git"
       url = "https://github.com/haskell/cabal.git"
   ExitSuccess <- rawSystem "git" [ "clone", "--depth=1", url, dir]
   commit <-
-      withDirectory_ dir $ trim <$> readProcess "git" ["rev-parse", "HEAD"] ""
+      withDirectory_ dir $ trim <$> readProcess' opts "git" ["rev-parse", "HEAD"] ""
   return (CabalSourceDir $ dir </> "Cabal", CommitId commit)
  where
    withDirectory_ :: FilePath -> IO a -> IO a
@@ -629,40 +660,46 @@ errorInstallCabal cabalVer _distdir = panicIO $ printf "\
  where
    sver = showVersion cabalVer
 
-listCabalVersions :: Options -> IO [Version]
+listCabalVersions :: Options -> MaybeT IO [Version]
 listCabalVersions opts = listCabalVersions' opts Nothing
 
--- TODO: Include sandbox? Probably only relevant for build-type:custom projects.
-listCabalVersions' :: Options -> Maybe PackageDbDir -> IO [Version]
-listCabalVersions' Options {..} mdb = do
-  let mdbopt = ("--package-conf="++) <$> unPackageDbDir <$> mdb
-      opts = ["list", "--simple-output", "Cabal"] ++ maybeToList mdbopt
+listCabalVersions' :: Options -> Maybe PackageDbDir -> MaybeT IO [Version]
+listCabalVersions' opts@Options {..} mdb = do
+  case mdb of
+    Nothing -> mzero
+    Just (PackageDbDir db_path) -> do
+      exists <- liftIO $ doesDirectoryExist db_path
+      case exists of
+        False -> mzero
+        True  -> MaybeT $ logIOError opts "listCabalVersions'" $ Just <$> do
+          let mdbopt = ("--package-conf="++) <$> unPackageDbDir <$> mdb
+              args = ["list", "--simple-output", "Cabal"] ++ maybeToList mdbopt
 
-  catMaybes . map (fmap snd . parsePkgId . fromString) . words
-          <$> readProcess oGhcPkgProgram opts ""
+          catMaybes . map (fmap snd . parsePkgId . fromString) . words
+                   <$> readProcess' opts oGhcPkgProgram args ""
 
 cabalVersionExistsInPkgDb :: Options -> Version -> PackageDbDir -> IO Bool
 cabalVersionExistsInPkgDb opts cabalVer db@(PackageDbDir db_path) = do
   exists <- doesDirectoryExist db_path
   case exists of
     False -> return False
-    True -> do
+    True -> fromMaybe False <$> runMaybeT (do
       vers <- listCabalVersions' opts (Just db)
-      return $ cabalVer `elem` vers
+      return $ cabalVer `elem` vers)
 
 ghcVersion :: Options -> IO Version
-ghcVersion Options {..} = do
-    parseVer . trim <$> readProcess oGhcProgram ["--numeric-version"] ""
+ghcVersion opts@Options {..} = do
+    parseVer . trim <$> readProcess' opts oGhcProgram ["--numeric-version"] ""
 
 ghcPkgVersion :: Options -> IO Version
-ghcPkgVersion Options {..} = do
-    parseVer . trim . dropWhile (not . isDigit) <$> readProcess oGhcPkgProgram ["--version"] ""
+ghcPkgVersion opts@Options {..} = do
+    parseVer . trim . dropWhile (not . isDigit) <$> readProcess' opts oGhcPkgProgram ["--version"] ""
 
 newtype CabalInstallVersion = CabalInstallVersion { cabalInstallVer :: Version }
 cabalInstallVersion :: Options -> IO CabalInstallVersion
-cabalInstallVersion Options {..} = do
+cabalInstallVersion opts@Options {..} = do
     CabalInstallVersion . parseVer . trim
-      <$> readProcess oCabalProgram ["--numeric-version"] ""
+      <$> readProcess' opts oCabalProgram ["--numeric-version"] ""
 
 createPkgDb :: Options -> CabalVersion -> IO PackageDbDir
 createPkgDb opts@Options {..} cabalVer = do

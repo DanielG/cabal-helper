@@ -13,9 +13,10 @@
 --
 -- You should have received a copy of the GNU Affero General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
-{-# LANGUAGE RecordWildCards, FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards, NamedFieldPuns, FlexibleContexts, ViewPatterns #-}
 module Main where
 
+import Cabal.Plan
 import Control.Applicative
 import Control.Monad
 import Data.Char
@@ -23,6 +24,7 @@ import Data.List
 import Data.Maybe
 import Data.String
 import Text.Printf
+import Text.Show.Pretty
 import System.Console.GetOpt
 import System.Environment
 import System.Directory
@@ -31,6 +33,9 @@ import System.Process
 import System.Exit
 import System.IO
 import Prelude
+
+import qualified Data.Text as Text
+import qualified Data.Map.Strict as Map
 
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
@@ -61,7 +66,11 @@ usage = do
 \  [--with-cabal=CABAL_PATH]\n\
 \  [--with-cabal-version=VERSION]\n\
 \  [--with-cabal-pkg-db=PKG_DB]\n\
-\  PROJ_DIR DIST_DIR ( print-exe | package-id | [CABAL_HELPER_ARGS...] ) )\n"
+\  v1-style PROJ_DIR DIST_DIR \n\
+\      ( print-exe | package-id | [CABAL_HELPER_ARGS...] )\n\
+\  v2-style PROJ_DIR DIST_NEWSTYLE_DIR DIST_DIR\n\
+\      ( print-exe | package-id | [CABAL_HELPER_ARGS...] )\n\
+\)\n"
 
 globalArgSpec :: [OptDescr (Options -> Options)]
 globalArgSpec =
@@ -147,7 +156,7 @@ main = handlePanic $ do
     "print-appcachedir":[] -> putStrLn =<< appCacheDir
     "print-build-platform":[] -> putStrLn $ display buildPlatform
 
-    projdir:_distdir:"package-id":[] -> do
+    "oldstyle":projdir:_distdir:"package-id":[] -> do
       let v | oVerbose opts = deafening
             | otherwise    = silent
       -- ghc-mod will catch multiple cabal files existing before we get here
@@ -156,27 +165,63 @@ main = handlePanic $ do
       putStrLn $ show $
         [Just $ ChResponseVersion (display (packageName gpd)) (toDataVersion $ packageVersion gpd)]
 
-    projdir:distdir:args' -> do
+    "v2-style":projdir:distdir_newstyle:unitid':args' -> do
+      let unitid = UnitId $ Text.pack unitid'
+      let plan_path = distdir_newstyle </> "cache" </> "plan.json"
+      plan@PlanJson {pjCabalLibVersion=Ver (makeDataVersion -> pjCabalLibVersion) }
+          <- decodePlanJson plan_path
+      case oCabalVersion opts of
+        Just ver | pjCabalLibVersion /= ver -> let
+            sver = showVersion ver
+            spjVer = showVersion pjCabalLibVersion
+          in panic $ printf "\
+\Cabal version %s was requested but plan.json was written by version %s" sver spjVer
+        _ -> case Map.lookup unitid $ pjUnits plan of
+               Just u@Unit {uType} | uType /= UnitTypeLocal -> do
+                 panic $ "\
+\UnitId '"++ unitid' ++"' points to non-local unit: " ++ ppShow u
+               Just Unit {uDistDir=Nothing} -> panic $ printf "\
+\plan.json doesn't contain 'dist-dir' for UnitId '"++ unitid' ++"'"
+               Just Unit {uType=UnitTypeLocal, uDistDir=Just distdir} ->
+                 runHelper opts projdir (Just (plan, distdir_newstyle)) distdir pjCabalLibVersion args'
+               _ -> let
+                   units = map (\(UnitId u) -> Text.unpack u)
+                         $ Map.keys
+                         $ Map.filter ((==UnitTypeLocal) . uType)
+                         $ pjUnits plan
+
+                   units_list = unlines $ map ("  "++) units
+                 in
+                   panic $ "\
+\UnitId '"++ unitid' ++"' not found in plan.json, available local units:\n" ++ units_list
+
+    "v1-style":projdir:distdir:args' -> do
       cfgf <- canonicalizePath (distdir </> "setup-config")
       mhdr <- getCabalConfigHeader cfgf
-      case mhdr of
-        Nothing -> panic $ printf "\
+      case (mhdr, oCabalVersion opts) of
+        (Nothing, _) -> panic $ printf "\
 \Could not read Cabal's persistent setup configuration header\n\
 \- Check first line of: %s\n\
 \- Maybe try: $ cabal configure" cfgf
-        Just (hdrCabalVersion, _) -> do
-          case oCabalVersion opts of
-            Just ver | hdrCabalVersion /= ver -> panic $ printf "\
+        (Just (hdrCabalVersion, _), Just ver)
+          | hdrCabalVersion /= ver -> panic $ printf "\
 \Cabal version %s was requested but setup configuration was\n\
 \written by version %s" (showVersion ver) (showVersion hdrCabalVersion)
-            _ -> do
-              eexe <- compileHelper opts hdrCabalVersion projdir distdir
-              case eexe of
-                  Left e -> exitWith e
-                  Right exe ->
-                    case args' of
-                      "print-exe":_ -> putStrLn exe
-                      _ -> do
-                        (_,_,_,h) <- createProcess $ proc exe args
-                        exitWith =<< waitForProcess h
-    _ -> error "invalid command line"
+        (Just (hdrCabalVersion, _), _) ->
+          runHelper opts projdir Nothing distdir hdrCabalVersion args'
+    _ -> do
+      hPutStrLn stderr "Invalid command line!"
+      usage
+      exitWith $ ExitFailure 1
+
+runHelper :: Options -> FilePath -> Maybe (PlanJson, FilePath) -> FilePath -> DataVersion -> [String] -> IO ()
+runHelper opts projdir mnewstyle distdir cabal_ver args' = do
+  eexe <- compileHelper opts cabal_ver projdir mnewstyle distdir
+  case eexe of
+      Left e -> exitWith e
+      Right exe -> do
+        case args' of
+          "print-exe":_ -> putStrLn exe
+          _ -> do
+            (_,_,_,h) <- createProcess $ proc exe $ projdir : distdir : args'
+            exitWith =<< waitForProcess h
