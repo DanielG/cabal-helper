@@ -1,5 +1,5 @@
 -- cabal-helper: Simple interface to Cabal's configuration state
--- Copyright (C) 2018  Daniel Gröber <dxld ÄT darkboxed DOT org>
+-- Copyright (C) 2018  Daniel Gröber <cabal-helper@dxld.at>
 --
 -- This program is free software: you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License as published by

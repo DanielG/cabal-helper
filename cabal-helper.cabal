@@ -26,8 +26,8 @@ description:
     package database.
 license:             GPL-3
 license-file:        LICENSE
-author:              Daniel Gröber <dxld@darkboxed.org>
-maintainer:          dxld@darkboxed.org
+author:              Daniel Gröber <cabal-helper@dxld.at>
+maintainer:          cabal-helper@dxld.at
 category:            Distribution
 build-type:          Simple
 cabal-version:       2.0
