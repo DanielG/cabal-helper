@@ -113,7 +113,7 @@ import Data.Version
 import Data.Typeable
 import Data.Function
 import Data.Functor.Apply
-import Distribution.Simple.BuildPaths (exeExtension)
+import Distribution.System (buildOS, OS(Windows))
 import System.Environment
 import System.FilePath hiding ((<.>))
 import qualified System.FilePath as FP
@@ -584,4 +584,6 @@ lookupEnv' :: String -> IO (Maybe String)
 lookupEnv' k = lookup k <$> getEnvironment
 
 exeExtension' :: FilePath
-exeExtension' = Distribution.Simple.BuildPaths.exeExtension
+exeExtension'
+    | Windows <- buildOS = "exe"
+    | otherwise = ""

@@ -125,10 +125,10 @@ executable cabal-helper-wrapper
   hs-source-dirs:      src
   other-modules:
                        CabalHelper.Compiletime.Compat.Environment
+                       CabalHelper.Compiletime.Compat.ProgramDb
                        CabalHelper.Compiletime.Compat.Version
                        CabalHelper.Compiletime.Compile
                        CabalHelper.Compiletime.Data
-                       CabalHelper.Compiletime.GuessGhc
                        CabalHelper.Compiletime.Log
                        CabalHelper.Compiletime.Types
                        CabalHelper.Shared.Common
@@ -169,10 +169,10 @@ test-suite compile-test
   hs-source-dirs:      src
   other-modules:
                        CabalHelper.Compiletime.Compat.Environment
+                       CabalHelper.Compiletime.Compat.ProgramDb
                        CabalHelper.Compiletime.Compat.Version
                        CabalHelper.Compiletime.Compile
                        CabalHelper.Compiletime.Data
-                       CabalHelper.Compiletime.GuessGhc
                        CabalHelper.Compiletime.Log
                        CabalHelper.Compiletime.Types
                        CabalHelper.Shared.Common
@@ -216,10 +216,10 @@ test-suite ghc-session
   hs-source-dirs:      src
   other-modules:
                        CabalHelper.Compiletime.Compat.Environment
+                       CabalHelper.Compiletime.Compat.ProgramDb
                        CabalHelper.Compiletime.Compat.Version
                        CabalHelper.Compiletime.Compile
                        CabalHelper.Compiletime.Data
-                       CabalHelper.Compiletime.GuessGhc
                        CabalHelper.Compiletime.Log
                        CabalHelper.Compiletime.Types
                        CabalHelper.Shared.Common

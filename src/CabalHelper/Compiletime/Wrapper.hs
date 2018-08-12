@@ -36,11 +36,13 @@ import Distribution.System (buildPlatform)
 import Distribution.Text (display)
 import Distribution.Verbosity (silent, deafening)
 import Distribution.Package (packageName, packageVersion)
+import Distribution.Simple.GHC as GHC (configure)
 
 import Paths_cabal_helper (version)
+import CabalHelper.Compiletime.Compat.ProgramDb
+    ( defaultProgramDb, programPath, lookupProgram, ghcProgram, ghcPkgProgram)
 import CabalHelper.Compiletime.Compat.Version
 import CabalHelper.Compiletime.Compile
-import CabalHelper.Compiletime.GuessGhc
 import CabalHelper.Compiletime.Types
 import CabalHelper.Shared.Common
 import CabalHelper.Shared.InterfaceTypes
@@ -98,13 +100,27 @@ parseCommandArgs opts argv
 
 guessProgramPaths :: Options -> IO Options
 guessProgramPaths opts = do
-    if not (same oGhcProgram opts dopts) && same oGhcPkgProgram opts dopts
-       then do
-         mghcPkg <- guessToolFromGhcPath "ghc-pkg" (oGhcProgram opts)
-         return opts {
-           oGhcPkgProgram = fromMaybe (oGhcPkgProgram opts) mghcPkg
-         }
-       else return opts
+    let v | oVerbose opts = deafening
+          | otherwise     = silent
+
+        mGhcPath0    | same oGhcProgram opts dopts = Nothing
+                     | otherwise = Just $ oGhcProgram opts
+        mGhcPkgPath0 | same oGhcPkgProgram opts dopts = Nothing
+                     | otherwise = Just $ oGhcPkgProgram opts
+
+    (_compiler, _mplatform, progdb)
+        <- GHC.configure
+               v
+               mGhcPath0
+               mGhcPkgPath0
+               defaultProgramDb
+
+    let mghcPath1    = programPath <$> lookupProgram ghcProgram progdb
+        mghcPkgPath1 = programPath <$> lookupProgram ghcPkgProgram progdb
+
+    return $ opts { oGhcProgram    = fromMaybe (oGhcProgram opts) mghcPath1
+                  , oGhcPkgProgram = fromMaybe (oGhcProgram opts) mghcPkgPath1
+                  }
  where
    same f o o'  = f o == f o'
    dopts = defaultOptions
