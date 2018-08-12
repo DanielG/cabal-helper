@@ -501,10 +501,11 @@ tryFindCabalHelperTreeDistDir :: IO (Maybe FilePath)
 tryFindCabalHelperTreeDistDir = do
   exe <- canonicalizePath =<< getExecutablePath'
   mplan <- findPlanJson exe
+  let mdistdir = takeDirectory . takeDirectory <$> mplan
   cwd <- getCurrentDirectory
 
   let candidates = sortBy (compare `on` ddType) $ concat
-        [ maybeToList $ DistDir NewBuildDist <$> mplan
+        [ maybeToList $ DistDir NewBuildDist <$> mdistdir
         , [ DistDir OldBuildDist $ (!!3) $ iterate takeDirectory exe ]
         , if takeFileName exe == "ghc" -- we're probably in ghci; try CWD
             then [ DistDir NewBuildDist $ cwd </> "dist-newstyle"
@@ -539,7 +540,10 @@ toOldBuildDistDir (DistDir NewBuildDist dir) = do
     isCabalHelperUnit
       Unit { uPId = PkgId (PkgName n) _
            , uType = UnitTypeLocal
-           } | n == "cabal-helper" = True
+           , uComps
+           } | n == "cabal-helper" &&
+               Map.member (CompNameExe "cabal-helper-wrapper") uComps
+             = True
     isCabalHelperUnit _ = False
 toOldBuildDistDir x = return $ Just x
 
