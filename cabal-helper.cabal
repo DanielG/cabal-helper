@@ -24,9 +24,8 @@ description:
     is installed into a private, isolated, package database in
     @$XDG_CACHE_HOME/cabal-helper@ so as to not interfere with the user's
     package database.
-license:             AGPL-3
+license:             GPL-3
 license-file:        LICENSE
-license-files:       LICENSE
 author:              Daniel Gröber <dxld@darkboxed.org>
 maintainer:          dxld@darkboxed.org
 category:            Distribution
