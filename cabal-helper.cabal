@@ -1,5 +1,5 @@
 name:                cabal-helper
-version:             1.0.0.0
+version:             0.8.1.1
 synopsis:
  Simple interface to some of Cabal's configuration state, mainly used by ghc-mod
 description:
