@@ -156,7 +156,7 @@ main = handlePanic $ do
     "print-appcachedir":[] -> putStrLn =<< appCacheDir
     "print-build-platform":[] -> putStrLn $ display buildPlatform
 
-    "oldstyle":projdir:_distdir:"package-id":[] -> do
+    _:projdir:_distdir:"package-id":[] -> do
       let v | oVerbose opts = deafening
             | otherwise    = silent
       -- ghc-mod will catch multiple cabal files existing before we get here
