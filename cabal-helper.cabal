@@ -95,6 +95,9 @@ library
 
   ghc-options:         -Wall
 
+  -- well actually this is a "runtime"-tool-depends :)
+  build-tool-depends:  cabal-helper:cabal-helper-wrapper
+
   build-depends:       base             < 5    && >= 4.7
   build-depends:       Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
                      , cabal-plan       < 0.4  && >= 0.3.0.0
