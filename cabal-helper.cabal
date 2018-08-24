@@ -29,7 +29,7 @@ license-file:        LICENSE
 author:              Daniel Gröber <cabal-helper@dxld.at>
 maintainer:          cabal-helper@dxld.at
 category:            Distribution
-build-type:          Simple
+build-type:          Custom
 cabal-version:       2.0
 extra-source-files:  README.md
                      src/CabalHelper/Runtime/*.hs
@@ -66,6 +66,9 @@ flag dev
   default:     False
   manual:      True
 
+custom-setup
+  setup-depends:       base
+                     , Cabal          < 3 && >= 2.0.0.0
 
 -- [Note test dependencies] Vaious tests need access to modules used in other
 -- components, unfortunately we can't use Cabal 2.0's new internal libraries for
