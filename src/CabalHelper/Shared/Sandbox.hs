@@ -34,16 +34,17 @@ import Prelude
 import qualified Data.Traversable as T
 
 -- | Get the path to the sandbox package-db in a project
-getSandboxPkgDb :: FilePath
-             -- ^ Path to the cabal package root directory (containing the
-             -- @cabal.sandbox.config@ file)
-             -> String
+getSandboxPkgDb :: String
              -- ^ Cabal build platform, i.e. @buildPlatform@
              -> Version
              -- ^ GHC version (@cProjectVersion@ is your friend)
+             -> FilePath
+             -- ^ Path to the cabal package root directory (containing the
+             -- @cabal.sandbox.config@ file)
              -> IO (Maybe FilePath)
-getSandboxPkgDb d platform ghcVer = do
-  mConf <- T.traverse readFile =<< mightExist (d </> "cabal.sandbox.config")
+getSandboxPkgDb platform ghcVer projdir = do
+  mConf <-
+      T.traverse readFile =<< mightExist (projdir </> "cabal.sandbox.config")
   return $ fixPkgDbVer <$> (extractSandboxDbDir =<< mConf)
 
  where

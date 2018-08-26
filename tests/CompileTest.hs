@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, GADTs #-}
+{-# LANGUAGE ScopedTypeVariables, GADTs, ImplicitParams #-}
 
 import System.Environment (getArgs)
 import System.Directory
@@ -44,15 +44,19 @@ setupHOME = do
 
 main :: IO ()
 main = do
+  let ?progs = defaultPrograms
+  let ?opts = defaultCompileOptions { oVerbose = True }
+
   args <- getArgs
   case args of
     "list-versions":[] -> do
-        mapM_ print =<< (allCabalVersions <$> ghcVersion defaultOptions)
+        mapM_ print =<< (allCabalVersions <$> ghcVersion)
     "list-versions":ghc_ver_str:[] ->
         mapM_ print $ allCabalVersions (parseVer ghc_ver_str)
     _ ->
         test args
 
+test :: Env => [String] -> IO ()
 test args = do
   let action
        | null args = testAllCabalVersions
@@ -135,13 +139,13 @@ allCabalVersions ghc_ver = let
     reverse $ filter (flip withinRange'CH constraint) cabal_versions
 
 
-testAllCabalVersions :: IO ()
+testAllCabalVersions :: Env => IO ()
 testAllCabalVersions = do
-  ghc_ver <- ghcVersion defaultOptions
+  ghc_ver <- ghcVersion
   let relevant_cabal_versions = allCabalVersions ghc_ver
   testCabalVersions $ map Right relevant_cabal_versions ++ [Left HEAD]
 
-testCabalVersions :: [Either HEAD Version] -> IO ()
+testCabalVersions :: Env => [Either HEAD Version] -> IO ()
 testCabalVersions versions = do
   rvs <- forM versions $ \ver -> do
            let sver = either show showVersion ver
@@ -167,9 +171,10 @@ testCabalVersions versions = do
    isLeft' (Left _) = True
    isLeft' (Right _) = False
 
-compilePrivatePkgDb :: Either HEAD Version -> IO (Either ExitCode FilePath)
+compilePrivatePkgDb
+    :: Env => Either HEAD Version -> IO (Either ExitCode FilePath)
 compilePrivatePkgDb eCabalVer = do
-    res <- E.try $ installCabal defaultOptions { oVerbose = True } eCabalVer
+    res <- E.try $ installCabal eCabalVer
     case res of
       Right (db, cabalVer) ->
           compileWithPkg db cabalVer
@@ -177,7 +182,8 @@ compilePrivatePkgDb eCabalVer = do
           print ioe
           return $ Left (ExitFailure 1)
 
-compileWithPkg :: PackageDbDir
+compileWithPkg :: Env
+               => PackageDbDir
                -> CabalVersion
                -> IO (Either ExitCode FilePath)
 compileWithPkg db cabalVer = do
@@ -187,7 +193,6 @@ compileWithPkg db cabalVer = do
     compile
       comp
       (compPaths appdir (error "compile-test: distdir not available") comp)
-      defaultOptions { oVerbose = True }
 
 
 cabalPkgId :: CabalVersion -> String
