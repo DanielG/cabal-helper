@@ -1,4 +1,5 @@
 dist/
+dist-newstyle/
 *~
 /.cabal-sandbox/
 add-source-timestamps
