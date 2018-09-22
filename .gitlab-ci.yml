@@ -1,6 +1,11 @@
 stages:
   - build
 
+before_script:
+  - mkdir -p ~/.cabal /cache/store
+  - rm -rf ~/.cabal/store
+  - ln -s /cache/store ~/.cabal/store
+
 job-ghc8.4.3-cabal-install2.2.0.0:
   image: registry.gitlab.com/dxld/ghc-mod:ghc8.4.3-cabal-install2.2.0.0
   stage: build
