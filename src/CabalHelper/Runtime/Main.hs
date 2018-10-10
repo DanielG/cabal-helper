@@ -219,6 +219,7 @@ import Text.Printf
 import CabalHelper.Shared.Sandbox
 import CabalHelper.Shared.Common
 import CabalHelper.Shared.InterfaceTypes
+import CabalHelper.Runtime.Compat
 
 usage :: IO ()
 usage = do
@@ -704,61 +705,7 @@ toDataVersion = id
 --fromDataVersion = id
 #endif
 
-componentNameToCh _uid CLibName = ChLibName
-#if CH_MIN_VERSION_Cabal(1,25,0)
--- CPP >= 1.25
-#if CH_MIN_VERSION_Cabal(2,0,0)
-componentNameToCh uid (CSubLibName n) = ChSubLibName uid
-#else
-componentNameToCh _uid (CSubLibName n) = ChSubLibName (unUnqualComponentName' n)
-#endif
-componentNameToCh uid (CFLibName   n) = ChFLibName (unUnqualComponentName' n)
-#endif
-componentNameToCh _uid (CExeName n) = ChExeName (unUnqualComponentName' n)
-componentNameToCh _uid (CTestName n) = ChTestName (unUnqualComponentName' n)
-componentNameToCh _uid (CBenchName n) = ChBenchName (unUnqualComponentName' n)
 
-#if CH_MIN_VERSION_Cabal(1,25,0)
--- CPP >= 1.25
-unUnqualComponentName' = unUnqualComponentName
-#else
-unUnqualComponentName' = id
-#endif
-
-#if !CH_MIN_VERSION_Cabal(1,25,0)
--- CPP < 1.25
-componentNameFromComponent (CLib Library {}) = CLibName
-#elif CH_MIN_VERSION_Cabal(1,25,0)
--- CPP >= 1.25 (redundant)
-componentNameFromComponent (CLib Library { libName = Nothing }) = CLibName
-componentNameFromComponent (CLib Library { libName = Just n })  = CSubLibName n
-componentNameFromComponent (CFLib ForeignLib {..}) = CFLibName foreignLibName
-#endif
-componentNameFromComponent (CExe Executable {..}) = CExeName exeName
-componentNameFromComponent (CTest TestSuite {..}) = CTestName testName
-componentNameFromComponent (CBench Benchmark {..}) = CBenchName benchmarkName
-
-componentOutDir lbi (CLib Library {..})=
-    buildDir lbi
-#if CH_MIN_VERSION_Cabal(2,0,0)
-componentOutDir lbi (CFLib ForeignLib {..}) =
-    componentOutDir' lbi (unUnqualComponentName foreignLibName)
-#endif
-componentOutDir lbi (CExe Executable {..}) =
-    componentOutDir' lbi (unUnqualComponentName' exeName)
-componentOutDir lbi (CTest TestSuite { testInterface = TestSuiteExeV10 _ _, ..}) =
-    componentOutDir' lbi (unUnqualComponentName' testName)
-componentOutDir lbi (CTest TestSuite { testInterface = TestSuiteLibV09 _ _, ..}) =
-    componentOutDir' lbi (unUnqualComponentName' testName ++ "Stub")
-componentOutDir lbi (CBench Benchmark { benchmarkInterface = BenchmarkExeV10 _ _, ..})=
-    componentOutDir' lbi (unUnqualComponentName' benchmarkName)
-
-componentOutDir' :: LocalBuildInfo -> String -> FilePath
-componentOutDir' lbi compName' =
-  ----- Copied from Distribution/Simple/GHC.hs:buildOrReplExe
-  let targetDir = (buildDir lbi) </> compName'
-      compDir    = targetDir </> (compName' ++ "-tmp")
-  in compDir
 
 componentEntrypoints :: Component -> ChEntrypoint
 componentEntrypoints (CLib Library {..})

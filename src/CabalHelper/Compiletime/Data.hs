@@ -85,6 +85,7 @@ runtimeSources :: (String, [(FilePath, FilePath)])
 runtimeSources = $(
   let files = map (\f -> (f, ("src/CabalHelper" </> f))) $ sort $
         [ ("Runtime/Main.hs")
+        , ("Runtime/Compat.hs")
         , ("Shared/Common.hs")
         , ("Shared/Sandbox.hs")
         , ("Shared/InterfaceTypes.hs")

@@ -234,6 +234,7 @@ executable cabal-helper-main
   main-is:             CabalHelper/Runtime/Main.hs
   hs-source-dirs:      src
   other-modules:
+                       CabalHelper.Runtime.Compat
                        CabalHelper.Shared.Common
                        CabalHelper.Shared.InterfaceTypes
                        CabalHelper.Shared.Sandbox
