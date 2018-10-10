@@ -27,9 +27,13 @@ module CabalHelper.Compiletime.Data where
 
 import Control.Monad
 import Control.Monad.IO.Class
+import Data.Digest.Pure.SHA
 import Data.Functor
+import Data.List
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.UTF8 as UTF8
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Lazy.UTF8 as LUTF8
 import Language.Haskell.TH
 import System.Directory
 import System.FilePath
@@ -71,11 +75,31 @@ createHelperSources dir = do
         BS.writeFile path $ UTF8.fromString src
         setFileTimes path modtime modtime
 
+sourceHash :: String
+sourceHash  = fst runtimeSources
 
 sourceFiles :: [(FilePath, String)]
-sourceFiles =
-  [ ("Runtime/Main.hs",     $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "src/CabalHelper/Runtime/Main.hs")))
-  , ("Shared/Common.hs",    $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "src/CabalHelper/Shared/Common.hs")))
-  , ("Shared/Sandbox.hs",   $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "src/CabalHelper/Shared/Sandbox.hs")))
-  , ("Shared/InterfaceTypes.hs",     $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile "src/CabalHelper/Shared/InterfaceTypes.hs")))
-  ]
+sourceFiles = snd runtimeSources
+
+runtimeSources :: (String, [(FilePath, FilePath)])
+runtimeSources = $(
+  let files = map (\f -> (f, ("src/CabalHelper" </> f))) $ sort $
+        [ ("Runtime/Main.hs")
+        , ("Shared/Common.hs")
+        , ("Shared/Sandbox.hs")
+        , ("Shared/InterfaceTypes.hs")
+        ]
+  in do
+    contents <- mapM (\lf -> runIO (LBS.readFile lf)) $ map snd files
+    let hashes = map (bytestringDigest . sha256) contents
+    let top_hash = showDigest $ sha256 $ LBS.concat hashes
+
+    thfiles <- forM (map fst files `zip` contents) $ \(f, xs) -> do
+      return $ TupE [LitE (StringL f), LitE (StringL (LUTF8.toString xs))]
+
+
+    return $ TupE [LitE (StringL top_hash), ListE thfiles]
+
+  )
+
+-- - $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile
