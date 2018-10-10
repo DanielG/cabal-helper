@@ -500,9 +500,9 @@ componentsMap lbi _v _distdir f = do
         l' <- readIORef lr
         r <- f c clbi bi
 #if CH_MIN_VERSION_Cabal(2,0,0)
-        writeIORef lr $ (componentNameToCh (unUnitId $ componentUnitId clbi) name, r):l'
+        writeIORef lr $ (componentNameToCh name, r):l'
 #else
-        writeIORef lr $ (componentNameToCh "" name, r):l'
+        writeIORef lr $ (componentNameToCh name, r):l'
 #endif
 
     reverse <$> readIORef lr

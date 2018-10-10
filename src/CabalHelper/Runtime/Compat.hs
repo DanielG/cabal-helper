@@ -150,15 +150,15 @@ type UnitId = InstalledPackageId
 
 
 
-componentNameToCh :: a -> ComponentName -> ChComponentName
-componentNameToCh _ CLibName = ChLibName
+componentNameToCh :: ComponentName -> ChComponentName
+componentNameToCh CLibName = ChLibName
 #if CH_MIN_VERSION_Cabal(2,0,0)
-componentNameToCh _ (CSubLibName n) = ChSubLibName (unUnqualComponentName' n)
-componentNameToCh _ (CFLibName n) = ChFLibName (unUnqualComponentName' n)
+componentNameToCh (CSubLibName n) = ChSubLibName (unUnqualComponentName' n)
+componentNameToCh (CFLibName n) = ChFLibName (unUnqualComponentName' n)
 #endif
-componentNameToCh _ (CExeName n) = ChExeName (unUnqualComponentName' n)
-componentNameToCh _ (CTestName n) = ChTestName (unUnqualComponentName' n)
-componentNameToCh _ (CBenchName n) = ChBenchName (unUnqualComponentName' n)
+componentNameToCh (CExeName n) = ChExeName (unUnqualComponentName' n)
+componentNameToCh (CTestName n) = ChTestName (unUnqualComponentName' n)
+componentNameToCh (CBenchName n) = ChBenchName (unUnqualComponentName' n)
 
 
 #if CH_MIN_VERSION_Cabal(1,25,0)
