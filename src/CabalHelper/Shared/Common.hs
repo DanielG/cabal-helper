@@ -61,8 +61,10 @@ import System.FilePath
 import Text.ParserCombinators.ReadP
 import Prelude
 
-data Panic = Panic String deriving (Typeable, Show)
+data Panic = Panic String deriving (Typeable)
 instance Exception Panic
+instance Show Panic where
+    show (Panic msg) = "panic! " ++ msg
 
 panic :: String -> a
 panic msg = throw $ Panic msg
