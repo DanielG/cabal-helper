@@ -162,3 +162,8 @@ readPackageDescription = P.readGenericPackageDescription
 #else
 readPackageDescription = P.readPackageDescription
 #endif
+
+mightExist :: FilePath -> IO (Maybe FilePath)
+mightExist f = do
+  exists <- doesFileExist f
+  return $ if exists then (Just f) else (Nothing)

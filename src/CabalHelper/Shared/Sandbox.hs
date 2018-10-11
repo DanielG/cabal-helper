@@ -28,10 +28,11 @@ import Data.Maybe
 import Data.List
 import Data.Version
 import System.FilePath
-import System.Directory
 import Prelude
 
 import qualified Data.Traversable as T
+
+import CabalHelper.Shared.Common
 
 -- | Get the path to the sandbox package-db in a project
 getSandboxPkgDb :: String
@@ -67,12 +68,6 @@ extractSandboxDbDir conf = extractValue <$> parse conf
 
     parse = listToMaybe . filter (key `isPrefixOf`) . lines
     extractValue = CabalHelper.Shared.Sandbox.dropWhileEnd isSpace . dropWhile isSpace . drop keyLen
-
-
-mightExist :: FilePath -> IO (Maybe FilePath)
-mightExist f = do
-  exists <- doesFileExist f
-  return $ if exists then (Just f) else (Nothing)
 
 -- dropWhileEnd is not provided prior to base 4.5.0.0.
 dropWhileEnd :: (a -> Bool) -> [a] -> [a]
