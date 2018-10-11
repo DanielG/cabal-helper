@@ -26,5 +26,6 @@ module CabalHelper.Compiletime.Compat.ProgramDb
 import Distribution.Simple.Program
 
 #if !MIN_VERSION_Cabal(2,0,0)
+defaultProgramDb :: ProgramConfiguration
 defaultProgramDb = defaultProgramConfiguration
 #endif

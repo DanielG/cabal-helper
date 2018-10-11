@@ -28,6 +28,19 @@ module CabalHelper.Shared.Common where
 #define CH_MIN_VERSION_Cabal MIN_VERSION_Cabal
 #endif
 
+import Distribution.PackageDescription
+    ( GenericPackageDescription
+    )
+import Distribution.Verbosity
+    ( Verbosity
+    )
+
+#if CH_MIN_VERSION_Cabal(2,2,0)
+import qualified Distribution.PackageDescription.Parsec as P
+#else
+import qualified Distribution.PackageDescription.Parse as P
+#endif
+
 import Control.Applicative
 import Control.Exception as E
 import Control.Monad
@@ -39,11 +52,6 @@ import Data.Typeable
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
-#if CH_MIN_VERSION_Cabal(2,2,0)
-import qualified Distribution.PackageDescription.Parsec as P
-#else
-import qualified Distribution.PackageDescription.Parse as P
-#endif
 import System.Environment
 import System.IO
 import qualified System.Info
@@ -143,7 +151,11 @@ replace n r hs' = go "" hs'
    go acc [] = reverse acc
 
 
-#if CH_MIN_VERSION_Cabal(2,2,0)
+readPackageDescription
+    :: Verbosity
+    -> FilePath
+    -> IO GenericPackageDescription
+#if CH_MIN_VERSION_Cabal(2,0,0)
 readPackageDescription = P.readGenericPackageDescription
 #else
 readPackageDescription = P.readPackageDescription
