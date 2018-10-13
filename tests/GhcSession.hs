@@ -79,7 +79,7 @@ setup topdir act (srcdir, min_cabal_ver, min_ghc_ver) = do
         putStrLn $ "Running test '" ++ srcdir ++ "' ------------------------------"
         withSystemTempDirectory "cabal-helper.ghc-session.test" $ \dir -> do
           setCurrentDirectory $ topdir </> srcdir
-          run "cabal" [ "sdist", "--output-dir", dir ]
+          run "cabal" [ "sdist", "-v0", "--output-dir", dir ]
 
           setCurrentDirectory dir
           run "cabal" [ "configure" ]
