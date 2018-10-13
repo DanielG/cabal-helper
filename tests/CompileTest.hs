@@ -76,12 +76,7 @@ allCabalVersions :: Version -> [Version]
 allCabalVersions ghc_ver = let
     cabal_versions :: [Version]
     cabal_versions = map parseVer
-         -- "1.14.0" -- not supported at runtime
-         [ "1.16.0"
-         , "1.16.0.1"
-         , "1.16.0.2"
-         , "1.16.0.3"
-         , "1.18.0"
+         [ "1.18.0"
          , "1.18.1"
          , "1.18.1.1"
          , "1.18.1.2"
@@ -124,9 +119,7 @@ allCabalVersions ghc_ver = let
 
     constraint_table =
         map (parseVer *** runReadP'Dist parse) $
-            [ ("7.4"  , ">= 1.14    && < 2")
-            , ("7.6"  , ">= 1.16    && < 2")
-            , ("7.8"  , ">= 1.18    && < 2")
+            [ ("7.8"  , ">= 1.18    && < 2")
             , ("7.10" , ">= 1.22.2  && < 2")
             , ("8.0.1", ">= 1.24          ")
             , ("8.0.2", ">= 1.24.2        ")
