@@ -46,6 +46,9 @@ module Distribution.Helper (
   , UnitInfo(..)
   , unitQuery
 
+  -- ** Convenience Queries
+  , allUnits
+
   -- * Query environment
   , QueryEnv -- abstract
   , mkQueryEnv
@@ -268,7 +271,9 @@ projectUnits = Query $ \qe@QueryEnv{qeDistDir} ->
 unitQuery          :: Unit -> Query pt UnitInfo
 unitQuery u = Query $ \qe -> getUnitInfo qe u
 
-
+-- | Get information on all units in a project.
+allUnits :: (UnitInfo -> a) -> Query pt [a]
+allUnits f = map f <$> (mapM unitQuery =<< projectUnits)
 
 -- | Run @cabal configure@
 reconfigure :: MonadIO m

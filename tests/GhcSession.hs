@@ -92,14 +92,10 @@ run x xs = do
   ExitSuccess <- rawSystem x xs
   return ()
 
-allComponents :: Query pt [ChComponentInfo]
-allComponents =
-    concat . map (Map.elems . uiComponents) <$> (mapM unitQuery =<< projectUnits)
-
 test :: FilePath -> IO [Bool]
 test dir = do
     qe <- mkQueryEnv (ProjDirV1 dir) (DistDirV1 $ dir </> "dist")
-    cs <- runQuery allComponents qe
+    cs <- runQuery (concat <$> allUnits (Map.elems . uiComponents)) qe
     forM cs $ \ChComponentInfo{..} -> do
         putStrLn $ "\n" ++ show ciComponentName ++ ":::: " ++ show ciNeedsBuildOutput
 
