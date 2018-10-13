@@ -75,7 +75,7 @@ data Compile
       }
 
 data CompPaths = CompPaths
-    { compSrcDir  :: FilePath
+    { compBuildDir:: FilePath
     , compOutDir  :: FilePath
     , compExePath :: FilePath
     }
@@ -93,7 +93,7 @@ compileHelper
     -> Maybe (PlanJson, FilePath)
     -> FilePath
     -> IO (Either ExitCode FilePath)
-compileHelper opts hdrCabalVersion projdir mnewstyle distdir = do
+compileHelper opts hdrCabalVersion projdir mnewstyle cachedir = do
     let ?opts = opts
 
     ghcVer <- ghcVersion
@@ -112,7 +112,7 @@ compileHelper opts hdrCabalVersion projdir mnewstyle distdir = do
 
     appdir <- appCacheDir
 
-    let cp@CompPaths {compExePath} = compPaths appdir distdir comp
+    let cp@CompPaths {compExePath} = compPaths appdir cachedir comp
     exists <- doesFileExist compExePath
     if exists
       then do
@@ -175,7 +175,7 @@ compileHelper opts hdrCabalVersion projdir mnewstyle distdir = do
          db_exists <- liftIO $ cabalVersionExistsInPkgDb hdrCabalVersion db
          when (not db_exists) $
            void $ installCabal (Right hdrCabalVersion) `E.catch`
-             \(SomeException _) -> errorInstallCabal hdrCabalVersion distdir
+             \(SomeException _) -> errorInstallCabal hdrCabalVersion cachedir
 
    -- | See if we're in a cabal source tree
    compileCabalSource :: Env => MaybeT IO (IO (), Compile)
@@ -219,30 +219,30 @@ compileHelper opts hdrCabalVersion projdir mnewstyle distdir = do
 compile :: Env => Compile -> CompPaths -> IO (Either ExitCode FilePath)
 compile comp paths@CompPaths {..} = do
     createDirectoryIfMissing True compOutDir
-    createHelperSources compSrcDir
+    createHelperSources compBuildDir
 
-    vLog $ "compSrcDir: " ++ compSrcDir
+    vLog $ "compBuildDir: " ++ compBuildDir
     vLog $ "compOutDir: " ++ compOutDir
     vLog $ "compExePath: " ++ compExePath
 
     invokeGhc $ compGhcInvocation comp paths
 
 compPaths :: FilePath -> FilePath -> Compile -> CompPaths
-compPaths appdir distdir c =
+compPaths appdir cachedir c =
     case c of
       CompileWithCabalPackage {compProductTarget=CPSGlobal,..} -> CompPaths {..}
         where
-          compSrcDir  = appdir </> exeName compCabalVersion <.> "build"
-          compOutDir  = compSrcDir
-          compExePath = appdir </> exeName compCabalVersion
+          compBuildDir = appdir </> sourceHash <.> "build"
+          compOutDir  = compBuildDir
+          compExePath = compBuildDir </> "cabal-helper"
 
-      CompileWithCabalPackage {compProductTarget=CPSProject,..} -> distdirPaths
-      CompileWithCabalSource {..} -> distdirPaths
+      CompileWithCabalPackage {compProductTarget=CPSProject,..} -> cachedirPaths
+      CompileWithCabalSource {..} -> cachedirPaths
   where
-    distdirPaths = CompPaths {..}
+    cachedirPaths = CompPaths {..}
         where
-          compSrcDir  = distdir </> "cabal-helper"
-          compOutDir  = compSrcDir
+          compBuildDir = cachedir </> "cabal-helper"
+          compOutDir  = compBuildDir
           compExePath = compOutDir </> "cabal-helper"
 
 data GhcInvocation = GhcInvocation
@@ -262,7 +262,7 @@ compGhcInvocation comp CompPaths {..} =
     case comp of
       CompileWithCabalSource {..} ->
         GhcInvocation
-          { giIncludeDirs = [compSrcDir, unCabalSourceDir compCabalSourceDir]
+          { giIncludeDirs = [compBuildDir, unCabalSourceDir compCabalSourceDir]
           , giPackageDBs  = []
           , giHideAllPackages = False
           , giPackages    = []
@@ -272,7 +272,7 @@ compGhcInvocation comp CompPaths {..} =
           }
       CompileWithCabalPackage {..} ->
         GhcInvocation
-          { giIncludeDirs = [compSrcDir]
+          { giIncludeDirs = [compBuildDir]
           , giPackageDBs = maybeToList compPackageDb
           , giHideAllPackages = True
           , giPackages =
@@ -300,7 +300,7 @@ compGhcInvocation comp CompPaths {..} =
     giOutDir = compOutDir
     giOutput = compExePath
     giWarningFlags = [ "-w" ] -- no point in bothering end users with warnings
-    giInputs = [compSrcDir</>"CabalHelper"</>"Runtime"</>"Main.hs"]
+    giInputs = [compBuildDir</>"CabalHelper"</>"Runtime"</>"Main.hs"]
 
 cabalVersionMacro :: Version -> String
 cabalVersionMacro (Version vs _) =
