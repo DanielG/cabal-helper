@@ -1,10 +1,11 @@
-dist/
-dist-newstyle/
+dist*/
 *~
 /.cabal-sandbox/
 add-source-timestamps
 package.cache
 cabal.sandbox.config
+cabal.project.local
+.ghc.environment.*
 # Mac OS generates
 # .DS_Store
 *.o
