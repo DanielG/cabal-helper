@@ -109,6 +109,8 @@ allCabalVersions ghc_ver = let
          , "2.0.1.1"
          , "2.2.0.0"
          , "2.2.0.1"
+         , "2.4.0.0"
+         , "2.4.0.1"
          ]
 
     constraint :: VersionRange
