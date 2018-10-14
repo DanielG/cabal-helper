@@ -151,9 +151,9 @@ type UnitId = InstalledPackageId
 
 
 componentNameToCh :: ComponentName -> ChComponentName
-componentNameToCh CLibName = ChLibName
+componentNameToCh CLibName = ChLibName ChMainLibName
 #if CH_MIN_VERSION_Cabal(2,0,0)
-componentNameToCh (CSubLibName n) = ChSubLibName (unUnqualComponentName' n)
+componentNameToCh (CSubLibName n) = ChLibName $ ChSubLibName (unUnqualComponentName' n)
 componentNameToCh (CFLibName n) = ChFLibName (unUnqualComponentName' n)
 #endif
 componentNameToCh (CExeName n) = ChExeName (unUnqualComponentName' n)

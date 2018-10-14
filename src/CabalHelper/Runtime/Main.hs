@@ -14,7 +14,11 @@
 -- You should have received a copy of the GNU General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-{-# LANGUAGE CPP, BangPatterns, RecordWildCards, RankNTypes, ViewPatterns #-}
+{-# LANGUAGE CPP, BangPatterns, RecordWildCards, RankNTypes, ViewPatterns,
+  TupleSections #-}
+
+{- # OPTIONS_GHC -Wno-missing-signatures #-}
+{- # OPTIONS_GHC -fno-warn-incomplete-patterns #-}
 
 #ifdef MIN_VERSION_Cabal
 #undef CH_MIN_VERSION_Cabal
@@ -34,7 +38,7 @@ import Distribution.PackageDescription
   ( PackageDescription
   , GenericPackageDescription(..)
   , Flag(..)
-  , FlagName(..)
+  , FlagName
   , FlagAssignment
   , Executable(..)
   , Library(..)
@@ -65,7 +69,7 @@ import Distribution.Simple.LocalBuildInfo
   , ComponentLocalBuildInfo(..)
   , componentBuildInfo
   , externalPackageDeps
-  , withComponentsLBI
+  , withAllComponentsInBuildOrder
   , withLibLBI
   , withExeLBI
   )
@@ -141,7 +145,13 @@ import Distribution.Types.ForeignLib
   ( ForeignLib(..)
   )
 import Distribution.Types.UnqualComponentName
-  ( unUnqualComponentName
+  ( UnqualComponentName
+  , unUnqualComponentName
+  )
+#else
+-- <1.25
+import Distribution.PackageDescription
+  ( FlagName(FlagName)
   )
 #endif
 
@@ -198,12 +208,12 @@ import Distribution.Types.GenericPackageDescription
   )
 #endif
 
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (<*>), ZipList(..))
 import Control.Arrow (first, second, (&&&))
 import Control.Monad
 import Control.Exception (catch, PatternMatchFail(..))
 import Data.List
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 import Data.Maybe
 import Data.Monoid
 import Data.IORef
@@ -227,42 +237,26 @@ usage = do
   hPutStr stderr $ "Usage: " ++ prog ++ " " ++ usageMsg
  where
    usageMsg = ""
-     ++"PROJ_DIR DIST_DIR [--with-* ...] (\n"
-     ++"    version\n"
-     ++"  | print-lbi [--human]\n"
-     ++"  | package-id\n"
+     ++"PROJ_DIR DIST_DIR [--with-* ...]\n"
+     ++"  ( version\n"
      ++"  | flags\n"
      ++"  | config-flags\n"
      ++"  | non-default-config-flags\n"
      ++"  | write-autogen-files\n"
      ++"  | compiler-version\n"
-     ++"  | ghc-options     [--with-inplace]\n"
-     ++"  | ghc-src-options [--with-inplace]\n"
-     ++"  | ghc-pkg-options [--with-inplace]\n"
-     ++"  | ghc-merged-pkg-options [--with-inplace]\n"
-     ++"  | ghc-lang-options [--with-inplace]\n"
-     ++"  | package-db-stack\n"
-     ++"  | entrypoints\n"
-     ++"  | needs-build-output\n"
-     ++"  | source-dirs\n"
+     ++"  | component-info\n"
+     ++"  | print-lbi [--human]\n"
      ++"  ) ...\n"
 
 commands :: [String]
-commands = [ "print-lbi"
-           , "package-id"
-           , "flags"
+commands = [ "flags"
            , "config-flags"
            , "non-default-config-flags"
            , "write-autogen-files"
            , "compiler-version"
-           , "ghc-options"
-           , "ghc-src-options"
-           , "ghc-pkg-options"
-           , "ghc-lang-options"
            , "package-db-stack"
-           , "entrypoints"
-           , "needs-build-output"
-           , "source-dirs"
+           , "component-info"
+           , "print-lbi"
            ]
 
 main :: IO ()
@@ -352,55 +346,6 @@ main = do
       let CompilerId comp ver = compilerId $ compiler lbi
       return $ Just $ ChResponseVersion (show comp) (toDataVersion ver)
 
-    "ghc-options":flags -> do
-      res <- componentOptions lvd True flags id
-      return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
-
-    "ghc-src-options":flags -> do
-      res <- componentOptions lvd False flags $ \opts -> mempty {
-               -- Not really needed but "unexpected package db stack: []"
-               ghcOptPackageDBs      = [GlobalPackageDB, UserPackageDB],
-
-               ghcOptCppOptions      = ghcOptCppOptions opts,
-               ghcOptCppIncludePath  = ghcOptCppIncludePath opts,
-               ghcOptCppIncludes     = ghcOptCppIncludes opts,
-               ghcOptFfiIncludes     = ghcOptFfiIncludes opts,
-               ghcOptSourcePathClear = ghcOptSourcePathClear opts,
-               ghcOptSourcePath      = ghcOptSourcePath opts
-              }
-      return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
-
-    "ghc-pkg-options":flags -> do
-      res <- componentOptions lvd True flags $ \opts -> mempty {
-                       ghcOptPackageDBs = ghcOptPackageDBs opts,
-                       ghcOptPackages   = ghcOptPackages opts,
-                       ghcOptHideAllPackages = ghcOptHideAllPackages opts
-                   }
-      return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
-
-    "ghc-merged-pkg-options":flags -> do
-      res <- mconcat . map snd <$> (componentOptions' lvd True flags (\_ _ o -> return o) $ \opts -> mempty {
-                       ghcOptPackageDBs = [],
-                       ghcOptHideAllPackages = NoFlag,
-                       ghcOptPackages   = ghcOptPackages opts
-                   })
-
-      let res' = nubPackageFlags $ res { ghcOptPackageDBs = withPackageDB lbi
-                                       , ghcOptHideAllPackages = Flag True
-                                       }
-
-      Just . ChResponseList <$> renderGhcOptions' lbi v res'
-
-    "ghc-lang-options":flags -> do
-      res <- componentOptions lvd False flags $ \opts -> mempty {
-                       ghcOptPackageDBs      = [GlobalPackageDB, UserPackageDB],
-
-                       ghcOptLanguage = ghcOptLanguage opts,
-                       ghcOptExtensions = ghcOptExtensions opts,
-                       ghcOptExtensionMap = ghcOptExtensionMap opts
-                   }
-      return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
-
     "package-db-stack":[] -> do
       let
           pkgDb GlobalPackageDB = ChPkgGlobal
@@ -410,37 +355,9 @@ main = do
       -- TODO: Setup.hs has access to the sandbox as well: ghc-mod#478
       return $ Just $ ChResponsePkgDbs $ map pkgDb $ withPackageDB lbi
 
-    "entrypoints":[] -> do
-#if CH_MIN_VERSION_Cabal(2,0,0)
-      includeDirMap <- recursiveDepInfo lbi v distdir
-      eps <- componentsMap lbi v distdir $ \c clbi _bi -> do
-               case needsBuildOutput includeDirMap (componentUnitId clbi) of
-                 ProduceBuildOutput -> return $ componentEntrypoints c
-                 NoBuildOutput -> return seps
-                   where (_,_,seps) = recursiveIncludeDirs includeDirMap (componentUnitId clbi)
-#else
-      eps <- componentsMap lbi v distdir $ \c _clbi _bi ->
-               return $ componentEntrypoints c
-#endif
-      -- MUST append Setup component at the end otherwise CabalHelper gets
-      -- confused
-      let eps' = eps ++ [(ChSetupHsName, ChSetupEntrypoint)]
-      return $ Just $ ChResponseEntrypoints eps'
-
-    "needs-build-output":[] -> do
-#if CH_MIN_VERSION_Cabal(2,0,0)
-      includeDirMap <- recursiveDepInfo lbi v distdir
-      nbs <- componentsMap lbi v distdir $ \c clbi _bi ->
-               return $ needsBuildOutput includeDirMap (componentUnitId clbi)
-#else
-      nbs <- componentsMap lbi v distdir $ \c _clbi _bi ->
-               return $ NoBuildOutput
-#endif
-      return $ Just $ ChResponseNeedsBuild nbs
-
-    "source-dirs":[] -> do
-      res <- componentsMap lbi v distdir $$ \_ _ bi -> return $ hsSourceDirs bi
-      return $ Just $ ChResponseCompList (res ++ [(ChSetupHsName, [])])
+    "component-info":flags -> do
+      res <- componentsInfo flags lvd lbi v distdir
+      return $ Just $ ChResponseComponentsInfo res
 
     "print-lbi":flags ->
       case flags of
@@ -452,6 +369,83 @@ main = do
     _ ->
             errMsg "Invalid usage!" >> usage >> exitFailure
 
+
+componentsInfo
+    :: [String]
+    -> (LocalBuildInfo, Verbosity, FilePath)
+    -> LocalBuildInfo
+    -> Verbosity
+    -> FilePath
+    -> IO (Map.Map ChComponentName ChComponentInfo)
+componentsInfo flags lvd lbi v distdir = do
+      ciGhcOptions <- componentOptions lvd True flags id
+
+      ciGhcSrcOptions <- componentOptions lvd False flags $ \opts -> mempty {
+               -- Not really needed but "unexpected package db stack: []"
+               ghcOptPackageDBs      = [GlobalPackageDB, UserPackageDB],
+
+               ghcOptCppOptions      = ghcOptCppOptions opts,
+               ghcOptCppIncludePath  = ghcOptCppIncludePath opts,
+               ghcOptCppIncludes     = ghcOptCppIncludes opts,
+               ghcOptFfiIncludes     = ghcOptFfiIncludes opts,
+               ghcOptSourcePathClear = ghcOptSourcePathClear opts,
+               ghcOptSourcePath      = ghcOptSourcePath opts
+              }
+
+      ciGhcPkgOptions <- componentOptions lvd True flags $ \opts -> mempty {
+                       ghcOptPackageDBs = ghcOptPackageDBs opts,
+                       ghcOptPackages   = ghcOptPackages opts,
+                       ghcOptHideAllPackages = ghcOptHideAllPackages opts
+                   }
+
+      ciGhcLangOptions <- componentOptions lvd False flags $ \opts -> mempty {
+                       ghcOptPackageDBs      = [GlobalPackageDB, UserPackageDB],
+
+                       ghcOptLanguage = ghcOptLanguage opts,
+                       ghcOptExtensions = ghcOptExtensions opts,
+                       ghcOptExtensionMap = ghcOptExtensionMap opts
+                   }
+
+      ciSourceDirs <- componentsMap lbi v distdir $ \_ _ bi -> return $ hsSourceDirs bi
+
+#if CH_MIN_VERSION_Cabal(2,0,0)
+      includeDirMap <- recursiveDepInfo lbi v distdir
+      ciEntrypoints <- componentsMap lbi v distdir $ \c clbi _bi -> do
+               case needsBuildOutput includeDirMap (componentUnitId clbi) of
+                 ProduceBuildOutput -> return $ componentEntrypoints c
+                 NoBuildOutput -> return seps
+                   where (_,_,seps) = recursiveIncludeDirs includeDirMap (componentUnitId clbi)
+#else
+      ciEntrypoints <- componentsMap lbi v distdir $ \c _clbi _bi ->
+               return $ componentEntrypoints c
+#endif
+
+#if CH_MIN_VERSION_Cabal(2,0,0)
+      ciNeedsBuildOutput <- componentsMap lbi v distdir $ \_c clbi _bi ->
+               return $ needsBuildOutput includeDirMap (componentUnitId clbi)
+#else
+      ciNeedsBuildOutput <- componentsMap lbi v distdir $ \_c _clbi _bi ->
+               return $ NoBuildOutput
+#endif
+
+      let comp_name = map fst ciGhcOptions
+          uiComponents = Map.fromList
+                      $ map (ciComponentName &&& id)
+                      $ getZipList
+                      $ ChComponentInfo
+                     <$> ZipList comp_name
+                     <*> ZipList (map snd ciGhcOptions)
+                     <*> ZipList (map snd ciGhcSrcOptions)
+                     <*> ZipList (map snd ciGhcPkgOptions)
+                     <*> ZipList (map snd ciGhcLangOptions)
+                     <*> ZipList (map snd ciSourceDirs)
+                     <*> ZipList (map snd ciEntrypoints)
+                     <*> ZipList (map snd ciNeedsBuildOutput)
+
+      return uiComponents
+
+
+flagName' :: Distribution.PackageDescription.Flag -> String
 flagName' = unFlagName . flagName
 
 -- getLibrary :: PackageDescription -> Library
@@ -460,20 +454,15 @@ flagName' = unFlagName . flagName
 --   withLib pd (writeIORef lr)
 --   readIORef lr
 
+getLibraryClbi
+    :: PackageDescription
+    -> LocalBuildInfo
+    -> Maybe (Library, ComponentLocalBuildInfo)
 getLibraryClbi pd lbi = unsafePerformIO $ do
   lr <- newIORef Nothing
 
   withLibLBI pd lbi $ \ lib clbi ->
       writeIORef lr $ Just (lib,clbi)
-
-  readIORef lr
-
-
-getExeClbi pd lbi = unsafePerformIO $ do
-  lr <- newIORef Nothing
-
-  withExeLBI pd lbi $ \ exe clbi ->
-      writeIORef lr $ Just (exe,clbi)
 
   readIORef lr
 
@@ -493,20 +482,23 @@ componentsMap lbi _v _distdir f = do
 
     -- withComponentsLBI is deprecated but also exists in very old versions
     -- it's equivalent to withAllComponentsInBuildOrder in newer versions
-    withComponentsLBI pd lbi $ \c clbi -> do
+    withAllComponentsInBuildOrder pd lbi $ \c clbi -> do
         let bi = componentBuildInfo c
-            name = componentNameFromComponent c
+            name = componentNameToCh $ componentNameFromComponent c
 
         l' <- readIORef lr
         r <- f c clbi bi
-#if CH_MIN_VERSION_Cabal(2,0,0)
-        writeIORef lr $ (componentNameToCh name, r):l'
-#else
-        writeIORef lr $ (componentNameToCh name, r):l'
-#endif
+        writeIORef lr $ (name, r) : l'
 
     reverse <$> readIORef lr
 
+componentOptions'
+    :: (LocalBuildInfo, Verbosity, FilePath)
+    -> Bool
+    -> [String]
+    -> (LocalBuildInfo -> Verbosity -> GhcOptions -> IO a)
+    -> (GhcOptions -> GhcOptions)
+    -> IO [(ChComponentName, a)]
 componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
   let pd = localPkgDescr lbi
 #if CH_MIN_VERSION_Cabal(2,0,0)
@@ -529,11 +521,17 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
 
          in rf lbi v $ nubPackageFlags $ opts' `mappend` adopts
 
+componentOptions :: (LocalBuildInfo, Verbosity, FilePath)
+                 -> Bool
+                 -> [String]
+                 -> (GhcOptions -> GhcOptions)
+                 -> IO [(ChComponentName, [String])]
 componentOptions (lbi, v, distdir) inplaceFlag flags f =
     componentOptions' (lbi, v, distdir) inplaceFlag flags renderGhcOptions' f
 
 gmModuleName :: C.ModuleName -> ChModuleName
 gmModuleName = ChModuleName . intercalate "." . components
+
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
 removeInplaceDeps :: Verbosity
@@ -571,7 +569,7 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
              , ghcOptPackages   = ghcOptPackages   opts <> toNubListR extraDeps }
 
     libopts =
-      case (getLibraryClbi pd lbi,getExeClbi pd lbi) of
+      case (getLibraryClbi pd lbi, getExeClbi pd lbi) of
         (Just (lib, libclbi),_) | hasIdeps ->
           let
             libbi = libBuildInfo lib
@@ -594,7 +592,21 @@ removeInplaceDeps _v lbi pd clbi includeDirs = let
                  NoBuildOutput -> libopts
                  ProduceBuildOutput -> mempty { ghcOptPackageDBs = [SpecificPackageDB packageDbDir] }
   in (clbi', libopts')
+
+getExeClbi
+    :: PackageDescription
+    -> LocalBuildInfo
+    -> Maybe (Executable, ComponentLocalBuildInfo)
+getExeClbi pd lbi = unsafePerformIO $ do
+  lr <- newIORef Nothing
+
+  withExeLBI pd lbi $ \ exe clbi ->
+      writeIORef lr $ Just (exe,clbi)
+
+  readIORef lr
+
 #else
+
 removeInplaceDeps :: Verbosity
                   -> LocalBuildInfo
                   -> PackageDescription
@@ -616,10 +628,16 @@ removeInplaceDeps _v lbi pd clbi = let
         _ -> mempty
     clbi' = clbi { componentPackageDeps = deps }
   in (clbi', libopts)
+
 #endif
 
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
+recursiveDepInfo
+    :: LocalBuildInfo
+    -> Verbosity
+    -> FilePath
+    -> IO (Map.Map UnitId SubDeps)
 recursiveDepInfo lbi v distdir = do
   includeDirs <- componentsMap lbi v distdir $ \c clbi bi -> do
     return (componentUnitId clbi
@@ -656,7 +674,7 @@ needsBuildOutput includeDirs unit = go [unit]
     go [] = NoBuildOutput
     go (u:us) = case Map.lookup u includeDirs of
       Nothing -> go us
-      Just (SubDeps us' sfp sci sep) ->
+      Just (SubDeps us' _sfp sci _sep) ->
         if any (isIndef . fst) sci
           then ProduceBuildOutput
           else go (us++us')
@@ -666,31 +684,32 @@ needsBuildOutput includeDirs unit = go [unit]
 -- current accumulated value, and the second one is the current sub-dependency
 -- being considered. So the bias should be to preserve the type of entrypoint
 -- from the first parameter.
+combineEp :: Maybe ChEntrypoint -> ChEntrypoint -> ChEntrypoint
 combineEp Nothing e = e
 combineEp (Just ChSetupEntrypoint) e = e
 combineEp (Just (ChLibEntrypoint es1 os1 ss1))   (ChLibEntrypoint es2 os2 ss2) = (ChLibEntrypoint (nub $ es2++es1) (nub $ os2++os1) (nub $ ss2++ss1))
-combineEp _                                    e@(ChExeEntrypoint  mi os2)     = error $ "combineEP: cannot have a sub exe:" ++ show e
+combineEp _                                    e@(ChExeEntrypoint  _mi _os2)     = error $ "combineEP: cannot have a sub exe:" ++ show e
 combineEp (Just (ChExeEntrypoint  mi os1))       (ChLibEntrypoint es2 os2 ss2) = (ChExeEntrypoint mi  (nub $ os1++es2++os2++ss2))
 
 -- no, you unconditionally always wrap the result in Just, so instead of `f x = Just y; f x = Just z` do `f x = y; f x = z` and use f as `Just . f`
 
-
-
-instantiatedGhcPackage :: (ModuleName,OpenModule) -> [(OpenUnitId, ModuleRenaming)]
-instantiatedGhcPackage (_,OpenModule oui@(DefiniteUnitId _) _) = [(oui,DefaultRenaming)]
-instantiatedGhcPackage (_, _) = []
 #endif
 
+
+initialBuildStepsForAllComponents
+    :: FilePath
+    -> PackageDescription
+    -> LocalBuildInfo
+    -> Verbosity
+    -> IO ()
 initialBuildStepsForAllComponents distdir pd lbi v =
   initialBuildSteps distdir pd lbi v
 
 
 
-
-
-
 #if !CH_MIN_VERSION_Cabal(1,25,0)
 -- CPP < 1.25
+unFlagName :: FlagName -> String
 unFlagName (FlagName n) = n
 -- mkFlagName n = FlagName n
 #endif
@@ -742,14 +761,14 @@ componentEntrypoints (CBench Benchmark {})
 #if CH_MIN_VERSION_Cabal(2,0,0)
 isInplaceCompInc :: ComponentLocalBuildInfo -> (OpenUnitId, ModuleRenaming) -> Bool
 isInplaceCompInc clbi (DefiniteUnitId uid, _mr)     = unDefUnitId uid `elem` componentInternalDeps clbi
-isInplaceCompInc clbi (IndefFullUnitId uid _, _mmr) = False
+isInplaceCompInc _clbi (IndefFullUnitId _uid _, _mmr) = False
 #endif
 
 #if CH_MIN_VERSION_Cabal(2,0,0)
-isInplaceDep :: LocalBuildInfo -> ComponentLocalBuildInfo -> (UnitId, MungedPackageId) -> Bool
-isInplaceDep lbi clbi (uid, _mpid) = uid `elem` componentInternalDeps clbi
+-- isInplaceDep :: LocalBuildInfo -> ComponentLocalBuildInfo -> (UnitId, MungedPackageId) -> Bool
+-- isInplaceDep lbi clbi (uid, _mpid) = uid `elem` componentInternalDeps clbi
 #else
-isInplaceDep :: LocalBuildInfo -> (InstalledPackageId, PackageId) -> Bool
+isInplaceDep :: LocalBuildInfo -> (UnitId, PackageId) -> Bool
 #  if CH_MIN_VERSION_Cabal(1,23,0)
 -- CPP >= 1.23
 isInplaceDep lbi (ipid, _pid) = localUnitId lbi == ipid
@@ -759,6 +778,7 @@ isInplaceDep _lbi (ipid, pid) = inplacePackageId pid == ipid
 #  endif
 #endif
 
+nubPackageFlags :: GhcOptions -> GhcOptions
 #if CH_MIN_VERSION_Cabal(1,22,0)
 -- CPP >= 1.22
 -- >= 1.22 uses NubListR

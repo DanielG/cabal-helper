@@ -46,6 +46,7 @@ main :: IO ()
 main = do
   let ?progs = defaultPrograms
   let ?opts = defaultCompileOptions { oVerbose = True }
+  let ?verbose = True
 
   args <- getArgs
   case args of

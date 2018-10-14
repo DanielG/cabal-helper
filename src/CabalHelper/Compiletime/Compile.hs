@@ -13,8 +13,8 @@
 --
 -- You should have received a copy of the GNU General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
-{-# LANGUAGE RecordWildCards, FlexibleContexts, NamedFieldPuns, DeriveFunctor,
-  GADTs, ImplicitParams, ConstraintKinds #-}
+{-# LANGUAGE FlexibleContexts, DeriveFunctor, GADTs, ConstraintKinds,
+  ImplicitParams, NamedFieldPuns, RecordWildCards #-}
 
 {-|
 Module      : CabalHelper.Compiletime.Compile
@@ -24,7 +24,9 @@ License     : GPL-3
 
 module CabalHelper.Compiletime.Compile where
 
+import qualified Cabal.Plan as CP
 import Cabal.Plan
+  ( PlanJson(..), PkgId(..), PkgName(..), Ver(..), uPId)
 import Control.Applicative
 import Control.Arrow
 import Control.Exception as E
@@ -49,16 +51,24 @@ import System.IO.Error
 import System.IO.Temp
 import Prelude
 
-
 import qualified Data.Text as Text
 import qualified Data.Map.Strict as Map
 
-import Distribution.System (buildPlatform)
-import Distribution.Text (display)
+import Distribution.System
+  ( buildPlatform )
+import Distribution.Text
+  ( display )
 
-import Paths_cabal_helper (version)
+import Paths_cabal_helper
+  ( version )
+
+--import CabalHelper.Compiletime.Cabal
 import CabalHelper.Compiletime.Data
+--import CabalHelper.Compiletime.Log
+--import CabalHelper.Compiletime.Program.GHC
+--import CabalHelper.Compiletime.Program.CabalInstall
 import CabalHelper.Compiletime.Types
+
 import CabalHelper.Shared.Common
 import CabalHelper.Shared.Sandbox (getSandboxPkgDb)
 
@@ -87,18 +97,17 @@ data CompPaths = CompPaths
 data CompilationProductScope = CPSGlobal | CPSProject
 
 compileHelper
-    :: CompileOptions
-    -> Version
+    :: Env
+    => Version
+    -> Maybe PackageDbDir
     -> FilePath
     -> Maybe (PlanJson, FilePath)
     -> FilePath
     -> IO (Either ExitCode FilePath)
-compileHelper opts hdrCabalVersion projdir mnewstyle cachedir = do
-    let ?opts = opts
-
+compileHelper hdrCabalVersion cabalPkgDb projdir mnewstyle cachedir = do
     ghcVer <- ghcVersion
     Just (prepare, comp) <- runMaybeT $ msum $
-      case oCabalPkgDb opts of
+      case cabalPkgDb of
         Nothing ->
           [ compileCabalSource
           , compileNewBuild ghcVer
@@ -107,7 +116,7 @@ compileHelper opts hdrCabalVersion projdir mnewstyle cachedir = do
           , MaybeT $ Just <$> compileWithCabalInPrivatePkgDb
           ]
         Just db ->
-            [ return $ (return (), compileWithPkg (Just db) hdrCabalVersion CPSProject)
+          [ pure $ (pure (), compileWithPkg (Just db) hdrCabalVersion CPSProject)
           ]
 
     appdir <- appCacheDir
@@ -122,7 +131,7 @@ compileHelper opts hdrCabalVersion projdir mnewstyle cachedir = do
         vLog $ "helper exe does not exist, compiling "++compExePath
         prepare >> compile comp cp
 
- where
+  where
    logMsg = "using helper compiled with Cabal from "
 
 -- for relaxed deps: find (sameMajorVersionAs hdrCabalVersion) . reverse . sort
@@ -130,7 +139,7 @@ compileHelper opts hdrCabalVersion projdir mnewstyle cachedir = do
    -- | Check if this version is globally available
    compileGlobal :: Env => MaybeT IO (IO (), Compile)
    compileGlobal = do
-       cabal_versions <- listCabalVersions
+       cabal_versions <- listCabalVersions' Nothing
        ver <- MaybeT $ return $ find (== hdrCabalVersion) cabal_versions
        vLog $ logMsg ++ "user/global package-db"
        return $ (return (), compileWithPkg Nothing ver CPSGlobal)
@@ -150,10 +159,10 @@ compileHelper opts hdrCabalVersion projdir mnewstyle cachedir = do
        (PlanJson {pjUnits}, distdir_newstyle) <- maybe mzero pure mnewstyle
        let cabal_pkgid =
                PkgId (PkgName (Text.pack "Cabal"))
-                     (Ver $ versionBranch hdrCabalVersion)
+                        (Ver $ versionBranch hdrCabalVersion)
            mcabal_unit = listToMaybe $
-             Map.elems $ Map.filter (\Unit {..} -> uPId == cabal_pkgid) pjUnits
-       Unit {} <- maybe mzero pure mcabal_unit
+             Map.elems $ Map.filter (\CP.Unit{..} -> uPId == cabal_pkgid) pjUnits
+       CP.Unit {} <- maybe mzero pure mcabal_unit
        let inplace_db_path = distdir_newstyle
              </> "packagedb" </> ("ghc-" ++ showVersion ghcVer)
            inplace_db = PackageDbDir inplace_db_path
@@ -175,7 +184,7 @@ compileHelper opts hdrCabalVersion projdir mnewstyle cachedir = do
          db_exists <- liftIO $ cabalVersionExistsInPkgDb hdrCabalVersion db
          when (not db_exists) $
            void $ installCabal (Right hdrCabalVersion) `E.catch`
-             \(SomeException _) -> errorInstallCabal hdrCabalVersion cachedir
+             \(SomeException _) -> errorInstallCabal hdrCabalVersion
 
    -- | See if we're in a cabal source tree
    compileCabalSource :: Env => MaybeT IO (IO (), Compile)
@@ -318,7 +327,7 @@ cabalMinVersionMacro _ =
 
 invokeGhc :: Env => GhcInvocation -> IO (Either ExitCode FilePath)
 invokeGhc GhcInvocation {..} = do
-    rv <- callProcessStderr' Nothing oGhcProgram $ concat
+    rv <- callProcessStderr' Nothing (ghcProgram ?progs) $ concat
       [ [ "-outputdir", giOutDir
         , "-o", giOutput
         ]
@@ -335,8 +344,6 @@ invokeGhc GhcInvocation {..} = do
       case rv of
         ExitSuccess -> Right giOutput
         e@(ExitFailure _) -> Left e
-  where
-    CompileOptions {..} = ?opts
 
 
 -- | Cabal library version we're compiling the helper exe against.
@@ -460,7 +467,7 @@ runCabalInstall (PackageDbDir db) (CabalSourceDir srcdir) ever = do
              then ["--no-require-sandbox"]
              else []
         , [ "install", srcdir ]
-        , if oVerbose ?opts
+        , if ?verbose
             then ["-v"]
             else []
         , [ "--only-dependencies" ]
@@ -635,8 +642,8 @@ unpackCabalHEAD tmpdir = do
          (liftIO . setCurrentDirectory)
          (\_ -> liftIO (setCurrentDirectory dir) >> action)
 
-errorInstallCabal :: Version -> FilePath -> IO a
-errorInstallCabal cabalVer _distdir = panicIO $ printf "\
+errorInstallCabal :: Version -> IO a
+errorInstallCabal cabalVer = panicIO $ printf "\
 \Installing Cabal version %s failed.\n\
 \\n\
 \You have the following choices to fix this:\n\
@@ -669,9 +676,6 @@ errorInstallCabal cabalVer _distdir = panicIO $ printf "\
 \\n" sver sver
  where
    sver = showVersion cabalVer
-
-listCabalVersions :: Env => MaybeT IO [Version]
-listCabalVersions = listCabalVersions' Nothing
 
 listCabalVersions' :: Env => Maybe PackageDbDir -> MaybeT IO [Version]
 listCabalVersions' mdb = do
@@ -746,12 +750,12 @@ cabalFileTopField field cabalFile = value
   ls = map (map toLower) $ lines cabalFile
   extract = dropWhile (/=':') >>> drop 1 >>> dropWhile isSpace >>> takeWhile (not . isSpace)
 
-vLog :: (Env, MonadIO m) => String -> m ()
-vLog msg | CompileOptions { oVerbose = True } <- ?opts =
-    liftIO $ hPutStrLn stderr msg
-vLog _ = return ()
+vLog :: (MonadIO m, Verbose) => String -> m ()
+vLog msg
+    | ?verbose  = liftIO $ hPutStrLn stderr msg
+    | otherwise = return ()
 
-logIOError :: Env => String -> IO (Maybe a) -> IO (Maybe a)
+logIOError :: Verbose => String -> IO (Maybe a) -> IO (Maybe a)
 logIOError label a = do
   a `catchIOError` \ex -> do
       vLog $ label ++ ": " ++ show ex

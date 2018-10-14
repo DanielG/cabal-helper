@@ -34,30 +34,62 @@ module CabalHelper.Shared.InterfaceTypes where
 
 import GHC.Generics
 import Data.Version
+import Data.Map.Strict (Map)
 
 data ChResponse
-    = ChResponseCompList    [(ChComponentName, [String])]
-    | ChResponseEntrypoints [(ChComponentName, ChEntrypoint)]
-    | ChResponseNeedsBuild  [(ChComponentName, NeedsBuildOutput)]
-    | ChResponseList        [String]
-    | ChResponsePkgDbs      [ChPkgDb]
-    | ChResponseLbi         String
-    | ChResponseVersion     String Version
-    | ChResponseLicenses    [(String, [(String, Version)])]
-    | ChResponseFlags       [(String, Bool)]
+    = ChResponseComponentsInfo (Map ChComponentName ChComponentInfo)
+    | ChResponseList           [String]
+    | ChResponsePkgDbs         [ChPkgDb]
+    | ChResponseLbi            String
+    | ChResponseVersion        String Version
+    | ChResponseLicenses       [(String, [(String, Version)])]
+    | ChResponseFlags          [(String, Bool)]
   deriving (Eq, Ord, Read, Show, Generic)
 
 data ChComponentName = ChSetupHsName
-                     | ChLibName
-                     | ChSubLibName String
+                     | ChLibName ChLibraryName
                      | ChFLibName String
                      | ChExeName String
                      | ChTestName String
                      | ChBenchName String
   deriving (Eq, Ord, Read, Show, Generic)
 
+data ChLibraryName = ChMainLibName
+                   | ChSubLibName String
+  deriving (Eq, Ord, Read, Show, Generic)
+
 newtype ChModuleName = ChModuleName String
     deriving (Eq, Ord, Read, Show, Generic)
+
+data ChComponentInfo = ChComponentInfo
+    { ciComponentName         :: ChComponentName
+    -- ^ The component\'s type and name
+
+    , ciGhcOptions            :: [String]
+    -- ^ Full set of GHC options, ready for loading this component into GHCi.
+
+    , ciGhcSrcOptions         :: [String]
+    -- ^ Only search path related GHC options.
+
+    , ciGhcPkgOptions         :: [String]
+    -- ^ Only package related GHC options, sufficient for things don't need to
+    -- access any home modules.
+
+    , ciGhcLangOptions        :: [String]
+    -- ^ Only Haskell language extension related options, i.e. @-XSomeExtension@
+
+    , ciSourceDirs            :: [String]
+    -- ^ A component's @source-dirs@ field, beware since if this is empty
+    -- implicit behaviour in GHC kicks in which you might have to emulate.
+
+    , ciEntrypoints           :: ChEntrypoint
+    -- ^ Modules or files Cabal would have the compiler build directly. Can be
+    -- used to compute the home module closure for a component.
+
+    , ciNeedsBuildOutput      :: NeedsBuildOutput
+    -- ^ If a component has a non-default module renaming (backpack) it cannot
+    -- be built in memory and instead needs proper build output.
+    } deriving (Eq, Ord, Read, Show)
 
 data ChEntrypoint = ChSetupEntrypoint -- ^ Almost like 'ChExeEntrypoint' but
                                       -- @main-is@ could either be @"Setup.hs"@

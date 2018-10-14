@@ -15,7 +15,8 @@
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 {-# LANGUAGE DeriveGeneric, DeriveDataTypeable, DefaultSignatures,
-  KindSignatures, ImplicitParams, ConstraintKinds #-}
+  StandaloneDeriving, GADTs, DataKinds, KindSignatures, ImplicitParams,
+  ConstraintKinds, RankNTypes #-}
 
 {-|
 Module      : CabalHelper.Compiletime.Types
@@ -25,13 +26,25 @@ License     : GPL-3
 
 module CabalHelper.Compiletime.Types where
 
+import Cabal.Plan
+  ( PlanJson )
+import Data.IORef
 import Data.Version
 import Data.Typeable
+import Data.Map.Strict (Map)
 import GHC.Generics
+import System.Posix.Types
+import CabalHelper.Shared.InterfaceTypes
 
-type Env = (?opts :: CompileOptions)
+type Verbose = (?verbose :: Bool)
+type Progs = (?progs :: Programs)
+-- TODO: rname to `CompEnv` or something
+type Env =
+    ( ?verbose :: Bool
+    , ?progs   :: Programs
+    )
 
--- | Paths or names of various programs we need.
+-- | Configurable paths to various programs we use.
 data Programs = Programs {
       -- | The path to the @cabal@ program.
       cabalProgram  :: FilePath,
@@ -44,8 +57,8 @@ data Programs = Programs {
       ghcPkgProgram :: FilePath
     } deriving (Eq, Ord, Show, Read, Generic, Typeable)
 
--- | Default all programs to their unqualified names, i.e. they will be searched
--- for on @PATH@.
+-- | By default all programs use their unqualified names, i.e. they will be
+-- searched for on @PATH@.
 defaultPrograms :: Programs
 defaultPrograms = Programs "cabal" "ghc" "ghc-pkg"
 
@@ -57,13 +70,13 @@ data CompileOptions = CompileOptions
     }
 
 oCabalProgram :: Env => FilePath
-oCabalProgram = cabalProgram $ oPrograms ?opts
+oCabalProgram = cabalProgram ?progs
 
 oGhcProgram :: Env => FilePath
-oGhcProgram = ghcProgram $ oPrograms ?opts
+oGhcProgram = ghcProgram ?progs
 
 oGhcPkgProgram :: Env => FilePath
-oGhcPkgProgram = ghcPkgProgram $ oPrograms ?opts
+oGhcPkgProgram = ghcPkgProgram ?progs
 
 defaultCompileOptions :: CompileOptions
 defaultCompileOptions =

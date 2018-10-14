@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections, ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections, ScopedTypeVariables, RecordWildCards #-}
 module Main where
 
 import GHC
@@ -10,6 +10,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Data.List
 import Data.Version
+import qualified Data.Map as Map
 import System.Environment (getArgs)
 import System.Exit
 import System.FilePath ((</>))
@@ -91,23 +92,26 @@ run x xs = do
   ExitSuccess <- rawSystem x xs
   return ()
 
+allComponents :: Query pt [ChComponentInfo]
+allComponents =
+    concat . map (Map.elems . uiComponents) <$> (mapM unitQuery =<< projectUnits)
+
 test :: FilePath -> IO [Bool]
 test dir = do
-    let qe = mkQueryEnv dir (dir </> "dist")
-    cs <- runQuery qe $ components $ (,,,) <$> entrypoints <.> ghcOptions <.> needsBuildOutput
-    forM cs $ \(ep, opts, nb, cn) -> do
+    qe <- mkQueryEnv (ProjDirV1 dir) (DistDirV1 $ dir </> "dist")
+    cs <- runQuery allComponents qe
+    forM cs $ \ChComponentInfo{..} -> do
+        putStrLn $ "\n" ++ show ciComponentName ++ ":::: " ++ show ciNeedsBuildOutput
 
-        putStrLn $ "\n" ++ show cn ++ ":::: " ++ show nb
-
-        when (nb == ProduceBuildOutput) $ do
+        when (ciNeedsBuildOutput == ProduceBuildOutput) $ do
           run "cabal" [ "build" ]
 
-        let opts' = "-Werror" : opts
+        let opts' = "-Werror" : ciGhcOptions
 
         let sopts = intercalate " " $ map formatArg $ "\nghc" : opts'
-        putStrLn $ "\n" ++ show cn ++ ": " ++ sopts
+        putStrLn $ "\n" ++ show ciComponentName ++ ": " ++ sopts
         hFlush stdout
-        compileModule nb ep opts'
+        compileModule ciNeedsBuildOutput ciEntrypoints opts'
   where
     formatArg x
         | "-" `isPrefixOf` x = "\n  "++x
