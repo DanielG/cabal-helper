@@ -68,26 +68,20 @@ flag dev
 
 
 -- [Note test dependencies] Vaious tests need access to modules used in other
--- components, unfortunately we can't use Cabal 2.0's new internal libraries for
--- this because we'd like to support ancient Cabal versions. Instead we just
--- copy 'hs-source-dirs', 'build-depends' and 'other-modules' fields as
--- appropriate.
+-- components, unfortunately we can't use Cabal 2.2's new common stanzas for
+-- this because we'd like to support Cabal-2.0 for a while still. Instead we
+-- just copy 'hs-source-dirs', 'build-depends' and 'other-modules' fields using
+-- an awk script as appropriate.
 --
 -- The following awk command will copy paragraphs starting with:
---     -- Common some-name
+--     -- Common <some-name>
 -- to following paragraphs starting with:
---     -- Instantiate common some-name
+--     -- Instantiate common <some-name>
 --
 -- $ gawk -i inplace -f scripts/update-cabal-common-section-instantiations.awk cabal-helper.cabal
---
--- FIXME: We can use Cabal 2.0 features now, yey!
 
-library
-  default-language:    Haskell2010
-  default-extensions:  NondecreasingIndentation
-  hs-source-dirs:      lib, src
-  exposed-modules:     Distribution.Helper
-  other-modules:
+library c-h-internal
+  exposed-modules:
                        CabalHelper.Compiletime.Compat.Environment
                        CabalHelper.Compiletime.Compat.ProgramDb
                        CabalHelper.Compiletime.Compat.Version
@@ -99,15 +93,18 @@ library
                        CabalHelper.Shared.Common
                        CabalHelper.Shared.InterfaceTypes
                        CabalHelper.Shared.Sandbox
+  other-modules:
                        Paths_cabal_helper
-
   autogen-modules:
                        Paths_cabal_helper
+  hs-source-dirs:      src
 
-  ghc-options:         -Wall
-
+  -- Common c-h-internal -- See [Note test dependencies]
+  default-language:    Haskell2010
+  default-extensions:  NondecreasingIndentation
+  other-extensions:    TemplateHaskell
   build-depends:       base             < 5    && >= 4.7
-  build-depends:       Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
+                     , Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
                      , cabal-plan       < 0.5  && >= 0.3.0.0
                      , containers       < 1    && >= 0.5.5.1
                      , bytestring       < 0.11 && >= 0.9.2.1
@@ -126,39 +123,25 @@ library
     build-depends:     unix             < 2.8  && >= 2.5.1.1
   build-depends:       unix-compat      < 0.6  && >= 0.4.3.1
                      , utf8-string      < 1.1  && >= 1.0.1.1
+  if flag(dev)
+    ghc-options:       -Wall
 
-  build-tools:         cabal
-  build-tool-depends:  cabal-install:cabal
 
 
-test-suite compile-test
-  type:                exitcode-stdio-1.0
-  main-is:             CompileTest.hs
-  hs-source-dirs:      tests
-  ghc-options:         -Wall
-
-  -- Common c-h-wrapper-fields -- See [Note test dependencies]
+library
+  exposed-modules:     Distribution.Helper
+  other-modules:
+                       Paths_cabal_helper
+  autogen-modules:
+                       Paths_cabal_helper
+  hs-source-dirs:      lib
+  build-depends:       c-h-internal
+  -- Instantiate common c-h-internal -- See [Note test dependencies]
   default-language:    Haskell2010
   default-extensions:  NondecreasingIndentation
   other-extensions:    TemplateHaskell
-  hs-source-dirs:      src
-  other-modules:
-                       CabalHelper.Compiletime.Compat.Environment
-                       CabalHelper.Compiletime.Compat.ProgramDb
-                       CabalHelper.Compiletime.Compat.Version
-                       CabalHelper.Compiletime.Compile
-                       CabalHelper.Compiletime.Data
-                       CabalHelper.Compiletime.Types
-                       CabalHelper.Shared.Common
-                       CabalHelper.Shared.InterfaceTypes
-                       CabalHelper.Shared.Sandbox
-                       Paths_cabal_helper
-  build-tool-depends:  cabal-install:cabal
-  build-tools:         cabal
   build-depends:       base             < 5    && >= 4.7
-  if os(windows)
-    build-depends:     base                       >= 4.7
-  build-depends:       Cabal            < 2.5  && >= 2.0 || < 1.26 && >= 1.14
+                     , Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
                      , cabal-plan       < 0.5  && >= 0.3.0.0
                      , containers       < 1    && >= 0.5.5.1
                      , bytestring       < 0.11 && >= 0.9.2.1
@@ -167,6 +150,7 @@ test-suite compile-test
                      , mtl              < 2.3  && >= 2.0
                      , process          < 1.7  && >= 1.2.3.0
                      , pretty-show      < 1.9  && >= 1.8.1
+                     , semigroupoids    < 5.3  && >= 5.2
                      , SHA              < 1.7  && >= 1.6.4.4
                      , text             < 1.3  && >= 1.0.0.0
                      , template-haskell < 2.14 && >= 2.7.0.0
@@ -176,6 +160,44 @@ test-suite compile-test
     build-depends:     unix             < 2.8  && >= 2.5.1.1
   build-depends:       unix-compat      < 0.6  && >= 0.4.3.1
                      , utf8-string      < 1.1  && >= 1.0.1.1
+  if flag(dev)
+    ghc-options:       -Wall
+
+
+
+test-suite compile-test
+  type:                exitcode-stdio-1.0
+  main-is:             CompileTest.hs
+  hs-source-dirs:      tests
+  ghc-options:         -Wall
+  build-depends:       c-h-internal
+  -- Instantiate common c-h-internal -- See [Note test dependencies]
+  default-language:    Haskell2010
+  default-extensions:  NondecreasingIndentation
+  other-extensions:    TemplateHaskell
+  build-depends:       base             < 5    && >= 4.7
+                     , Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
+                     , cabal-plan       < 0.5  && >= 0.3.0.0
+                     , containers       < 1    && >= 0.5.5.1
+                     , bytestring       < 0.11 && >= 0.9.2.1
+                     , directory        < 1.4  && >= 1.2.1.0
+                     , filepath         < 1.5  && >= 1.3.0.0
+                     , mtl              < 2.3  && >= 2.0
+                     , process          < 1.7  && >= 1.2.3.0
+                     , pretty-show      < 1.9  && >= 1.8.1
+                     , semigroupoids    < 5.3  && >= 5.2
+                     , SHA              < 1.7  && >= 1.6.4.4
+                     , text             < 1.3  && >= 1.0.0.0
+                     , template-haskell < 2.14 && >= 2.7.0.0
+                     , temporary        < 1.3  && >= 1.2.1
+                     , transformers     < 0.6  && >= 0.3.0.0
+  if !os(windows)
+    build-depends:     unix             < 2.8  && >= 2.5.1.1
+  build-depends:       unix-compat      < 0.6  && >= 0.4.3.1
+                     , utf8-string      < 1.1  && >= 1.0.1.1
+  if flag(dev)
+    ghc-options:       -Wall
+
 
 
 test-suite ghc-session
@@ -187,29 +209,13 @@ test-suite ghc-session
                      , ghc              < 8.5  && >= 7.10
                      , ghc-paths        < 0.2  && >= 0.1.0.9
                      , cabal-helper
-
-  -- Instantiate common c-h-wrapper-fields -- See [Note test dependencies]
+                     , c-h-internal
+  -- Instantiate common c-h-internal -- See [Note test dependencies]
   default-language:    Haskell2010
   default-extensions:  NondecreasingIndentation
   other-extensions:    TemplateHaskell
-  hs-source-dirs:      src
-  other-modules:
-                       CabalHelper.Compiletime.Compat.Environment
-                       CabalHelper.Compiletime.Compat.ProgramDb
-                       CabalHelper.Compiletime.Compat.Version
-                       CabalHelper.Compiletime.Compile
-                       CabalHelper.Compiletime.Data
-                       CabalHelper.Compiletime.Types
-                       CabalHelper.Shared.Common
-                       CabalHelper.Shared.InterfaceTypes
-                       CabalHelper.Shared.Sandbox
-                       Paths_cabal_helper
-  build-tool-depends:  cabal-install:cabal
-  build-tools:         cabal
   build-depends:       base             < 5    && >= 4.7
-  if os(windows)
-    build-depends:     base                       >= 4.7
-  build-depends:       Cabal            < 2.5  && >= 2.0 || < 1.26 && >= 1.14
+                     , Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
                      , cabal-plan       < 0.5  && >= 0.3.0.0
                      , containers       < 1    && >= 0.5.5.1
                      , bytestring       < 0.11 && >= 0.9.2.1
@@ -218,6 +224,7 @@ test-suite ghc-session
                      , mtl              < 2.3  && >= 2.0
                      , process          < 1.7  && >= 1.2.3.0
                      , pretty-show      < 1.9  && >= 1.8.1
+                     , semigroupoids    < 5.3  && >= 5.2
                      , SHA              < 1.7  && >= 1.6.4.4
                      , text             < 1.3  && >= 1.0.0.0
                      , template-haskell < 2.14 && >= 2.7.0.0
@@ -227,6 +234,9 @@ test-suite ghc-session
     build-depends:     unix             < 2.8  && >= 2.5.1.1
   build-depends:       unix-compat      < 0.6  && >= 0.4.3.1
                      , utf8-string      < 1.1  && >= 1.0.1.1
+  if flag(dev)
+    ghc-options:       -Wall
+
 
 
 
@@ -249,7 +259,6 @@ executable cabal-helper-main
   else
     buildable:         False
 
-  -- Common c-h-main-fields -- See [Note test dependencies]
   ghc-options:         -Wall -fno-warn-unused-imports
   build-depends:       base             < 5    && >= 4.7
                      , Cabal
