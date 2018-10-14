@@ -93,7 +93,9 @@ library
                        CabalHelper.Compiletime.Compat.Version
                        CabalHelper.Compiletime.Compile
                        CabalHelper.Compiletime.Data
+                       CabalHelper.Compiletime.Program.Stack
                        CabalHelper.Compiletime.Types
+                       CabalHelper.Compiletime.Types.RelativePath
                        CabalHelper.Shared.Common
                        CabalHelper.Shared.InterfaceTypes
                        CabalHelper.Shared.Sandbox
