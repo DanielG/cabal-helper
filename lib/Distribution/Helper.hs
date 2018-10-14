@@ -96,7 +96,6 @@ import Control.Monad
 import Control.Monad.Trans.Maybe
 import Control.Monad.IO.Class
 import Control.Exception as E
-import Data.Char
 import Data.Coerce
 import Data.IORef
 import Data.List hiding (filter)
