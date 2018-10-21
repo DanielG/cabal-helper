@@ -33,6 +33,7 @@ import Data.Version
 import Data.Typeable
 import Data.Map.Strict (Map)
 import GHC.Generics
+import System.FilePath
 import System.Posix.Types
 import CabalHelper.Compiletime.Types.RelativePath
 import CabalHelper.Shared.InterfaceTypes
@@ -44,23 +45,27 @@ data ProjType
     | V2    -- ^ @cabal v2-build@ project, see 'DistDirV2'
     | Stack -- ^ @stack@ project.
 
--- | A project directory. The project type of a given directory can be
--- determined by trying to access a set of marker files. See below.
-data ProjDir (pt :: ProjType) where
+-- | The location of a project. The kind of location marker given determines the
+-- 'ProjType'. The project type of a given directory can be determined by trying
+-- to access a set of marker files. See below.
+data ProjLoc (pt :: ProjType) where
     -- | A @cabal v1-build@ project directory can be identified by one file
     -- ending in @.cabal@ existing in the directory. More than one such files
     -- existing is a user error. Note: For this project type the concepts of
     -- project and package coincide.
-    ProjDirV1    :: FilePath -> ProjDir 'V1
+    ProjLocCabalFile :: { plCabalFile :: FilePath } -> ProjLoc 'V1
 
     -- | A @cabal v2-build@ project\'s marker file is called
     -- @cabal.project@. This configuration file points to the packages that make
     -- up this project.
-    ProjDirV2    :: FilePath -> ProjDir 'V2
+    ProjLocV2Dir     :: { plV2Dir :: FilePath } -> ProjLoc 'V2
 
     -- | A @stack@ project\'s marker file is called @stack.yaml@. This
     -- configuration file points to the packages that make up this project.
-    ProjDirStack :: FilePath -> ProjDir 'Stack
+    ProjLocStackDir  :: { plStackDir :: FilePath } -> ProjLoc 'Stack
+
+plV1Dir :: ProjLoc 'V1 -> FilePath
+plV1Dir (ProjLocCabalFile cabal_file) = takeDirectory cabal_file
 
 data DistDir (pt :: ProjType) where
     -- | Build directory for cabal /old-build/ aka. /v1-build/ aka. just
@@ -99,7 +104,7 @@ data QueryEnvI cache (proj_type :: ProjType) = QueryEnv
     , qePrograms    :: Programs
     -- ^ Field accessor for 'QueryEnv'.
 
-    , qeProjectDir  :: ProjDir proj_type
+    , qeProjLoc      :: !(ProjLoc proj_type)
     -- ^ Field accessor for 'QueryEnv'. Defines path to the project directory,
     -- i.e. a directory containing a @cabal.project@ file
 
@@ -135,6 +140,7 @@ newtype DistDirLib = DistDirLib FilePath
 data Unit = Unit
     { uUnitId      :: !UnitId
     , uPackageDir  :: !FilePath
+    , uCabalFile   :: !CabalFile
     , uDistDir     :: !DistDirLib
     }
 
@@ -173,32 +179,47 @@ data UnitInfo = UnitInfo
     , uiModTimes              :: !UnitModTimes
     } deriving (Eq, Ord, Read, Show)
 
-data ProjInfo pt where
-  ProjInfoV1 ::
-    { piV1ProjConfModTimes :: !(ProjConfModTimes 'V1)
-    } -> ProjInfo 'V1
+-- | Files relevant to the project-scope configuration of a project. We gather
+-- them here so we can refer to their paths conveniently.
+data ProjConf pt where
+  ProjConfV1 ::
+    { pcV1CabalFile :: !FilePath
+    } -> ProjConf 'V1
+
+  ProjConfV2 ::
+    { pcV2CabalProjFile       :: !FilePath
+    , pcV2CabalProjLocalFile  :: !FilePath
+    , pcV2CabalProjFreezeFile :: !FilePath
+    } -> ProjConf 'V2
+
+  ProjConfStack ::
+    { pcStackYaml :: !FilePath
+    } -> ProjConf 'Stack
+
+-- these are supposed to be opaque, as they are meant to be used only for cache
+-- invalidation
+newtype ProjConfModTimes = ProjConfModTimes [(FilePath, EpochTime)]
+    deriving (Eq)
+
+data ProjInfo pt = ProjInfo
+  { piCabalVersion     :: !Version
+  , piProjConfModTimes :: !ProjConfModTimes
+  , piUnits            :: ![Unit]
+  , piImpl             :: !(ProjInfoImpl pt)
+  }
+
+data ProjInfoImpl pt where
+  ProjInfoV1 :: ProjInfoImpl 'V1
 
   ProjInfoV2 ::
-    { piV2ProjConfModTimes :: !(ProjConfModTimes 'V2)
-    , piV2Plan             :: !PlanJson
-    , piV2PlanModTime      :: !EpochTime
-    } -> ProjInfo 'V2
+    { piV2Plan        :: !PlanJson
+    , piV2PlanModTime :: !EpochTime
+    , piV2CompilerId  :: !(String, Version)
+    } -> ProjInfoImpl 'V2
 
   ProjInfoStack ::
-    { piStackProjConfModTimes :: !(ProjConfModTimes 'Stack)
-    , piStackUnits            :: ![Unit]
-    , piStackProjPaths        :: !StackProjPaths
-    } -> ProjInfo 'Stack
-
-data ProjConfModTimes pt where
-    ProjConfModTimesV1
-        :: !(FilePath, EpochTime)     -> ProjConfModTimes 'V1
-    ProjConfModTimesV2
-        :: !([(FilePath, EpochTime)]) -> ProjConfModTimes 'V2
-    ProjConfModTimesStack
-        :: !(FilePath, EpochTime)     -> ProjConfModTimes 'Stack
-
-deriving instance Eq (ProjConfModTimes pt)
+    { piStackProjPaths        :: !StackProjPaths
+    } -> ProjInfoImpl 'Stack
 
 data UnitModTimes = UnitModTimes
     { umtCabalFile   :: !(FilePath, EpochTime)

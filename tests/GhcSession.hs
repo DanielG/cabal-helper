@@ -13,7 +13,7 @@ import Data.Version
 import qualified Data.Map as Map
 import System.Environment (getArgs)
 import System.Exit
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeFileName, takeDirectory)
 import System.Directory
 import System.IO
 import System.IO.Temp
@@ -29,11 +29,11 @@ main = do
   args <- getArgs
   topdir <- getCurrentDirectory
   res <- mapM (setup topdir test) $ case args of
-    [] -> [ ("tests/exelib"   , parseVer "1.10", parseVer "0")
-          , ("tests/exeintlib", parseVer "2.0",  parseVer "0")
-          , ("tests/fliblib"  , parseVer "2.0",  parseVer "0")
-          , ("tests/bkpregex" , parseVer "2.0",  parseVer "8.1")
-          --           min Cabal lib ver -^   min GHC ver -^
+    [] -> [ ("tests/exelib/exelib.cabal",       parseVer "1.10", parseVer "0")
+          , ("tests/exeintlib/exeintlib.cabal", parseVer "2.0",  parseVer "0")
+          , ("tests/fliblib/fliblib.cabal",     parseVer "2.0",  parseVer "0")
+          , ("tests/bkpregex/bkpregex.cabal",   parseVer "2.0",  parseVer "8.1")
+          --                           min Cabal lib ver -^   min GHC ver -^
           ]
     xs -> map (, parseVer "0", parseVer "0") xs
 
@@ -55,7 +55,8 @@ cabalInstallBuiltinCabalVersion =
         ["act-as-setup", "--", "--numeric-version"] ""
 
 setup :: FilePath -> (FilePath -> IO [Bool]) -> (FilePath, Version, Version) -> IO [Bool]
-setup topdir act (srcdir, min_cabal_ver, min_ghc_ver) = do
+setup topdir act (cabal_file, min_cabal_ver, min_ghc_ver) = do
+    let projdir = takeDirectory cabal_file
     ci_ver <- cabalInstallVersion
     c_ver <- cabalInstallBuiltinCabalVersion
     g_ver <- ghcVersion
@@ -73,18 +74,18 @@ setup topdir act (srcdir, min_cabal_ver, min_ghc_ver) = do
 
     case mreason of
       Just reason -> do
-        putStrLn $ "Skipping test '" ++ srcdir ++ "' because " ++ reason ++ "."
+        putStrLn $ "Skipping test '" ++ projdir ++ "' because " ++ reason ++ "."
         return []
       Nothing -> do
-        putStrLn $ "Running test '" ++ srcdir ++ "' ------------------------------"
+        putStrLn $ "Running test '" ++ projdir ++ "'-------------------------"
         withSystemTempDirectory "cabal-helper.ghc-session.test" $ \dir -> do
-          setCurrentDirectory $ topdir </> srcdir
+          setCurrentDirectory $ topdir </> projdir
           run "cabal" [ "sdist", "-v0", "--output-dir", dir ]
 
           setCurrentDirectory dir
           run "cabal" [ "configure" ]
 
-          act dir
+          act $ dir </> takeFileName cabal_file
 
 run :: String -> [String] -> IO ()
 run x xs = do
@@ -93,9 +94,12 @@ run x xs = do
   return ()
 
 test :: FilePath -> IO [Bool]
-test dir = do
-    qe <- mkQueryEnv (ProjDirV1 dir) (DistDirV1 $ dir </> "dist")
-    cs <- runQuery (concat <$> allUnits (Map.elems . uiComponents)) qe
+test cabal_file = do
+    let projdir = takeDirectory cabal_file
+    qe <- mkQueryEnv
+            (ProjLocCabalFile cabal_file)
+            (DistDirV1 $ projdir </> "dist")
+    cs <- concat <$> runQuery (allUnits (Map.elems . uiComponents)) qe
     forM cs $ \ChComponentInfo{..} -> do
         putStrLn $ "\n" ++ show ciComponentName ++ ":::: " ++ show ciNeedsBuildOutput
 

@@ -96,18 +96,19 @@ data CompPaths = CompPaths
 -- executable.
 data CompilationProductScope = CPSGlobal | CPSProject
 
-compileHelper
-    :: Env
-    => Version
-    -> Maybe PackageDbDir
-    -> FilePath
-    -> Maybe (PlanJson, FilePath)
-    -> FilePath
-    -> IO (Either ExitCode FilePath)
-compileHelper hdrCabalVersion cabalPkgDb projdir mnewstyle cachedir = do
+data CompHelperEnv = CompHelperEnv
+  { cheCabalVer :: Version
+  , chePkgDb    :: Maybe PackageDbDir
+  , cheProjDir  :: FilePath
+  , cheNewstyle :: Maybe (PlanJson, FilePath)
+  , cheCacheDir :: FilePath
+  }
+
+compileHelper :: Env => CompHelperEnv -> IO (Either ExitCode FilePath)
+compileHelper CompHelperEnv{..}   = do
     ghcVer <- ghcVersion
     Just (prepare, comp) <- runMaybeT $ msum $
-      case cabalPkgDb of
+      case chePkgDb of
         Nothing ->
           [ compileCabalSource
           , compileNewBuild ghcVer
@@ -116,12 +117,12 @@ compileHelper hdrCabalVersion cabalPkgDb projdir mnewstyle cachedir = do
           , MaybeT $ Just <$> compileWithCabalInPrivatePkgDb
           ]
         Just db ->
-          [ pure $ (pure (), compileWithPkg (Just db) hdrCabalVersion CPSProject)
+          [ pure $ (pure (), compileWithPkg (Just db) cheCabalVer CPSProject)
           ]
 
     appdir <- appCacheDir
 
-    let cp@CompPaths {compExePath} = compPaths appdir cachedir comp
+    let cp@CompPaths {compExePath} = compPaths appdir cheCacheDir comp
     exists <- doesFileExist compExePath
     if exists
       then do
@@ -134,32 +135,32 @@ compileHelper hdrCabalVersion cabalPkgDb projdir mnewstyle cachedir = do
   where
    logMsg = "using helper compiled with Cabal from "
 
--- for relaxed deps: find (sameMajorVersionAs hdrCabalVersion) . reverse . sort
+-- for relaxed deps: find (sameMajorVersionAs cheCabalVer) . reverse . sort
 
    -- | Check if this version is globally available
    compileGlobal :: Env => MaybeT IO (IO (), Compile)
    compileGlobal = do
        cabal_versions <- listCabalVersions' Nothing
-       ver <- MaybeT $ return $ find (== hdrCabalVersion) cabal_versions
+       ver <- MaybeT $ return $ find (== cheCabalVer) cabal_versions
        vLog $ logMsg ++ "user/global package-db"
        return $ (return (), compileWithPkg Nothing ver CPSGlobal)
 
    -- | Check if this version is available in the project sandbox
    compileSandbox :: Env => Version -> MaybeT IO (IO (), Compile)
    compileSandbox ghcVer = do
-       let mdb_path = getSandboxPkgDb (display buildPlatform) ghcVer projdir
+       let mdb_path = getSandboxPkgDb (display buildPlatform) ghcVer cheProjDir
        sandbox <- PackageDbDir <$> MaybeT mdb_path
        cabal_versions <- listCabalVersions' (Just sandbox)
-       ver <- MaybeT $ return $ find (== hdrCabalVersion) cabal_versions
+       ver <- MaybeT $ return $ find (== cheCabalVer) cabal_versions
        vLog $ logMsg ++ "sandbox package-db"
        return $ (return (), compileWithPkg (Just sandbox) ver CPSProject)
 
    compileNewBuild :: Env => Version -> MaybeT IO (IO (), Compile)
    compileNewBuild ghcVer = do
-       (PlanJson {pjUnits}, distdir_newstyle) <- maybe mzero pure mnewstyle
+       (PlanJson {pjUnits}, distdir_newstyle) <- maybe mzero pure cheNewstyle
        let cabal_pkgid =
                PkgId (PkgName (Text.pack "Cabal"))
-                        (Ver $ versionBranch hdrCabalVersion)
+                        (Ver $ versionBranch cheCabalVer)
            mcabal_unit = listToMaybe $
              Map.elems $ Map.filter (\CP.Unit{..} -> uPId == cabal_pkgid) pjUnits
        CP.Unit {} <- maybe mzero pure mcabal_unit
@@ -167,7 +168,7 @@ compileHelper hdrCabalVersion cabalPkgDb projdir mnewstyle cachedir = do
              </> "packagedb" </> ("ghc-" ++ showVersion ghcVer)
            inplace_db = PackageDbDir inplace_db_path
        cabal_versions <- listCabalVersions' (Just inplace_db)
-       ver <- MaybeT $ return $ find (== hdrCabalVersion) cabal_versions
+       ver <- MaybeT $ return $ find (== cheCabalVer) cabal_versions
        vLog $ logMsg ++ "v2-build package-db " ++ inplace_db_path
        return $ (return (), compileWithPkg (Just inplace_db) ver CPSProject)
 
@@ -176,22 +177,22 @@ compileHelper hdrCabalVersion cabalPkgDb projdir mnewstyle cachedir = do
    compileWithCabalInPrivatePkgDb :: Env => IO (IO (), Compile)
    compileWithCabalInPrivatePkgDb = do
        db@(PackageDbDir db_path)
-           <- getPrivateCabalPkgDb (CabalVersion hdrCabalVersion)
+           <- getPrivateCabalPkgDb (CabalVersion cheCabalVer)
        vLog $ logMsg ++ "private package-db in " ++ db_path
-       return (prepare db, compileWithPkg (Just db) hdrCabalVersion CPSGlobal)
+       return (prepare db, compileWithPkg (Just db) cheCabalVer CPSGlobal)
      where
        prepare db = do
-         db_exists <- liftIO $ cabalVersionExistsInPkgDb hdrCabalVersion db
+         db_exists <- liftIO $ cabalVersionExistsInPkgDb cheCabalVer db
          when (not db_exists) $
-           void $ installCabal (Right hdrCabalVersion) `E.catch`
-             \(SomeException _) -> errorInstallCabal hdrCabalVersion
+           void $ installCabal (Right cheCabalVer) `E.catch`
+             \(SomeException _) -> errorInstallCabal cheCabalVer
 
    -- | See if we're in a cabal source tree
    compileCabalSource :: Env => MaybeT IO (IO (), Compile)
    compileCabalSource = do
-       let cabalFile = projdir </> "Cabal.cabal"
+       let cabalFile = cheProjDir </> "Cabal.cabal"
        cabalSrc <- liftIO $ doesFileExist cabalFile
-       let projdir' = CabalSourceDir projdir
+       let projdir = CabalSourceDir cheProjDir
        case cabalSrc of
          False -> mzero
          True -> do
@@ -206,7 +207,7 @@ compileHelper hdrCabalVersion cabalPkgDb projdir mnewstyle cachedir = do
                  mzero
              "custom" -> do
                  vLog $ "compiling helper with local Cabal source tree"
-                 return $ (return (), compileWithCabalSource projdir' ver)
+                 return $ (return (), compileWithCabalSource projdir ver)
              _ -> error $ "compileCabalSource: unknown build-type: '"++buildType++"'"
 
    compileWithCabalSource srcDir ver =

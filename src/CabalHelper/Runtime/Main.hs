@@ -263,20 +263,19 @@ main :: IO ()
 main = do
   args <- getArgs
 
-  projdir:distdir:args' <- case args of
-                    [] -> usage >> exitFailure
-                    _ -> return args
+  cfile : distdir : args'
+    <- case args of
+         [] -> usage >> exitFailure
+         _ -> return args
 
   ddexists <- doesDirectoryExist distdir
   when (not ddexists) $ do
          errMsg $ "distdir '"++distdir++"' does not exist"
          exitFailure
 
-  [cfile] <- filter isCabalFile <$> getDirectoryContents projdir
-
   v <- maybe silent (const deafening) . lookup  "CABAL_HELPER_DEBUG" <$> getEnvironment
   lbi <- unsafeInterleaveIO $ getPersistBuildConfig distdir
-  gpd <- unsafeInterleaveIO $ readPackageDescription v (projdir </> cfile)
+  gpd <- unsafeInterleaveIO $ readPackageDescription v cfile
   let pd = localPkgDescr lbi
   let lvd = (lbi, v, distdir)
 

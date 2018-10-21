@@ -37,14 +37,15 @@ import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Types.RelativePath
 
 getUnit :: QueryEnvI c 'Stack -> CabalFile -> IO Unit
-getUnit qe (CabalFile cabal_file) = do
-  let pkgdir = takeDirectory cabal_file
-  let pkg_name = dropExtension $ takeFileName cabal_file
+getUnit qe cabal_file@(CabalFile cabal_file_path) = do
+  let pkgdir = takeDirectory cabal_file_path
+  let pkg_name = dropExtension $ takeFileName cabal_file_path
   look <- paths qe pkgdir
   let distdirv1 = look "dist-dir:"
   return $ Unit
     { uUnitId     = UnitId pkg_name
     , uPackageDir = pkgdir
+    , uCabalFile  = cabal_file
     , uDistDir    = DistDirLib distdirv1
     }
 
@@ -57,7 +58,7 @@ packageDistDir qe pkgdir = do
   return $ look "dist-dir:"
 
 projPaths :: QueryEnvI c 'Stack -> IO StackProjPaths
-projPaths qe@QueryEnv {qeProjectDir=ProjDirStack projdir} = do
+projPaths qe@QueryEnv {qeProjLoc=ProjLocStackDir projdir} = do
   look <- paths qe projdir
   return StackProjPaths
     { sppGlobalPkgDb = PackageDbDir $ look "global-pkg-db:"
@@ -76,7 +77,7 @@ paths qe dir = do
     split l = let (key, ' ' : val) = span (not . isSpace) l in (key, val)
 
 listPackageCabalFiles :: QueryEnvI c 'Stack -> IO [CabalFile]
-listPackageCabalFiles qe@QueryEnv{qeProjectDir=ProjDirStack projdir} = do
+listPackageCabalFiles qe@QueryEnv{qeProjLoc=ProjLocStackDir projdir} = do
   out <- qeReadProcess qe (Just projdir) (stackProgram $ qePrograms qe)
     [ "ide", "packages", "--cabal-files" ] ""
   return $ map CabalFile $ lines out
