@@ -306,6 +306,11 @@ main = do
 
   print =<< flip mapM cmds $$ \x -> do
   case x of
+    "package-id":[] ->
+      return $ Just $ ChResponseVersion $ (,)
+        (display (packageName gpd))
+        (toDataVersion (packageVersion gpd))
+
     "flags":[] -> do
       return $ Just $ ChResponseFlags $ sort $
         map (flagName' &&& flagDefault) $ genPackageFlags gpd
@@ -344,7 +349,7 @@ main = do
 
     "compiler-version":[] -> do
       let CompilerId comp ver = compilerId $ compiler lbi
-      return $ Just $ ChResponseVersion (show comp) (toDataVersion ver)
+      return $ Just $ ChResponseVersion $ (,) (show comp) (toDataVersion ver)
 
     "package-db-stack":[] -> do
       let

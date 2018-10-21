@@ -436,21 +436,22 @@ readUnitInfo :: QueryEnvI c pt -> FilePath -> Unit -> IO UnitInfo
 readUnitInfo
   qe exe unit@Unit {uUnitId=uiUnitId, uPackageDir=pkgdir, uDistDir=distdir} = do
     res <- readHelper qe exe pkgdir distdir
-           [ "package-db-stack"
+           [ "package-id"
+           , "package-db-stack"
            , "flags"
            , "compiler-version"
            , "config-flags"
            , "non-default-config-flags"
            , "component-info"
            ]
-    let [ Just (ChResponsePkgDbs         uiPackageDbStack),
+    let [ Just (ChResponseVersion        uiPackageId),
+          Just (ChResponsePkgDbs         uiPackageDbStack),
           Just (ChResponseFlags          uiPackageFlags),
-          Just (ChResponseVersion        comp compVer),
+          Just (ChResponseVersion        uiCompilerVersion),
           Just (ChResponseFlags          uiConfigFlags),
           Just (ChResponseFlags          uiNonDefaultConfigFlags),
           Just (ChResponseComponentsInfo uiComponents)
           ] = res
-        uiCompilerVersion = (comp, compVer)
     uiModTimes <- getUnitModTimes unit
     return $ UnitInfo {..}
 

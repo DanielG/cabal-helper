@@ -146,6 +146,9 @@ data UnitInfo = UnitInfo
     { uiUnitId                :: !UnitId
     -- ^ A unique identifier of this init within the project.
 
+    , uiPackageId             :: !(String, Version)
+    -- ^ The package-name and version this unit belongs to.
+
     , uiComponents            :: !(Map ChComponentName ChComponentInfo)
     -- ^ The components of the unit: libraries, executables, test-suites,
     -- benchmarks and so on.

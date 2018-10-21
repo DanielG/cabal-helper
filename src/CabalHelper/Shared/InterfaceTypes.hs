@@ -41,7 +41,7 @@ data ChResponse
     | ChResponseList           [String]
     | ChResponsePkgDbs         [ChPkgDb]
     | ChResponseLbi            String
-    | ChResponseVersion        String Version
+    | ChResponseVersion        (String, Version)
     | ChResponseLicenses       [(String, [(String, Version)])]
     | ChResponseFlags          [(String, Bool)]
   deriving (Eq, Ord, Read, Show, Generic)
