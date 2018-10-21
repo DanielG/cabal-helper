@@ -20,7 +20,7 @@ Description : Stack program interface
 License     : GPL-3
 -}
 
-{-# LANGUAGE GADTs, DataKinds #-}
+{-# LANGUAGE NamedFieldPuns, GADTs, DataKinds #-}
 
 module CabalHelper.Compiletime.Program.Stack where
 
@@ -64,6 +64,7 @@ projPaths qe@QueryEnv {qeProjLoc=ProjLocStackDir projdir} = do
     { sppGlobalPkgDb = PackageDbDir $ look "global-pkg-db:"
     , sppSnapPkgDb   = PackageDbDir $ look "snapshot-pkg-db:"
     , sppLocalPkgDb  = PackageDbDir $ look "local-pkg-db:"
+    , sppCompExe     = look "compiler-exe:"
     }
 
 paths :: QueryEnvI c 'Stack
@@ -85,3 +86,7 @@ listPackageCabalFiles qe@QueryEnv{qeProjLoc=ProjLocStackDir projdir} = do
 workdirArg :: QueryEnvI c 'Stack -> [String]
 workdirArg QueryEnv{qeDistDir=DistDirStack mworkdir} =
   maybeToList $ ("--work-dir="++) . unRelativePath <$> mworkdir
+
+patchCompPrograms :: StackProjPaths -> CompPrograms -> CompPrograms
+patchCompPrograms StackProjPaths{sppCompExe} cprogs =
+  cprogs { ghcProgram = sppCompExe }

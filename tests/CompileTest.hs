@@ -45,6 +45,7 @@ setupHOME = do
 main :: IO ()
 main = do
   let ?progs = defaultPrograms
+  let ?cprogs = defaultCompPrograms
   let ?opts = defaultCompileOptions { oVerbose = True }
   let ?verbose = True
 

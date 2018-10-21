@@ -326,9 +326,10 @@ cabalMinVersionMacro (Version (mj1:mj2:mi:_) _) =
 cabalMinVersionMacro _ =
     error "cabalMinVersionMacro: Version must have at least 3 components"
 
-invokeGhc :: Env => GhcInvocation -> IO (Either ExitCode FilePath)
+invokeGhc
+    :: (Verbose, CProgs) => GhcInvocation -> IO (Either ExitCode FilePath)
 invokeGhc GhcInvocation {..} = do
-    rv <- callProcessStderr' Nothing (ghcProgram ?progs) $ concat
+    rv <- callProcessStderr' Nothing (ghcProgram ?cprogs) $ concat
       [ [ "-outputdir", giOutDir
         , "-o", giOutput
         ]
@@ -364,7 +365,7 @@ exeName CabalVersion {cabalVersion} = intercalate "-"
     , "Cabal" ++ showVersion cabalVersion
     ]
 
-readProcess' :: Env => FilePath -> [String] -> String -> IO String
+readProcess' :: Verbose => FilePath -> [String] -> String -> IO String
 readProcess' exe args inp = do
   vLog $ intercalate " " $ map formatProcessArg (exe:args)
   outp <- readProcess exe args inp
@@ -372,7 +373,7 @@ readProcess' exe args inp = do
   return outp
 
 callProcessStderr'
-    :: Env => Maybe FilePath -> FilePath -> [String] -> IO ExitCode
+    :: Verbose => Maybe FilePath -> FilePath -> [String] -> IO ExitCode
 callProcessStderr' mwd exe args = do
   let cd = case mwd of
              Nothing -> []; Just wd -> [ "cd", formatProcessArg wd++";" ]
@@ -381,7 +382,7 @@ callProcessStderr' mwd exe args = do
                                                 , cwd = mwd }
   waitForProcess h
 
-callProcessStderr :: Env => Maybe FilePath -> FilePath -> [String] -> IO ()
+callProcessStderr :: Verbose => Maybe FilePath -> FilePath -> [String] -> IO ()
 callProcessStderr mwd exe args = do
   rv <- callProcessStderr' mwd exe args
   case rv of
@@ -482,9 +483,9 @@ runCabalInstall (PackageDbDir db) (CabalSourceDir srcdir) ever = do
 
 withGHCProgramOptions :: Env => [String]
 withGHCProgramOptions =
-    concat [ [ "--with-ghc=" ++ oGhcProgram ]
-           , if oGhcProgram /= ghcPkgProgram defaultPrograms
-               then [ "--with-ghc-pkg=" ++ oGhcPkgProgram ]
+    concat [ [ "--with-ghc=" ++ ghcProgram ?cprogs ]
+           , if ghcProgram ?cprogs /= ghcPkgProgram defaultCompPrograms
+               then [ "--with-ghc-pkg=" ++ ghcPkgProgram ?cprogs ]
                else []
            ]
 
@@ -533,7 +534,7 @@ compileSetupHs db srcdir = do
 
       file = srcdir </> "Setup"
 
-  callProcessStderr (Just srcdir) oGhcProgram $ concat
+  callProcessStderr (Just srcdir) (ghcProgram ?cprogs) $ concat
     [ [ "--make"
       , "-package-conf", db
       ]
@@ -691,7 +692,7 @@ listCabalVersions' mdb = do
               args = ["list", "--simple-output", "Cabal"] ++ maybeToList mdbopt
 
           catMaybes . map (fmap snd . parsePkgId . fromString) . words
-                   <$> readProcess' oGhcPkgProgram args ""
+                   <$> readProcess' (ghcProgram ?cprogs) args ""
 
 cabalVersionExistsInPkgDb :: Env => Version -> PackageDbDir -> IO Bool
 cabalVersionExistsInPkgDb cabalVer db@(PackageDbDir db_path) = do
@@ -702,14 +703,14 @@ cabalVersionExistsInPkgDb cabalVer db@(PackageDbDir db_path) = do
       vers <- listCabalVersions' (Just db)
       return $ cabalVer `elem` vers)
 
-ghcVersion :: Env => IO Version
+ghcVersion :: (Verbose, CProgs) => IO Version
 ghcVersion = do
-    parseVer . trim <$> readProcess' oGhcProgram ["--numeric-version"] ""
+  parseVer . trim <$> readProcess' (ghcProgram ?cprogs) ["--numeric-version"] ""
 
-ghcPkgVersion :: Env => IO Version
+ghcPkgVersion :: (Verbose, CProgs) => IO Version
 ghcPkgVersion =
   parseVer . trim . dropWhile (not . isDigit)
-    <$> readProcess' oGhcPkgProgram ["--version"] ""
+    <$> readProcess' (ghcPkgProgram ?cprogs) ["--version"] ""
 
 newtype CabalInstallVersion = CabalInstallVersion { cabalInstallVer :: Version }
 cabalInstallVersion :: Env => IO CabalInstallVersion
@@ -717,15 +718,15 @@ cabalInstallVersion = do
   CabalInstallVersion . parseVer . trim
     <$> readProcess' oCabalProgram ["--numeric-version"] ""
 
-createPkgDb :: Env => CabalVersion -> IO PackageDbDir
+createPkgDb :: (Verbose, CProgs) => CabalVersion -> IO PackageDbDir
 createPkgDb cabalVer = do
   db@(PackageDbDir db_path) <- getPrivateCabalPkgDb cabalVer
   exists <- doesDirectoryExist db_path
   when (not exists) $
-       callProcessStderr Nothing oGhcPkgProgram ["init", db_path]
+       callProcessStderr Nothing (ghcPkgProgram ?cprogs) ["init", db_path]
   return db
 
-getPrivateCabalPkgDb :: Env => CabalVersion -> IO PackageDbDir
+getPrivateCabalPkgDb :: (Verbose, CProgs) => CabalVersion -> IO PackageDbDir
 getPrivateCabalPkgDb cabalVer = do
   appdir <- appCacheDir
   ghcVer <- ghcVersion

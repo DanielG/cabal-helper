@@ -54,6 +54,7 @@ module Distribution.Helper (
   , mkQueryEnv
   , qeReadProcess
   , qePrograms
+  , qeCompPrograms
   , qeProjLoc
   , qeDistDir
 
@@ -82,7 +83,6 @@ module Distribution.Helper (
 
   -- * Managing @dist/@
   , prepare
-  , reconfigure
   , writeAutogenFiles
 
   -- * Reexports
@@ -177,10 +177,11 @@ mkQueryEnv projloc distdir = do
   return $ QueryEnv
     { qeReadProcess = \mcwd exe args stdin ->
         readCreateProcess (proc exe args){ cwd = mcwd } stdin
-    , qePrograms    = defaultPrograms
-    , qeDistDir     = distdir
-    , qeCacheRef    = cr
+    , qePrograms     = defaultPrograms
+    , qeCompPrograms = defaultCompPrograms
     , qeProjLoc      = projloc
+    , qeDistDir      = distdir
+    , qeCacheRef     = cr
     }
 
 -- | Construct paths to project configuration files.
@@ -244,25 +245,6 @@ unitQuery u = Query $ \qe -> getUnitInfo qe u
 allUnits :: (UnitInfo -> a) -> Query pt [a]
 allUnits f = map f <$> (mapM unitQuery =<< projectUnits)
 
--- | Run @cabal configure@
-reconfigure :: MonadIO m
-            => (FilePath -> [String] -> String -> IO String)
-            -> Programs -- ^ Program paths
-            -> [String] -- ^ Command line arguments to be passed to @cabal@
-            -> m ()
-reconfigure readProc progs cabalOpts = do
-    let progOpts =
-            [ "--with-ghc=" ++ ghcProgram progs ]
-            -- Only pass ghc-pkg if it was actually set otherwise we
-            -- might break cabal's guessing logic
-            ++ if ghcPkgProgram progs /= "ghc-pkg"
-                 then [ "--with-ghc-pkg=" ++ ghcPkgProgram progs ]
-                 else []
-            ++ cabalOpts
-    _ <- liftIO $ readProc (cabalProgram progs) ("configure":progOpts) ""
-    return ()
-
-
 getProjInfo :: QueryEnv pt -> IO (ProjInfo pt)
 getProjInfo qe@QueryEnv{..} = do
   cache@QueryCache{qcProjInfo, qcUnitInfos} <- readIORef qeCacheRef
@@ -321,7 +303,7 @@ checkUpdateUnitInfo qe proj_info unit munit_info = do
   where
     reconf = do
       reconfigureUnit qe unit
-      helper <- wrapper proj_info qe
+      helper <- getHelperExe proj_info qe
       readUnitInfo qe helper unit
 
 -- | Restrict 'UnitInfo' cache to units that are still active
@@ -386,7 +368,7 @@ getFileModTime f = do
 
 readProjInfo
     :: QueryEnvI c pt -> ProjConf pt -> ProjConfModTimes -> IO (ProjInfo pt)
-readProjInfo qe pc pcm = join $ withVerbosity $ do
+readProjInfo qe pc pcm = withVerbosity $ do
   case (qeProjLoc qe, qeDistDir qe, pc) of
     ((,,)
      projloc
@@ -432,7 +414,12 @@ readProjInfo qe pc pcm = join $ withVerbosity $ do
       cabal_files <- Stack.listPackageCabalFiles qe
       units <- mapM (Stack.getUnit qe) cabal_files
       proj_paths <- Stack.projPaths qe
+      cprogs <-
+        guessCompProgramPaths $
+        Stack.patchCompPrograms proj_paths $
+        qeCompPrograms qe
       Just (cabalVer:_) <- runMaybeT $
+        let ?cprogs = cprogs in
         let ?progs  = qePrograms qe in
         listCabalVersions' (Just (sppGlobalPkgDb proj_paths))
       -- ^ See [Note Stack Cabal Version]
@@ -541,14 +528,14 @@ invokeHelper
 prepare :: QueryEnv pt -> IO ()
 prepare qe = do
   proj_info <- getProjInfo qe
-  void $ wrapper proj_info qe
+  void $ getHelperExe proj_info qe
 
 -- | Create @cabal_macros.h@ and @Paths_\<pkg\>@ possibly other generated files
 -- in the usual place. See 'Distribution.Simple.Build.initialBuildSteps'.
 writeAutogenFiles :: Unit -> Query pt ()
 writeAutogenFiles Unit{uCabalFile, uDistDir} = Query $ \qe -> do
   proj_info <- getProjInfo qe
-  exe <- wrapper proj_info qe
+  exe <- getHelperExe proj_info qe
   void $ invokeHelper qe exe uCabalFile uDistDir ["write-autogen-files"]
 
 -- | Get the path to the sandbox package-db in a project
@@ -570,16 +557,15 @@ buildPlatform = display Distribution.System.buildPlatform
 lookupEnv' :: String -> IO (Maybe String)
 lookupEnv' k = lookup k <$> getEnvironment
 
-guessProgramPaths :: (Verbose, Progs) => (Progs => IO a) -> IO a
-guessProgramPaths act = do
+-- | Determine ghc-pkg path from ghc path
+guessCompProgramPaths :: Verbose => CompPrograms -> IO CompPrograms
+guessCompProgramPaths progs = do
     let v | ?verbose  = deafening
           | otherwise = silent
-
-        mGhcPath0    | same ghcProgram ?progs dprogs = Nothing
-                     | otherwise = Just $ ghcProgram ?progs
-        mGhcPkgPath0 | same ghcPkgProgram ?progs dprogs = Nothing
-                     | otherwise = Just $ ghcPkgProgram ?progs
-
+        mGhcPath0    | same ghcProgram progs dprogs = Nothing
+                     | otherwise = Just $ ghcProgram progs
+        mGhcPkgPath0 | same ghcPkgProgram progs dprogs = Nothing
+                     | otherwise = Just $ ghcPkgProgram progs
     (_compiler, _mplatform, progdb)
         <- GHC.configure
                v
@@ -589,31 +575,31 @@ guessProgramPaths act = do
     let getProg p = ProgDb.programPath <$> ProgDb.lookupProgram p progdb
         mghcPath1    = getProg ProgDb.ghcProgram
         mghcPkgPath1 = getProg ProgDb.ghcPkgProgram
+    return progs
+      { ghcProgram    = fromMaybe (ghcProgram progs) mghcPath1
+      , ghcPkgProgram = fromMaybe (ghcProgram progs) mghcPkgPath1
+      }
 
-    let ?progs = ?progs
-          { ghcProgram    = fromMaybe (ghcProgram ?progs) mghcPath1
-          , ghcPkgProgram = fromMaybe (ghcProgram ?progs) mghcPkgPath1
-          }
-    act
- where
+  where
    same f o o'  = f o == f o'
-   dprogs = defaultPrograms
+   dprogs = defaultCompPrograms
 
-withVerbosity :: (Verbose => a) -> IO a
-withVerbosity a = do
+withVerbosity :: (Verbose => IO a) -> IO a
+withVerbosity act = do
   x <- lookup  "CABAL_HELPER_DEBUG" <$> getEnvironment
   let ?verbose =
         case x of
           Just xs | not (null xs) -> True
           _ -> False
-  return a
+  act
 
-wrapper
+getHelperExe
     :: ProjInfo pt -> QueryEnvI c pt -> IO FilePath
-wrapper proj_info QueryEnv{..} = do
-  join $ withVerbosity $ do
-    let ?progs = qePrograms
+getHelperExe proj_info QueryEnv{..} = do
+  withVerbosity $ do
     let comp = wrapper' qeProjLoc qeDistDir proj_info
+    let ?progs = qePrograms
+        ?cprogs = qeCompPrograms
     eexe <- compileHelper comp
     case eexe of
       Left rv ->
