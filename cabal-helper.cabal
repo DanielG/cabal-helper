@@ -1,3 +1,4 @@
+cabal-version:       2.2
 name:                cabal-helper
 version:             1.0.0.0
 synopsis:
@@ -24,13 +25,12 @@ description:
     is installed into a private, isolated, package database in
     @$XDG_CACHE_HOME/cabal-helper@ so as to not interfere with the user's
     package database.
-license:             GPL-3
+license:             GPL-3.0-or-later
 license-file:        LICENSE
 author:              Daniel Gröber <cabal-helper@dxld.at>
 maintainer:          cabal-helper@dxld.at
 category:            Distribution
 build-type:          Simple
-cabal-version:       2.0
 extra-source-files:  README.md
                      src/CabalHelper/Runtime/*.hs
 
