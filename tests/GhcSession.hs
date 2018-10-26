@@ -152,8 +152,9 @@ compileModule nb ep opts = do
            ChExeEntrypoint m'  ms    ->
              let
 
-               -- The options first clear out includes, then put in the build dir. We want the
-               -- first one after that, so "regex-example" in the following case
+               -- The options first clear out includes, then put in the build
+               -- dir. We want the first one after that, so "regex-example" in
+               -- the following case
                --
                -- ,"-i"
                -- ,"-idist/build/regex-example"

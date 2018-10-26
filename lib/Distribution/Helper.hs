@@ -341,7 +341,7 @@ reconfigureUnit :: QueryEnvI c pt -> Unit -> IO ()
 reconfigureUnit QueryEnv{qeDistDir=DistDirV1{}, ..} Unit{uPackageDir=_} = do
   return ()
 reconfigureUnit QueryEnv{qeDistDir=DistDirV2{}, ..} Unit{uPackageDir=_} = do
-  return ()
+  return () -- TODO: new-build --only-configure
 reconfigureUnit QueryEnv{qeDistDir=DistDirStack{}, ..} Unit{uPackageDir} = do
   _ <- liftIO $ qeReadProcess (Just uPackageDir) (stackProgram qePrograms)
          ["stack", "build", "--only-configure", "."] ""
@@ -458,6 +458,12 @@ planUnits plan = do
       return $ Just $ Left u
     takeunit _ =
       return $ Nothing
+-- [Note Stack Cabal Version]
+--
+-- Stack just uses a ghc-pkg invocation on the global-pkg-db to determine the
+-- appropriate Cabal version for a resolver when building, see
+-- Stack.GhcPkg.getCabalPkgVer. We do essentially the same thing here, but we
+-- use --simple-output instead of using @ghc-pkg field@.
 
 readUnitInfo :: QueryEnvI c pt -> FilePath -> Unit -> IO UnitInfo
 readUnitInfo
