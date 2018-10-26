@@ -96,7 +96,7 @@ type QueryEnv (proj_type :: ProjType)
 
 data QueryEnvI cache (proj_type :: ProjType) = QueryEnv
     { qeReadProcess
-          :: Maybe FilePath -> FilePath -> [String] -> String -> IO String
+          :: !(Maybe FilePath -> FilePath -> [String] -> String -> IO String)
     -- ^ Field accessor for 'QueryEnv'. Function used to to start
     -- processes. Useful if you need to, for example, redirect standard error
     -- output away from the user\'s terminal.
@@ -111,11 +111,11 @@ data QueryEnvI cache (proj_type :: ProjType) = QueryEnv
     -- ^ Field accessor for 'QueryEnv'. Defines path to the project directory,
     -- i.e. a directory containing a @cabal.project@ file
 
-    , qeDistDir     :: DistDir proj_type
+    , qeDistDir      :: !(DistDir proj_type)
     -- ^ Field accessor for 'QueryEnv'. Defines path to the @dist/@ or
     -- @dist-newstyle/@ directory, aka. /builddir/ in Cabal terminology.
 
-    , qeCacheRef    :: IORef cache
+    , qeCacheRef     :: !(IORef cache)
     -- ^ Cache for query results, only accessible when type parameter @cache@ is
     -- instantiated and not forall quantified.
     }
