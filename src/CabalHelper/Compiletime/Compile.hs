@@ -681,18 +681,16 @@ errorInstallCabal cabalVer = panicIO $ printf "\
 
 listCabalVersions' :: Env => Maybe PackageDbDir -> MaybeT IO [Version]
 listCabalVersions' mdb = do
-  case mdb of
-    Nothing -> mzero
-    Just (PackageDbDir db_path) -> do
-      exists <- liftIO $ doesDirectoryExist db_path
-      case exists of
-        False -> mzero
-        True  -> MaybeT $ logIOError "listCabalVersions'" $ Just <$> do
-          let mdbopt = ("--package-conf="++) <$> unPackageDbDir <$> mdb
-              args = ["list", "--simple-output", "Cabal"] ++ maybeToList mdbopt
-
-          catMaybes . map (fmap snd . parsePkgId . fromString) . words
-                   <$> readProcess' (ghcProgram ?cprogs) args ""
+  let mdb_path = unPackageDbDir <$> mdb
+  exists <- fromMaybe True <$>
+    traverse (liftIO . doesDirectoryExist) mdb_path
+  case exists of
+    True -> MaybeT $ logIOError "listCabalVersions" $ Just <$> do
+      let mdbopt = ("--package-conf="++) <$> mdb_path
+          args = ["list", "--simple-output", "Cabal"] ++ maybeToList mdbopt
+      catMaybes . map (fmap snd . parsePkgId . fromString) . words
+               <$> readProcess' (ghcPkgProgram ?cprogs) args ""
+    _ -> mzero
 
 cabalVersionExistsInPkgDb :: Env => Version -> PackageDbDir -> IO Bool
 cabalVersionExistsInPkgDb cabalVer db@(PackageDbDir db_path) = do
