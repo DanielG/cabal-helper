@@ -1,2 +1,4 @@
-cabal_helper_libexecdir="$build_dir"/build/cabal-helper-wrapper \
-    cabal --sandbox-config="$sandbox_config" test --builddir="$build_dir" --show-details=streaming
+
+cabal --builddir="$build_dir" new-run ghc-session
+
+cabal --builddir="$build_dir" new-run compile-test
