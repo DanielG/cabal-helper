@@ -1,0 +1,11 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = ../cabal-plan
+	branch = master
+	commit = 34506abf26df4275e8c90771587d152d1c8531f1
+	parent = 12e1be31c09161dec1fa70f15ede84ba9965a365
+	cmdver = 0.3.1
