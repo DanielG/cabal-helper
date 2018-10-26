@@ -134,15 +134,6 @@ appCacheDir =
     windowsCache = "Local Settings" </> "Cache"
     unixCache = ".cache"
 
-isCabalFile :: FilePath -> Bool
-isCabalFile f = takeExtension' f == ".cabal"
-
-takeExtension' :: FilePath -> String
-takeExtension' p =
-    if takeFileName p == takeExtension p
-      then "" -- just ".cabal" is not a valid cabal file
-      else takeExtension p
-
 replace :: String -> String -> String -> String
 replace n r hs' = go "" hs'
  where

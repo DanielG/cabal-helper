@@ -90,13 +90,11 @@ module Distribution.Helper (
   ) where
 
 import Cabal.Plan hiding (Unit, UnitId, uDistDir)
-import qualified Cabal.Plan as CP
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.Maybe
 import Control.Monad.IO.Class
 import Control.Exception as E
-import Data.Coerce
 import Data.IORef
 import Data.List hiding (filter)
 import Data.String
@@ -117,11 +115,12 @@ import System.Process
 import System.Posix.Types
 import System.PosixCompat.Files
 import Text.Printf
-import Text.Show.Pretty
 import Prelude
 
 import CabalHelper.Compiletime.Compile
 import qualified CabalHelper.Compiletime.Program.Stack as Stack
+import qualified CabalHelper.Compiletime.Program.GHC as GHC
+import qualified CabalHelper.Compiletime.Program.CabalInstall as CabalInstall
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Types.RelativePath
 import CabalHelper.Shared.InterfaceTypes
@@ -131,18 +130,12 @@ import CabalHelper.Shared.Common
 import CabalHelper.Compiletime.Compat.Version
 import qualified CabalHelper.Compiletime.Compat.ProgramDb as ProgDb
     ( defaultProgramDb, programPath, lookupProgram, ghcProgram, ghcPkgProgram)
-import CabalHelper.Shared.Common
 
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
 import Distribution.Verbosity (silent, deafening)
 --import Distribution.Package (packageName, packageVersion)
 import Distribution.Simple.GHC as GHC (configure)
-
-import qualified CabalHelper.Compiletime.Compat.ProgramDb as ProgDb
-    ( defaultProgramDb, programPath, lookupProgram, ghcProgram, ghcPkgProgram)
-import CabalHelper.Compiletime.Compat.Version
-import CabalHelper.Shared.Common
 
 -- | A lazy, cached, query against a package's Cabal configuration. Use
 -- 'runQuery' to execute it.
@@ -347,20 +340,6 @@ reconfigureUnit QueryEnv{qeDistDir=DistDirStack{}, ..} Unit{uPackageDir} = do
          ["stack", "build", "--only-configure", "."] ""
   return ()
 
-findCabalFile :: FilePath -> IO FilePath
-findCabalFile pkgdir = do
-    [cfile] <- filter isCabalFile <$> getDirectoryContents pkgdir
-    return cfile
-  where
-    isCabalFile :: FilePath -> Bool
-    isCabalFile f = takeExtension' f == ".cabal"
-
-    takeExtension' :: FilePath -> String
-    takeExtension' p =
-        if takeFileName p == takeExtension p
-          then "" -- just ".cabal" is not a valid cabal file
-          else takeExtension p
-
 getFileModTime :: FilePath -> IO (FilePath, EpochTime)
 getFileModTime f = do
   t <- modificationTime <$> getFileStatus f
@@ -399,7 +378,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
                     , pjCompilerId=PkgId (PkgName compName) (Ver compVer)
                     }
           <- decodePlanJson plan_path
-      units <- planUnits plan
+      units <- CabalInstall.planUnits plan
       return ProjInfo
         { piCabalVersion = makeDataVersion pjCabalLibVersion
         , piProjConfModTimes = pcm
@@ -421,7 +400,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
       Just (cabalVer:_) <- runMaybeT $
         let ?cprogs = cprogs in
         let ?progs  = qePrograms qe in
-        listCabalVersions' (Just (sppGlobalPkgDb proj_paths))
+        GHC.listCabalVersions (Just (sppGlobalPkgDb proj_paths))
       -- ^ See [Note Stack Cabal Version]
       return ProjInfo
         { piCabalVersion = cabalVer
@@ -431,39 +410,6 @@ readProjInfo qe pc pcm = withVerbosity $ do
           { piStackProjPaths = proj_paths
           }
         }
-
-planUnits :: CP.PlanJson -> IO [Unit]
-planUnits plan = do
-    units <- fmap catMaybes $ mapM takeunit $ Map.elems $ CP.pjUnits plan
-    case lefts units of
-      [] -> return $ rights units
-      us@(_:_) -> panicIO $
-        msg ++ (concat $ map (unlines . map ("  "++) . lines . ppShow) us)
-  where
-    msg = "\
-\plan.json doesn't contain 'dist-dir' key for the following local units:\n"
-    takeunit u@CP.Unit
-      { uType=CP.UnitTypeLocal
-      , uDistDir=Just distdirv1
-      , uPkgSrc=Just (CP.LocalUnpackedPackage pkgdir)
-      } = do
-        cabal_file <- findCabalFile pkgdir
-        return $ Just $ Right $ Unit
-          { uUnitId     = UnitId $ Text.unpack (coerce (CP.uId u))
-          , uPackageDir = pkgdir
-          , uCabalFile  = CabalFile cabal_file
-          , uDistDir    = DistDirLib distdirv1
-          }
-    takeunit u@CP.Unit {uType=CP.UnitTypeLocal} =
-      return $ Just $ Left u
-    takeunit _ =
-      return $ Nothing
--- [Note Stack Cabal Version]
---
--- Stack just uses a ghc-pkg invocation on the global-pkg-db to determine the
--- appropriate Cabal version for a resolver when building, see
--- Stack.GhcPkg.getCabalPkgVer. We do essentially the same thing here, but we
--- use --simple-output instead of using @ghc-pkg field@.
 
 readUnitInfo :: QueryEnvI c pt -> FilePath -> Unit -> IO UnitInfo
 readUnitInfo

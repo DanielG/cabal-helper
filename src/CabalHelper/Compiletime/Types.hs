@@ -15,8 +15,7 @@
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 {-# LANGUAGE DeriveGeneric, DeriveDataTypeable, DefaultSignatures,
-  StandaloneDeriving, GADTs, DataKinds, KindSignatures, ImplicitParams,
-  ConstraintKinds, RankNTypes #-}
+  StandaloneDeriving, GADTs, DataKinds, KindSignatures, RankNTypes #-}
 
 {-|
 Module      : CabalHelper.Compiletime.Types

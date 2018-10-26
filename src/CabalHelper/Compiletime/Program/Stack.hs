@@ -20,7 +20,7 @@ Description : Stack program interface
 License     : GPL-3
 -}
 
-{-# LANGUAGE NamedFieldPuns, GADTs, DataKinds #-}
+{-# LANGUAGE GADTs, DataKinds #-}
 
 module CabalHelper.Compiletime.Program.Stack where
 

@@ -21,7 +21,10 @@ import Prelude
 
 import CabalHelper.Compiletime.Compat.Environment
 import CabalHelper.Compiletime.Compat.Version
+import CabalHelper.Compiletime.Cabal
 import CabalHelper.Compiletime.Compile
+import CabalHelper.Compiletime.Program.CabalInstall
+import CabalHelper.Compiletime.Program.GHC
 import CabalHelper.Compiletime.Types
 import CabalHelper.Shared.Common
 
@@ -172,7 +175,7 @@ testCabalVersions versions = do
 compilePrivatePkgDb
     :: Env => Either HEAD Version -> IO (Either ExitCode FilePath)
 compilePrivatePkgDb eCabalVer = do
-    res <- E.try $ installCabal eCabalVer
+    res <- E.try $ installCabalLib eCabalVer
     case res of
       Right (db, cabalVer) ->
           compileWithPkg db cabalVer

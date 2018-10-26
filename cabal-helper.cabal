@@ -82,12 +82,17 @@ flag dev
 
 library c-h-internal
   exposed-modules:
+                       CabalHelper.Compiletime.Cabal
                        CabalHelper.Compiletime.Compat.Environment
                        CabalHelper.Compiletime.Compat.ProgramDb
                        CabalHelper.Compiletime.Compat.Version
                        CabalHelper.Compiletime.Compile
                        CabalHelper.Compiletime.Data
+                       CabalHelper.Compiletime.Log
+                       CabalHelper.Compiletime.Process
+                       CabalHelper.Compiletime.Program.CabalInstall
                        CabalHelper.Compiletime.Program.Stack
+                       CabalHelper.Compiletime.Program.GHC
                        CabalHelper.Compiletime.Types
                        CabalHelper.Compiletime.Types.RelativePath
                        CabalHelper.Shared.Common
@@ -102,6 +107,10 @@ library c-h-internal
   -- Common c-h-internal -- See [Note test dependencies]
   default-language:    Haskell2010
   default-extensions:  NondecreasingIndentation
+                       ImplicitParams
+                       NamedFieldPuns RecordWildCards
+                       FlexibleContexts
+                       ConstraintKinds
   other-extensions:    TemplateHaskell
   build-depends:       base             < 5    && >= 4.7
                      , Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
@@ -139,6 +148,10 @@ library
   -- Instantiate common c-h-internal -- See [Note test dependencies]
   default-language:    Haskell2010
   default-extensions:  NondecreasingIndentation
+                       ImplicitParams
+                       NamedFieldPuns RecordWildCards
+                       FlexibleContexts
+                       ConstraintKinds
   other-extensions:    TemplateHaskell
   build-depends:       base             < 5    && >= 4.7
                      , Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
@@ -174,6 +187,10 @@ test-suite compile-test
   -- Instantiate common c-h-internal -- See [Note test dependencies]
   default-language:    Haskell2010
   default-extensions:  NondecreasingIndentation
+                       ImplicitParams
+                       NamedFieldPuns RecordWildCards
+                       FlexibleContexts
+                       ConstraintKinds
   other-extensions:    TemplateHaskell
   build-depends:       base             < 5    && >= 4.7
                      , Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
@@ -213,6 +230,10 @@ test-suite ghc-session
   -- Instantiate common c-h-internal -- See [Note test dependencies]
   default-language:    Haskell2010
   default-extensions:  NondecreasingIndentation
+                       ImplicitParams
+                       NamedFieldPuns RecordWildCards
+                       FlexibleContexts
+                       ConstraintKinds
   other-extensions:    TemplateHaskell
   build-depends:       base             < 5    && >= 4.7
                      , Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
