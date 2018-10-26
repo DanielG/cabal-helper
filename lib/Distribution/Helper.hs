@@ -312,7 +312,7 @@ discardInactiveUnitInfos
     -> Map DistDirLib UnitInfo
     -> Map DistDirLib UnitInfo
 discardInactiveUnitInfos active_units uis0 =
-  restrictKeysMap uis0 $ Set.fromList $ map uDistDir active_units
+    restrictKeysMap uis0 $ Set.fromList $ map uDistDir active_units
   where
     restrictKeysMap :: Ord k => Map k a -> Set k -> Map k a
     restrictKeysMap m s = Map.filterWithKey (\k _ -> Set.member k s) m
@@ -549,7 +549,7 @@ getSandboxPkgDb
     -- @cabal.sandbox.config@ file
     -> IO (Maybe FilePath)
 getSandboxPkgDb buildPlat ghc_ver projdir =
-    CabalHelper.Shared.Sandbox.getSandboxPkgDb buildPlat ghc_ver projdir
+  CabalHelper.Shared.Sandbox.getSandboxPkgDb buildPlat ghc_ver projdir
 
 buildPlatform :: String
 buildPlatform = display Distribution.System.buildPlatform
