@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections, ScopedTypeVariables, RecordWildCards #-}
+{-# LANGUAGE TupleSections, ScopedTypeVariables, RecordWildCards, RankNTypes, DataKinds #-}
 module Main where
 
 import GHC
@@ -54,7 +54,37 @@ cabalInstallBuiltinCabalVersion =
     parseVer . trim <$> readProcess "cabal"
         ["act-as-setup", "--", "--numeric-version"] ""
 
-setup :: FilePath -> (FilePath -> IO [Bool]) -> (FilePath, Version, Version) -> IO [Bool]
+data CabalCommands pt =
+  CabalCommands
+    { cabalDistDir          :: FilePath -> DistDir pt
+    , cabalProjDir          :: FilePath -> ProjLoc pt
+    , cabalAddProject       :: FilePath -> IO ()
+    , cabalConfigureCommand :: String
+    , cabalBuildCommand     :: String
+    , cabalSdistCommand     :: String
+    }
+
+oldBuild :: CabalCommands 'V1
+oldBuild = CabalCommands
+    { cabalDistDir          = \d -> DistDirV1 (d </> "dist")
+    , cabalProjDir          = \cf -> ProjLocCabalFile cf
+    , cabalAddProject       = \_ -> return ()
+    , cabalConfigureCommand = "configure"
+    , cabalBuildCommand     = "build"
+    , cabalSdistCommand     = "sdist"
+    }
+
+newBuild :: CabalCommands 'V2
+newBuild = CabalCommands
+    { cabalDistDir          = \d -> DistDirV2 (d </> "dist-newstyle")
+    , cabalProjDir          = \cf -> ProjLocV2Dir (takeDirectory cf)
+    , cabalAddProject       = addCabalProject
+    , cabalConfigureCommand = "new-configure"
+    , cabalBuildCommand     = "new-build"
+    , cabalSdistCommand     = "sdist"
+    }
+
+setup :: FilePath -> (forall pt . CabalCommands pt -> FilePath -> IO [Bool]) -> (FilePath, Version, Version) -> IO [Bool]
 setup topdir act (cabal_file, min_cabal_ver, min_ghc_ver) = do
     let projdir = takeDirectory cabal_file
     ci_ver <- cabalInstallVersion
@@ -77,15 +107,26 @@ setup topdir act (cabal_file, min_cabal_ver, min_ghc_ver) = do
         putStrLn $ "Skipping test '" ++ projdir ++ "' because " ++ reason ++ "."
         return []
       Nothing -> do
-        putStrLn $ "Running test '" ++ projdir ++ "'-------------------------"
-        withSystemTempDirectory "cabal-helper.ghc-session.test" $ \dir -> do
-          setCurrentDirectory $ topdir </> projdir
-          run "cabal" [ "sdist", "-v0", "--output-dir", dir ]
+        putStrLn $ "Running test '" ++ projdir ++ "' with " ++ showVersion ci_ver ++ "."
+        putStrLn "Old build -------------------------------------"
+        rold <- runTest oldBuild topdir projdir cabal_file act
+        putStrLn "New build -------------------------------------"
+        rnew <- runTest newBuild topdir projdir cabal_file act
+        return (rold ++ rnew)
 
-          setCurrentDirectory dir
-          run "cabal" [ "configure" ]
+runTest :: CabalCommands pt -> FilePath -> String -> FilePath
+        -> (CabalCommands pt -> FilePath -> IO [Bool]) -> IO [Bool]
+runTest c topdir projdir cabal_file act = do
+  putStrLn $ "Running test '" ++ projdir ++ "'-------------------------"
+  withSystemTempDirectory' "cabal-helper.ghc-session.test" $ \dir -> do
+    setCurrentDirectory $ topdir </> projdir
+    run "cabal" [ cabalSdistCommand c, "-v0", "--output-dir", dir ]
 
-          act $ dir </> takeFileName cabal_file
+    setCurrentDirectory dir
+    cabalAddProject c $ dir
+    run "cabal" [ cabalConfigureCommand c ]
+
+    act c $ dir </> takeFileName cabal_file
 
 run :: String -> [String] -> IO ()
 run x xs = do
@@ -93,18 +134,18 @@ run x xs = do
   ExitSuccess <- rawSystem x xs
   return ()
 
-test :: FilePath -> IO [Bool]
-test cabal_file = do
+test :: CabalCommands pt -> FilePath -> IO [Bool]
+test c cabal_file = do
     let projdir = takeDirectory cabal_file
     qe <- mkQueryEnv
-            (ProjLocCabalFile cabal_file)
-            (DistDirV1 $ projdir </> "dist")
+            (cabalProjDir c $ cabal_file)
+            (cabalDistDir c $ projdir)
     cs <- concat <$> runQuery (allUnits (Map.elems . uiComponents)) qe
     forM cs $ \ChComponentInfo{..} -> do
         putStrLn $ "\n" ++ show ciComponentName ++ ":::: " ++ show ciNeedsBuildOutput
 
         when (ciNeedsBuildOutput == ProduceBuildOutput) $ do
-          run "cabal" [ "build" ]
+          run "cabal" [ cabalBuildCommand c ]
 
         let opts' = "-Werror" : ciGhcOptions
 
@@ -117,6 +158,9 @@ test cabal_file = do
         | "-" `isPrefixOf` x = "\n  "++x
         | otherwise          = x
 
+addCabalProject :: FilePath -> IO ()
+addCabalProject dir = do
+  writeFile (dir </> "cabal.project") "packages: .\n"
 
 compileModule :: NeedsBuildOutput -> ChEntrypoint -> [String] -> IO Bool
 compileModule nb ep opts = do
@@ -185,3 +229,26 @@ compileModule nb ep opts = do
 
 unChModuleName :: ChModuleName -> String
 unChModuleName (ChModuleName  mn) = mn
+
+-- ---------------------------------------------------------------------
+-- | Create and use a temporary directory in the system standard temporary directory.
+--
+-- Behaves exactly the same as 'withTempDirectory', except that the parent temporary directory
+-- will be that returned by 'getCanonicalTemporaryDirectory'.
+withSystemTempDirectory' :: String   -- ^ Directory name template
+                        -> (FilePath -> IO a) -- ^ Callback that can use the directory
+                        -> IO a
+withSystemTempDirectory' template action
+  = liftIO getCanonicalTemporaryDirectory >>= \tmpDir' -> withTempDirectory' tmpDir' template action
+
+-- | Create and use a temporary directory inside the given directory.
+--
+-- The directory is deleted after use.
+withTempDirectory' :: FilePath -- ^ Parent directory to create the directory in
+                  -> String   -- ^ Directory name template
+                  -> (FilePath -> IO a) -- ^ Callback that can use the directory
+                  -> IO a
+withTempDirectory' targetDir template =
+  gbracket
+    (liftIO (createTempDirectory targetDir template))
+    (\x -> return x) -- Leave the dir for inspection later
