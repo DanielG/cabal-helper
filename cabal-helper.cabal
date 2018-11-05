@@ -112,7 +112,7 @@ library c-h-internal
                        FlexibleContexts
                        ConstraintKinds
   other-extensions:    TemplateHaskell
-  build-depends:       base             < 5    && >= 4.7
+  build-depends:       base             < 5    && >= 4.8
                      , Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
                      , cabal-plan       < 0.5  && >= 0.3.0.0
                      , containers       < 1    && >= 0.5.5.1
@@ -153,7 +153,7 @@ library
                        FlexibleContexts
                        ConstraintKinds
   other-extensions:    TemplateHaskell
-  build-depends:       base             < 5    && >= 4.7
+  build-depends:       base             < 5    && >= 4.8
                      , Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
                      , cabal-plan       < 0.5  && >= 0.3.0.0
                      , containers       < 1    && >= 0.5.5.1
@@ -192,7 +192,7 @@ test-suite compile-test
                        FlexibleContexts
                        ConstraintKinds
   other-extensions:    TemplateHaskell
-  build-depends:       base             < 5    && >= 4.7
+  build-depends:       base             < 5    && >= 4.8
                      , Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
                      , cabal-plan       < 0.5  && >= 0.3.0.0
                      , containers       < 1    && >= 0.5.5.1
@@ -222,7 +222,7 @@ test-suite ghc-session
   main-is:             GhcSession.hs
   hs-source-dirs:      tests
   ghc-options:         -Wall
-  build-depends:       base             < 5    && >= 4.7
+  build-depends:       base             < 5    && >= 4.8
                      , ghc              < 8.7  && >= 7.10
                      , ghc-paths        < 0.2  && >= 0.1.0.9
                      , cabal-helper
@@ -235,7 +235,7 @@ test-suite ghc-session
                        FlexibleContexts
                        ConstraintKinds
   other-extensions:    TemplateHaskell
-  build-depends:       base             < 5    && >= 4.7
+  build-depends:       base             < 5    && >= 4.8
                      , Cabal            < 2.5  && >= 2.0     || < 1.26 && >= 1.14
                      , cabal-plan       < 0.5  && >= 0.3.0.0
                      , containers       < 1    && >= 0.5.5.1
@@ -281,7 +281,7 @@ executable cabal-helper-main
     buildable:         False
 
   ghc-options:         -Wall -fno-warn-unused-imports
-  build-depends:       base             < 5    && >= 4.7
+  build-depends:       base             < 5    && >= 4.8
                      , Cabal
                      , containers
                      , bytestring
