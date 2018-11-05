@@ -38,34 +38,36 @@ import Paths_cabal_helper (version)
 
 -- | Cabal library version we're compiling the helper exe against.
 data CabalVersion
-    = CabalHEAD  { cvCommitId   :: CommitId }
+    = CabalHEAD { cvCommitId :: CommitId }
     | CabalVersion { cabalVersion :: Version }
 
 newtype CommitId = CommitId { unCommitId :: String }
 
 showCabalVersion :: CabalVersion -> String
 showCabalVersion (CabalHEAD commitid) =
-    "HEAD-" ++ unCommitId commitid
+  "HEAD-" ++ unCommitId commitid
 showCabalVersion CabalVersion {cabalVersion} =
-    showVersion cabalVersion
+  showVersion cabalVersion
 
 exeName :: CabalVersion -> String
 exeName (CabalHEAD commitid) = intercalate "--"
-    [ "cabal-helper-" ++ showVersion version
-    , "Cabal-HEAD" ++ unCommitId commitid
-    ]
+  [ "cabal-helper-" ++ showVersion version
+  , "Cabal-HEAD" ++ unCommitId commitid
+  ]
 exeName CabalVersion {cabalVersion} = intercalate "--"
-    [ "cabal-helper-" ++ showVersion version
-    , "Cabal-" ++ showVersion cabalVersion
-    ]
+  [ "cabal-helper-" ++ showVersion version
+  , "Cabal-" ++ showVersion cabalVersion
+  ]
 
-data CabalPatchDescription = CabalPatchDescription {
-      cpdVersions      :: [Version],
-      cpdUnpackVariant :: UnpackCabalVariant,
-      cpdPatchFn       :: FilePath -> IO ()
-    }
+data CabalPatchDescription = CabalPatchDescription
+  { cpdVersions      :: [Version]
+  , cpdUnpackVariant :: UnpackCabalVariant
+  , cpdPatchFn       :: FilePath -> IO ()
+  }
+
 nopCabalPatchDescription :: CabalPatchDescription
-nopCabalPatchDescription = CabalPatchDescription [] LatestRevision (const (return ()))
+nopCabalPatchDescription =
+  CabalPatchDescription [] LatestRevision (const (return ()))
 
 patchyCabalVersions :: [CabalPatchDescription]
 patchyCabalVersions = [
@@ -119,11 +121,7 @@ patchyCabalVersions = [
 
      renameFile versionFileTmp versionFile
 
-unpackPatchedCabal
-    :: Env
-    => Version
-    -> FilePath
-    -> IO CabalSourceDir
+unpackPatchedCabal :: Env => Version -> FilePath -> IO CabalSourceDir
 unpackPatchedCabal cabalVer tmpdir = do
     res@(CabalSourceDir dir) <- unpackCabal cabalVer tmpdir variant
     patch dir
