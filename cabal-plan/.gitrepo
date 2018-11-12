@@ -5,7 +5,7 @@
 ;
 [subrepo]
 	remote = ../cabal-plan
-	branch = master
-	commit = 34506abf26df4275e8c90771587d152d1c8531f1
-	parent = 12e1be31c09161dec1fa70f15ede84ba9965a365
+	branch = ghc-8.6
+	commit = 9c536d2794131a7ec891ab9153e3d81547918d38
+	parent = 0204de0c3511fcb45c7d46b06bd3f00d98f530f4
 	cmdver = 0.3.1
