@@ -36,7 +36,7 @@ import Prelude
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Types.RelativePath
 
-getUnit :: QueryEnvI c 'Stack -> CabalFile -> IO Unit
+getUnit :: QueryEnvI c 'Stack -> CabalFile -> IO (Unit 'Stack)
 getUnit qe cabal_file@(CabalFile cabal_file_path) = do
   let pkgdir = takeDirectory cabal_file_path
   let pkg_name = dropExtension $ takeFileName cabal_file_path
@@ -47,6 +47,7 @@ getUnit qe cabal_file@(CabalFile cabal_file_path) = do
     , uPackageDir = pkgdir
     , uCabalFile  = cabal_file
     , uDistDir    = DistDirLib distdirv1
+    , uUnitInfo   = UnitImplStack
     }
 
 -- TODO: patch ghc/ghc-pkg program paths like in ghc-mod when using stack so

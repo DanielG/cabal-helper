@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+
 -- cabal-helper: Simple interface to Cabal's configuration state
 -- Copyright (C) 2018  Daniel Gröber <cabal-helper@dxld.at>
 --
@@ -181,7 +183,7 @@ cabalWithGHCProgOpts = concat
       else []
   ]
 
-planUnits :: CP.PlanJson -> IO [Unit]
+planUnits :: CP.PlanJson -> IO [Unit 'V2]
 planUnits plan = do
     units <- fmap catMaybes $ mapM takeunit $ Map.elems $ CP.pjUnits plan
     case lefts units of
@@ -202,6 +204,7 @@ planUnits plan = do
           , uPackageDir = pkgdir
           , uCabalFile  = CabalFile cabal_file
           , uDistDir    = DistDirLib distdirv1
+          , uUnitInfo   = UnitImplV2{uiV2Component=map (Text.unpack . CP.dispCompName) (Map.keys $ CP.uComps u)}
           }
     takeunit u@CP.Unit {uType=CP.UnitTypeLocal} =
       return $ Just $ Left u

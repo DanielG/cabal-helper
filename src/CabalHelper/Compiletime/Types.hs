@@ -139,12 +139,23 @@ newtype DistDirLib = DistDirLib FilePath
 --
 -- As opposed to components, different 'Unit's can be queried independently
 -- since their on-disk information is stored separately.
-data Unit = Unit
+data Unit pt = Unit
     { uUnitId      :: !UnitId
     , uPackageDir  :: !FilePath
     , uCabalFile   :: !CabalFile
     , uDistDir     :: !DistDirLib
+    , uUnitInfo    :: !(UnitImpl pt)
     }
+
+data UnitImpl pt where
+  UnitImplV1 :: UnitImpl 'V1
+
+  UnitImplV2 ::
+    { uiV2Component :: ![String]
+    } -> UnitImpl 'V2
+
+  UnitImplStack :: UnitImpl 'Stack
+
 
 newtype UnitId = UnitId String
     deriving (Eq, Ord, Read, Show)
@@ -206,7 +217,7 @@ newtype ProjConfModTimes = ProjConfModTimes [(FilePath, EpochTime)]
 data ProjInfo pt = ProjInfo
   { piCabalVersion     :: !Version
   , piProjConfModTimes :: !ProjConfModTimes
-  , piUnits            :: ![Unit]
+  , piUnits            :: ![Unit pt]
   , piImpl             :: !(ProjInfoImpl pt)
   }
 
@@ -225,7 +236,7 @@ data ProjInfoImpl pt where
 
 data UnitModTimes = UnitModTimes
     { umtCabalFile   :: !(FilePath, EpochTime)
-    , umtSetupConfig :: !(FilePath, EpochTime)
+    , umtSetupConfig :: !(Maybe (FilePath, EpochTime))
     } deriving (Eq, Ord, Read, Show)
 
 newtype CabalFile = CabalFile FilePath

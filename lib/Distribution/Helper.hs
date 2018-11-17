@@ -214,7 +214,7 @@ getProjConfModTime ProjConfStack{..} =
     [ pcStackYaml
     ]
 
-getUnitModTimes :: Unit -> IO UnitModTimes
+getUnitModTimes :: Unit pt -> IO UnitModTimes
 getUnitModTimes
   Unit
     { uDistDir=DistDirLib distdirv1
@@ -223,7 +223,7 @@ getUnitModTimes
   = do
     cabal_file_mtime <- getFileModTime cabal_file_path
     let setup_config = distdirv1 </> "setup-config"
-    setup_config_mtime <- getFileModTime setup_config
+    setup_config_mtime <- (traverse getFileModTime <=< mightExist) setup_config
     return UnitModTimes
       { umtCabalFile   = cabal_file_mtime
       , umtSetupConfig = setup_config_mtime
@@ -234,11 +234,11 @@ compilerVersion       :: Query pt (String, Version)
 compilerVersion = undefined
 
 -- | List of units in a project
-projectUnits          :: Query pt [Unit]
+projectUnits          :: Query pt [Unit pt]
 projectUnits = Query $ \qe -> piUnits <$> getProjInfo qe
 
 -- | Run a 'UnitQuery' on a given unit. To get a a unit see 'projectUnits'.
-unitQuery          :: Unit -> Query pt UnitInfo
+unitQuery          :: Unit pt -> Query pt UnitInfo
 unitQuery u = Query $ \qe -> getUnitInfo qe u
 
 -- | Get information on all units in a project.
@@ -275,7 +275,7 @@ checkUpdateProjInfo qe mproj_info = do
       shallowReconfigureProject qe
       readProjInfo qe proj_conf mtime
 
-getUnitInfo :: QueryEnv pt -> Unit -> IO UnitInfo
+getUnitInfo :: QueryEnv pt -> Unit pt -> IO UnitInfo
 getUnitInfo qe@QueryEnv{..} unit@Unit{uDistDir} = do
   proj_info <- getProjInfo qe
   cache@QueryCache{qcUnitInfos} <- readIORef qeCacheRef
@@ -288,7 +288,7 @@ getUnitInfo qe@QueryEnv{..} unit@Unit{uDistDir} = do
 checkUpdateUnitInfo
     :: QueryEnvI c pt
     -> ProjInfo pt
-    -> Unit
+    -> Unit pt
     -> Maybe UnitInfo
     -> IO UnitInfo
 checkUpdateUnitInfo qe proj_info unit munit_info = do
@@ -308,7 +308,7 @@ checkUpdateUnitInfo qe proj_info unit munit_info = do
 
 -- | Restrict 'UnitInfo' cache to units that are still active
 discardInactiveUnitInfos
-    :: [Unit]
+    :: [Unit pt]
     -> Map DistDirLib UnitInfo
     -> Map DistDirLib UnitInfo
 discardInactiveUnitInfos active_units uis0 =
@@ -337,11 +337,13 @@ shallowReconfigureProject QueryEnv
     -- do stuff here?
     return ()
 
-reconfigureUnit :: QueryEnvI c pt -> Unit -> IO ()
+reconfigureUnit :: QueryEnvI c pt -> Unit pt -> IO ()
 reconfigureUnit QueryEnv{qeDistDir=DistDirV1{}, ..} Unit{uPackageDir=_} = do
   return ()
-reconfigureUnit QueryEnv{qeDistDir=DistDirV2{}, ..} Unit{uPackageDir=_} = do
-  return () -- TODO: new-build --only-configure
+reconfigureUnit QueryEnv{qeDistDir=DistDirV2{}, ..} Unit{uPackageDir, uUnitInfo} = do
+  _ <- liftIO $ qeReadProcess (Just uPackageDir) (cabalProgram qePrograms)
+        (["new-build"] ++ uiV2Component uUnitInfo) ""
+  return ()
 reconfigureUnit QueryEnv{qeDistDir=DistDirStack{}, ..} Unit{uPackageDir} = do
   _ <- liftIO $ qeReadProcess (Just uPackageDir) (stackProgram qePrograms)
          ["stack", "build", "--only-configure", "."] ""
@@ -375,6 +377,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
               , uPackageDir = projdir
               , uCabalFile = CabalFile pcV1CabalFile
               , uDistDir = DistDirLib distdir
+              , uUnitInfo = UnitImplV1
               }
             , piImpl = ProjInfoV1
             }
@@ -418,7 +421,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
           }
         }
 
-readUnitInfo :: QueryEnvI c pt -> FilePath -> Unit -> IO UnitInfo
+readUnitInfo :: QueryEnvI c pt -> FilePath -> Unit pt -> IO UnitInfo
 readUnitInfo
   qe exe unit@Unit {uUnitId=uiUnitId, uCabalFile, uDistDir} = do
     res <- readHelper qe exe uCabalFile uDistDir
@@ -491,7 +494,7 @@ prepare qe = do
 
 -- | Create @cabal_macros.h@ and @Paths_\<pkg\>@ possibly other generated files
 -- in the usual place. See 'Distribution.Simple.Build.initialBuildSteps'.
-writeAutogenFiles :: Unit -> Query pt ()
+writeAutogenFiles :: Unit pt -> Query pt ()
 writeAutogenFiles Unit{uCabalFile, uDistDir} = Query $ \qe -> do
   proj_info <- getProjInfo qe
   exe <- getHelperExe proj_info qe
