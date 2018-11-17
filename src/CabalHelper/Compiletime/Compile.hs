@@ -233,7 +233,7 @@ compPaths appdir cachedir c =
     case c of
       CompileWithCabalPackage {compProductTarget=CPSGlobal,..} -> CompPaths {..}
         where
-          compBuildDir = appdir </> sourceHash <.> "build"
+          compBuildDir = appdir </> exeName compCabalVersion ++ "--" ++ sourceHash <.> "build"
           compOutDir  = compBuildDir
           compExePath = compBuildDir </> "cabal-helper"
 
