@@ -329,7 +329,7 @@ shallowReconfigureProject QueryEnv
   { qeProjLoc = ProjLocV2Dir projdir
   , qeDistDir = DistDirV2 _distdirv2, .. } = do
     _ <- liftIO $ qeReadProcess (Just projdir) (cabalProgram qePrograms)
-           ["v2-build", "--dry-run", "all"] ""
+           ["new-build", "--dry-run", "all"] ""
     return ()
 shallowReconfigureProject QueryEnv
   { qeProjLoc = ProjLocStackDir _projdir, .. } =
