@@ -213,15 +213,22 @@ getUnitModTimes
   Unit
     { uDistDir=DistDirLib distdirv1
     , uCabalFile=CabalFile cabal_file_path
+    , uPackageDir
+    , uImpl
     }
   = do
-    cabal_file_mtime <- getFileModTime cabal_file_path
-    let setup_config = distdirv1 </> "setup-config"
-    setup_config_mtime <- (traverse getFileModTime <=< mightExist) setup_config
-    return UnitModTimes
-      { umtCabalFile   = cabal_file_mtime
-      , umtSetupConfig = setup_config_mtime
-      }
+    umtPkgYaml <-
+        case uImpl of
+          UnitImplStack{}
+            -> traverse getFileModTime =<< mightExist package_yaml_path
+          _ -> return Nothing
+    umtCabalFile <- getFileModTime cabal_file_path
+    umtSetupConfig <- (traverse getFileModTime <=< mightExist) setup_config_path
+    return UnitModTimes {..}
+  where
+    package_yaml_path = uPackageDir  </> "package.yaml"
+    setup_config_path = distdirv1 </> "setup-config"
+
 
 -- | The version of GHC the project is configured to use
 compilerVersion       :: Query pt (String, Version)
@@ -326,9 +333,10 @@ shallowReconfigureProject QueryEnv
            ["new-build", "--dry-run", "all"] ""
     return ()
 shallowReconfigureProject QueryEnv
-  { qeProjLoc = ProjLocStackDir _projdir, .. } =
-    -- TODO: do we need to do anything here? Maybe package.yaml support needs to
-    -- do stuff here?
+  { qeProjLoc = ProjLocStackDir projdir, .. } = do
+    -- -- In case we ever need to read the cabal files before the Unit stage, this command regenerates them from package.yaml
+    -- _ <- liftIO $ qeReadProcess (Just projdir) (stackProgram qePrograms)
+    --        ["build", "--dry-run"] ""
     return ()
 
 reconfigureUnit :: QueryEnvI c pt -> Unit pt -> IO ()

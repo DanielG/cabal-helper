@@ -235,7 +235,8 @@ data ProjInfoImpl pt where
     } -> ProjInfoImpl 'Stack
 
 data UnitModTimes = UnitModTimes
-    { umtCabalFile   :: !(FilePath, EpochTime)
+    { umtPkgYaml     :: !(Maybe (FilePath, EpochTime))
+    , umtCabalFile   :: !(FilePath, EpochTime)
     , umtSetupConfig :: !(Maybe (FilePath, EpochTime))
     } deriving (Eq, Ord, Read, Show)
 
