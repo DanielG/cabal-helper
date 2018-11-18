@@ -58,7 +58,6 @@ data CabalCommands pt =
   CabalCommands
     { cabalDistDir          :: FilePath -> DistDir pt
     , cabalProjDir          :: FilePath -> ProjLoc pt
-    , cabalAddProject       :: FilePath -> IO ()
     , cabalConfigureCommand :: String
     , cabalBuildCommand     :: String
     , cabalSdistCommand     :: String
@@ -68,7 +67,6 @@ oldBuild :: CabalCommands 'V1
 oldBuild = CabalCommands
     { cabalDistDir          = \d -> DistDirV1 (d </> "dist")
     , cabalProjDir          = \cf -> ProjLocCabalFile cf
-    , cabalAddProject       = \_ -> return ()
     , cabalConfigureCommand = "configure"
     , cabalBuildCommand     = "build"
     , cabalSdistCommand     = "sdist"
@@ -78,7 +76,6 @@ newBuild :: CabalCommands 'V2
 newBuild = CabalCommands
     { cabalDistDir          = \d -> DistDirV2 (d </> "dist-newstyle")
     , cabalProjDir          = \cf -> ProjLocV2Dir (takeDirectory cf)
-    , cabalAddProject       = addCabalProject
     , cabalConfigureCommand = "new-configure"
     , cabalBuildCommand     = "new-build"
     , cabalSdistCommand     = "sdist"
@@ -123,7 +120,6 @@ runTest c topdir projdir cabal_file act = do
     run "cabal" [ cabalSdistCommand c, "-v0", "--output-dir", dir ]
 
     setCurrentDirectory dir
-    cabalAddProject c $ dir
     run "cabal" [ cabalConfigureCommand c ]
 
     act c $ dir </> takeFileName cabal_file
