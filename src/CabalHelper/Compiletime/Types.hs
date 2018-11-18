@@ -231,7 +231,7 @@ data ProjInfoImpl pt where
     } -> ProjInfoImpl 'V2
 
   ProjInfoStack ::
-    { piStackProjPaths        :: !StackProjPaths
+    { piStackProjPaths :: !StackProjPaths
     } -> ProjInfoImpl 'Stack
 
 data UnitModTimes = UnitModTimes
