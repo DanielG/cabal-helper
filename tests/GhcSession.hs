@@ -17,11 +17,12 @@ import System.FilePath ((</>), takeFileName, takeDirectory)
 import System.Directory
 import System.IO
 import System.IO.Temp
-import System.Process (rawSystem, readProcess)
+import System.Process (readProcess)
 
 import Distribution.Helper
 
 import CabalHelper.Shared.Common
+import CabalHelper.Compiletime.Process
 
 
 main :: IO ()
@@ -54,34 +55,40 @@ cabalInstallBuiltinCabalVersion =
     parseVer . trim <$> readProcess "cabal"
         ["act-as-setup", "--", "--numeric-version"] ""
 
-data CabalCommands pt =
-  CabalCommands
-    { cabalDistDir          :: FilePath -> DistDir pt
-    , cabalProjDir          :: FilePath -> ProjLoc pt
-    , cabalConfigureCommand :: String
-    , cabalBuildCommand     :: String
-    , cabalSdistCommand     :: String
+data ProjSetup pt =
+  ProjSetup
+    { psDistDir   :: FilePath -> DistDir pt
+    , psProjDir   :: FilePath -> ProjLoc pt
+    , psConfigure :: FilePath -> IO ()
+    , psBuild     :: FilePath -> IO ()
+    , psSdist     :: FilePath -> FilePath -> IO ()
     }
 
-oldBuild :: CabalCommands 'V1
-oldBuild = CabalCommands
-    { cabalDistDir          = \d -> DistDirV1 (d </> "dist")
-    , cabalProjDir          = \cf -> ProjLocCabalFile cf
-    , cabalConfigureCommand = "configure"
-    , cabalBuildCommand     = "build"
-    , cabalSdistCommand     = "sdist"
+oldBuild :: ProjSetup 'V1
+oldBuild = ProjSetup
+    { psDistDir   = \dir -> DistDirV1 (dir </> "dist")
+    , psProjDir   = \cabal_file -> ProjLocCabalFile cabal_file
+    , psConfigure = \dir ->
+        runWithCwd dir "cabal" [ "configure" ]
+    , psBuild     = \dir ->
+        runWithCwd dir "cabal" [ "build" ]
+    , psSdist     = \srcdir destdir ->
+        runWithCwd srcdir "cabal" [ "sdist", "-v0", "--output-dir", destdir ]
     }
 
-newBuild :: CabalCommands 'V2
-newBuild = CabalCommands
-    { cabalDistDir          = \d -> DistDirV2 (d </> "dist-newstyle")
-    , cabalProjDir          = \cf -> ProjLocV2Dir (takeDirectory cf)
-    , cabalConfigureCommand = "new-configure"
-    , cabalBuildCommand     = "new-build"
-    , cabalSdistCommand     = "sdist"
+newBuild :: ProjSetup 'V2
+newBuild = ProjSetup
+    { psDistDir   = \dir  -> DistDirV2 (dir </> "dist-newstyle")
+    , psProjDir   = \cabal_file -> ProjLocV2Dir (takeDirectory cabal_file)
+    , psConfigure = \dir ->
+        runWithCwd dir "cabal" [ "new-configure" ]
+    , psBuild     = \dir ->
+        runWithCwd dir "cabal" [ "new-build" ]
+    , psSdist     = \srcdir destdir ->
+        runWithCwd srcdir "cabal" [ "sdist", "-v0", "--output-dir", destdir ]
     }
 
-setup :: FilePath -> (forall pt . CabalCommands pt -> FilePath -> IO [Bool]) -> (FilePath, Version, Version) -> IO [Bool]
+setup :: FilePath -> (forall pt . ProjSetup pt -> FilePath -> IO [Bool]) -> (FilePath, Version, Version) -> IO [Bool]
 setup topdir act (cabal_file, min_cabal_ver, min_ghc_ver) = do
     let projdir = takeDirectory cabal_file
     ci_ver <- cabalInstallVersion
@@ -111,44 +118,46 @@ setup topdir act (cabal_file, min_cabal_ver, min_ghc_ver) = do
         rnew <- runTest newBuild topdir projdir cabal_file act
         return (rold ++ rnew)
 
-runTest :: CabalCommands pt -> FilePath -> String -> FilePath
-        -> (CabalCommands pt -> FilePath -> IO [Bool]) -> IO [Bool]
-runTest c topdir projdir cabal_file act = do
+runTest :: ProjSetup pt -> FilePath -> String -> FilePath
+        -> (ProjSetup pt -> FilePath -> IO [Bool]) -> IO [Bool]
+runTest ps@ProjSetup{..} topdir projdir cabal_file act = do
   putStrLn $ "Running test '" ++ projdir ++ "'-------------------------"
-  withSystemTempDirectory' "cabal-helper.ghc-session.test" $ \dir -> do
-    setCurrentDirectory $ topdir </> projdir
-    run "cabal" [ cabalSdistCommand c, "-v0", "--output-dir", dir ]
+  withSystemTempDirectory' "cabal-helper.ghc-session.test" $ \tmpdir -> do
 
-    setCurrentDirectory dir
-    run "cabal" [ cabalConfigureCommand c ]
+    psSdist (topdir </> projdir) tmpdir
+    psConfigure tmpdir
 
-    act c $ dir </> takeFileName cabal_file
+    act ps $ tmpdir </> takeFileName cabal_file
+
+runWithCwd :: FilePath -> String -> [String] -> IO ()
+runWithCwd cwd x xs = do
+  let ?verbose = True
+  callProcessStderr (Just cwd) x xs
 
 run :: String -> [String] -> IO ()
 run x xs = do
-  print $ x:xs
-  ExitSuccess <- rawSystem x xs
-  return ()
+  let ?verbose = True
+  callProcessStderr Nothing x xs
 
-test :: CabalCommands pt -> FilePath -> IO [Bool]
-test c cabal_file = do
+test :: ProjSetup pt -> FilePath -> IO [Bool]
+test ProjSetup{..} cabal_file = do
     let projdir = takeDirectory cabal_file
     qe <- mkQueryEnv
-            (cabalProjDir c $ cabal_file)
-            (cabalDistDir c $ projdir)
+            (psProjDir cabal_file)
+            (psDistDir projdir)
     cs <- concat <$> runQuery (allUnits (Map.elems . uiComponents)) qe
     forM cs $ \ChComponentInfo{..} -> do
         putStrLn $ "\n" ++ show ciComponentName ++ ":::: " ++ show ciNeedsBuildOutput
 
         when (ciNeedsBuildOutput == ProduceBuildOutput) $ do
-          run "cabal" [ cabalBuildCommand c ]
+          psBuild projdir
 
         let opts' = "-Werror" : ciGhcOptions
 
         let sopts = intercalate " " $ map formatArg $ "\nghc" : opts'
         putStrLn $ "\n" ++ show ciComponentName ++ ": " ++ sopts
         hFlush stdout
-        compileModule ciNeedsBuildOutput ciEntrypoints opts'
+        compileModule projdir ciNeedsBuildOutput ciEntrypoints opts'
   where
     formatArg x
         | "-" `isPrefixOf` x = "\n  "++x
@@ -158,8 +167,10 @@ addCabalProject :: FilePath -> IO ()
 addCabalProject dir = do
   writeFile (dir </> "cabal.project") "packages: .\n"
 
-compileModule :: NeedsBuildOutput -> ChEntrypoint -> [String] -> IO Bool
-compileModule nb ep opts = do
+compileModule
+    :: FilePath -> NeedsBuildOutput -> ChEntrypoint -> [String] -> IO Bool
+compileModule projdir nb ep opts = do
+    setCurrentDirectory projdir
 
     putStrLn $ "compiling:" ++ show ep ++ " (" ++ show nb ++ ")"
 
