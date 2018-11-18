@@ -197,18 +197,12 @@ getProjConfModTime ProjConfV1{pcV1CabalFile} =
     [ pcV1CabalFile
     ]
 getProjConfModTime ProjConfV2{..} = do
-  mandatory <- mapM getFileModTime $
-    [ pcV2CabalProjFile
-    ]
-  optional <- mapM (traverse getFileModTime <=< mightExist)
-    [ pcV2CabalProjLocalFile
-    , pcV2CabalProjFreezeFile
-    ]
-  return $
-    ProjConfModTimes $
-      mandatory ++
-      catMaybes optional
-
+  fmap (ProjConfModTimes . catMaybes) $
+    mapM (traverse getFileModTime <=< mightExist)
+      [ pcV2CabalProjFile
+      , pcV2CabalProjLocalFile
+      , pcV2CabalProjFreezeFile
+      ]
 getProjConfModTime ProjConfStack{..} =
   fmap ProjConfModTimes $ mapM getFileModTime
     [ pcStackYaml
