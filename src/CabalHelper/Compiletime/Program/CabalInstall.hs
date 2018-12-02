@@ -198,9 +198,11 @@ planUnits plan = do
       , uDistDir=Just distdirv1
       , uPkgSrc=Just (CP.LocalUnpackedPackage pkgdir)
       , uComps=comps
+      , uPId=CP.PkgId pkg_name _
       } = do
         cabal_file <- Cabal.findCabalFile pkgdir
-        let uiV2Components = map (Text.unpack . CP.dispCompName) $ Map.keys comps
+        let uiV2Components =
+              map (Text.unpack . CP.dispCompNameTarget pkg_name) $ Map.keys comps
         return $ Just $ Right $ Unit
           { uUnitId     = UnitId $ Text.unpack (coerce (CP.uId u))
           , uPackageDir = pkgdir
