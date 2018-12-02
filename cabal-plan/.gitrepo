@@ -5,8 +5,8 @@
 ;
 [subrepo]
 	remote = ../cabal-plan
-	branch = master
-	commit = cd93de6ab26a15383ea9bea3005cec486be9af95
-	parent = afed7936ebb2ace14bc93535019b638130b451ab
+	branch = target-selector
+	commit = e36c8ca8d4a2efd1dc83d5fd1f0193ebff3840b9
+	parent = ee2f7ab509bdfbad38d54691cf781c08cdba9792
 	cmdver = 0.4.0
 	method = merge
