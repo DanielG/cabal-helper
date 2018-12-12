@@ -1,8 +1,8 @@
-# cabal-helper
+# The `cabal-helper` library
 [![build status](https://gitlab.com/dxld/cabal-helper/badges/master/build.svg)](https://gitlab.com/dxld/cabal-helper/commits/master)
 
-The ultimate goal of `cabal-helper` is to give Haskell development tools access
-to the same environment which build tools such as
+The purpose of the `cabal-helper` library is to give Haskell development tools
+access to the same environment which build tools such as
 [cabal](https://www.haskell.org/cabal) and [stack](https://www.haskellstack.org)
 provide to the compiler.
 
