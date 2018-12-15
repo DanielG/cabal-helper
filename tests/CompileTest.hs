@@ -1,5 +1,10 @@
 {-# LANGUAGE ScopedTypeVariables, GADTs, ImplicitParams #-}
 
+{-| This test tries to compile the Helper against every supported version of the
+  Cabal library. Since we compile the Helper at runtime, on the user's machine,
+  it is very important to make sure this will not fail.
+-}
+
 import System.Environment (getArgs)
 import System.Directory
 import System.FilePath
