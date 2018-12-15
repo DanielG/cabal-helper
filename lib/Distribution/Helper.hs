@@ -44,7 +44,7 @@ module Distribution.Helper (
   , Unit -- abstract
   , UnitId -- abstract
   , UnitInfo(..)
-  , unitQuery
+  , unitInfo
 
   -- ** Convenience Queries
   , allUnits
@@ -105,6 +105,8 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.Version
 import Data.Function
 import Data.Functor.Apply
@@ -230,27 +232,36 @@ getUnitModTimes
     setup_config_path = distdirv1 </> "setup-config"
 
 
--- | The version of GHC the project is configured to use
+-- | The version of GHC the project is configured to use for compilation.
 compilerVersion       :: Query pt (String, Version)
-compilerVersion = undefined
+compilerVersion = Query $ \qe ->
+  getProjInfo qe >>= \proj_info ->
+    let someUnit = NonEmpty.head $ piUnits proj_info in
+    --  ^ TODO: ASSUMPTION: Here we assume the compiler version is uniform
+    --  across all units so here we just pick any one. I'm not sure this is true
+    --  for Stack.
+    case piImpl proj_info of
+      ProjInfoV1 -> uiCompilerId <$> getUnitInfo qe someUnit
+      ProjInfoV2 { piV2CompilerId } -> return piV2CompilerId
+      ProjInfoStack {} -> uiCompilerId <$> getUnitInfo qe someUnit
 
--- | List of units in a project
-projectUnits          :: Query pt [Unit pt]
+-- | All units currently active in a project\'s build plan.
+projectUnits          :: Query pt (NonEmpty (Unit pt))
 projectUnits = Query $ \qe -> piUnits <$> getProjInfo qe
 
--- | Run a 'UnitQuery' on a given unit. To get a a unit see 'projectUnits'.
-unitQuery          :: Unit pt -> Query pt UnitInfo
-unitQuery u = Query $ \qe -> getUnitInfo qe u
+-- | Get the 'UnitInfo' for a given 'Unit'. To get a 'Unit' see 'projectUnits'.
+unitInfo              :: Unit pt -> Query pt UnitInfo
+unitInfo u = Query $ \qe -> getUnitInfo qe u
 
 -- | Get information on all units in a project.
-allUnits :: (UnitInfo -> a) -> Query pt [a]
-allUnits f = map f <$> (mapM unitQuery =<< projectUnits)
+allUnits :: (UnitInfo -> a) -> Query pt (NonEmpty a)
+allUnits f = fmap f <$> (mapM unitInfo =<< projectUnits)
 
 getProjInfo :: QueryEnv pt -> IO (ProjInfo pt)
 getProjInfo qe@QueryEnv{..} = do
   cache@QueryCache{qcProjInfo, qcUnitInfos} <- readIORef qeCacheRef
   proj_info <- checkUpdateProjInfo qe qcProjInfo
-  let active_units = piUnits proj_info
+  let active_units = NonEmpty.toList $ piUnits proj_info
   writeIORef qeCacheRef $ cache
     { qcProjInfo  = Just proj_info
     , qcUnitInfos = discardInactiveUnitInfos active_units qcUnitInfos
@@ -374,7 +385,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
           return ProjInfo
             { piCabalVersion = hdrCabalVersion
             , piProjConfModTimes = pcm
-            , piUnits = (:[]) $ Unit
+            , piUnits = (:|[]) $ Unit
               { uUnitId = UnitId ""
               , uPackageDir = projdir
               , uCabalFile = CabalFile pcV1CabalFile
@@ -390,7 +401,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
                     , pjCompilerId=PkgId (PkgName compName) (Ver compVer)
                     }
           <- decodePlanJson plan_path
-      units <- CabalInstall.planUnits plan
+      Just units <- NonEmpty.nonEmpty <$> CabalInstall.planUnits plan
       return ProjInfo
         { piCabalVersion = makeDataVersion pjCabalLibVersion
         , piProjConfModTimes = pcm
@@ -402,7 +413,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
           }
         }
     (ProjLocStackDir{} , DistDirStack{}, _) -> do
-      cabal_files <- Stack.listPackageCabalFiles qe
+      Just cabal_files <- NonEmpty.nonEmpty <$> Stack.listPackageCabalFiles qe
       units <- mapM (Stack.getUnit qe) cabal_files
       proj_paths <- Stack.projPaths qe
       cprogs <-
