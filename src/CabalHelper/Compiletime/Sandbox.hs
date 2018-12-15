@@ -33,11 +33,13 @@ import Prelude
 import qualified Data.Traversable as T
 
 import CabalHelper.Shared.Common
+import CabalHelper.Compiletime.Program.GHC
+    ( GhcVersion (..), showGhcVersion )
 
 -- | Get the path to the sandbox package-db in a project
 getSandboxPkgDb :: String
              -- ^ Cabal build platform, i.e. @buildPlatform@
-             -> Version
+             -> GhcVersion
              -- ^ GHC version (@cProjectVersion@ is your friend)
              -> FilePath
              -- ^ Path to the cabal package root directory (containing the
@@ -54,9 +56,9 @@ getSandboxPkgDb platform ghcVer projdir = do
          True -> dir
          False -> takeDirectory dir </> ghcSandboxPkgDbDir platform ghcVer
 
-ghcSandboxPkgDbDir :: String -> Version -> String
+ghcSandboxPkgDbDir :: String -> GhcVersion -> String
 ghcSandboxPkgDbDir platform ghcVer =
-   platform ++ "-ghc-" ++ showVersion ghcVer ++ "-packages.conf.d"
+   platform ++ "-ghc-" ++ showGhcVersion ghcVer ++ "-packages.conf.d"
 
 -- | Extract the sandbox package db directory from the cabal.sandbox.config
 -- file. Exception is thrown if the sandbox config file is broken.

@@ -38,24 +38,35 @@ import CabalHelper.Shared.Common
   (parseVer, trim, appCacheDir, parsePkgId)
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Cabal
-  (CabalVersion(..), showCabalVersion)
+  ( ResolvedCabalVersion, showResolvedCabalVersion, UnpackedCabalVersion
+  , unpackedToResolvedCabalVersion, CabalVersion'(..) )
 import CabalHelper.Compiletime.Process
 import CabalHelper.Compiletime.Log
+
+data GhcPackageSource
+    = GPSAmbient
+    | GPSPackageDBs ![PackageDbDir]
+    | GPSPackageEnv !PackageEnvFile
 
 data GhcInvocation = GhcInvocation
     { giOutDir          :: FilePath
     , giOutput          :: FilePath
     , giCPPOptions      :: [String]
-    , giPackageDBs      :: [PackageDbDir]
     , giIncludeDirs     :: [FilePath]
     , giHideAllPackages :: Bool
     , giPackages        :: [String]
     , giWarningFlags    :: [String]
     , giInputs          :: [String]
+    , giPackageSource   :: !GhcPackageSource
     }
 
-ghcVersion :: (Verbose, CProgs) => IO Version
-ghcVersion =
+newtype GhcVersion = GhcVersion { unGhcVersion :: Version }
+
+showGhcVersion :: GhcVersion -> String
+showGhcVersion (GhcVersion v) = showVersion v
+
+ghcVersion :: (Verbose, CProgs) => IO GhcVersion
+ghcVersion = GhcVersion .
   parseVer . trim <$> readProcess' (ghcProgram ?cprogs) ["--numeric-version"] ""
 
 ghcPkgVersion :: (Verbose, CProgs) => IO Version
@@ -63,22 +74,32 @@ ghcPkgVersion =
   parseVer . trim . dropWhile (not . isDigit)
     <$> readProcess' (ghcPkgProgram ?cprogs) ["--version"] ""
 
-createPkgDb :: (Verbose, CProgs) => CabalVersion -> IO PackageDbDir
+createPkgDb :: (Verbose, CProgs) => UnpackedCabalVersion -> IO PackageDbDir
 createPkgDb cabalVer = do
-  db@(PackageDbDir db_path) <- getPrivateCabalPkgDb cabalVer
+  db@(PackageDbDir db_path)
+    <- getPrivateCabalPkgDb $ unpackedToResolvedCabalVersion cabalVer
   exists <- doesDirectoryExist db_path
   when (not exists) $
        callProcessStderr Nothing (ghcPkgProgram ?cprogs) ["init", db_path]
   return db
 
-getPrivateCabalPkgDb :: (Verbose, CProgs) => CabalVersion -> IO PackageDbDir
+getPrivateCabalPkgDb :: (Verbose, CProgs) => ResolvedCabalVersion -> IO PackageDbDir
 getPrivateCabalPkgDb cabalVer = do
   appdir <- appCacheDir
   ghcVer <- ghcVersion
   let db_path =
-        appdir </> "ghc-" ++ showVersion ghcVer ++ ".package-db"
-               </> "Cabal-" ++ showCabalVersion cabalVer
+        appdir </> "ghc-" ++ showGhcVersion ghcVer ++ ".package-dbs"
+               </> "Cabal-" ++ showResolvedCabalVersion cabalVer
   return $ PackageDbDir db_path
+
+getPrivateCabalPkgEnv
+    :: Verbose => GhcVersion -> Version -> IO PackageEnvFile
+getPrivateCabalPkgEnv ghcVer cabalVer = do
+  appdir <- appCacheDir
+  let env_path =
+        appdir </> "ghc-" ++ showGhcVersion ghcVer ++ ".package-envs"
+               </> "Cabal-" ++ showVersion cabalVer ++ ".package-env"
+  return $ PackageEnvFile env_path
 
 listCabalVersions
     :: (Verbose, Progs) => Maybe PackageDbDir -> MaybeT IO [Version]
@@ -95,14 +116,21 @@ listCabalVersions mdb = do
     _ -> mzero
 
 cabalVersionExistsInPkgDb
-    :: (Verbose, Progs) => Version -> PackageDbDir -> IO Bool
+    :: (Verbose, Progs) => CabalVersion' a -> PackageDbDir -> IO Bool
 cabalVersionExistsInPkgDb cabalVer db@(PackageDbDir db_path) = do
-  exists <- doesDirectoryExist db_path
-  case exists of
-    False -> return False
-    True -> fromMaybe False <$> runMaybeT (do
-      vers <- listCabalVersions (Just db)
-      return $ cabalVer `elem` vers)
+  fromMaybe False <$> runMaybeT (do
+    vers <- listCabalVersions (Just db)
+    return $
+      case (cabalVer, vers) of
+        (CabalVersion ver, _) -> ver `elem` vers
+        (CabalHEAD _, [_headver]) -> True
+        (CabalHEAD _, _) ->
+          error $ msg ++ db_path)
+  where
+    msg = "\
+\Multiple Cabal versions in a HEAD package-db!\n\
+\This shouldn't happen. However you can manually delete the following\n\
+\directory to resolve this:\n    "
 
 invokeGhc :: Env => GhcInvocation -> IO (Either ExitCode FilePath)
 invokeGhc GhcInvocation {..} = do
@@ -111,7 +139,10 @@ invokeGhc GhcInvocation {..} = do
         , "-o", giOutput
         ]
       , map ("-optP"++) giCPPOptions
-      , map ("-package-conf="++) $ unPackageDbDir <$> giPackageDBs
+      , case giPackageSource of
+          GPSAmbient -> []
+          GPSPackageDBs dbs -> map ("-package-conf="++) $ unPackageDbDir <$> dbs
+          GPSPackageEnv env -> [ "-package-env=" ++ unPackageEnvFile env ]
       , map ("-i"++) $ nub $ "" : giIncludeDirs
       , if giHideAllPackages then ["-hide-all-packages"] else []
       , concatMap (\p -> ["-package", p]) giPackages

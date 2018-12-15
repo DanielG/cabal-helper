@@ -25,7 +25,6 @@ License     : GPL-3
 module CabalHelper.Compiletime.Program.CabalInstall where
 
 import qualified Cabal.Plan as CP
-import Control.Arrow
 import Control.Monad
 import Data.Coerce
 import Data.Either
@@ -33,6 +32,7 @@ import Data.Maybe
 import Data.Version
 import System.IO
 import System.IO.Temp
+import System.Directory
 import System.Environment
 import System.FilePath
 import Text.Printf
@@ -45,9 +45,9 @@ import qualified Data.Text as Text
 import qualified CabalHelper.Compiletime.Cabal as Cabal
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Program.GHC
-  ( ghcVersion, createPkgDb )
+  ( GhcVersion(..), createPkgDb )
 import CabalHelper.Compiletime.Cabal
-  ( CabalSourceDir(..), CabalVersion(..), unpackCabalHEAD, unpackPatchedCabal )
+  ( CabalSourceDir(..), UnpackedCabalVersion, CabalVersion'(..), unpackCabalV1 )
 import CabalHelper.Compiletime.Process
 import CabalHelper.Shared.Common
   ( parseVer, trim, appCacheDir, panicIO )
@@ -61,10 +61,11 @@ cabalInstallVersion = do
   CabalInstallVersion . parseVer . trim
     <$> readProcess' (cabalProgram ?progs) ["--numeric-version"] ""
 
-installCabalLib :: Env => Either HEAD Version -> IO (PackageDbDir, CabalVersion)
-installCabalLib ever = do
+installCabalLibV1 :: Env => GhcVersion -> UnpackedCabalVersion -> IO PackageDbDir
+installCabalLibV1 ghcVer cabalVer = do
   appdir <- appCacheDir
-  let message ver = do
+  let message (CabalHEAD {}) = return ()
+      message (CabalVersion ver) = do
       let sver = showVersion ver
       hPutStr stderr $ printf "\
 \cabal-helper: Installing a private copy of Cabal because we couldn't\n\
@@ -79,23 +80,29 @@ installCabalLib ever = do
 \    $ cabal install Cabal --constraint \"Cabal == %s\"\n\
 \\n\
 \Installing Cabal %s ...\n" appdir sver sver sver
-  withSystemTempDirectory "cabal-helper-Cabal-source" $ \tmpdir -> do
-    (srcdir, cabalVer) <- case ever of
-      Left HEAD -> do
-        second CabalHEAD <$> unpackCabalHEAD tmpdir
-      Right ver -> do
-        message ver
-        (,) <$> unpackPatchedCabal ver tmpdir <*> pure (CabalVersion ver)
+  withSystemTempDirectory "cabal-helper.install-cabal-tmp" $ \tmpdir -> do
+    message cabalVer
+    srcdir <- unpackCabalV1 cabalVer tmpdir
 
     db <- createPkgDb cabalVer
 
-    callCabalInstall db srcdir ever
+    callCabalInstall db srcdir ghcVer cabalVer
 
-    return (db, cabalVer)
+    return db
 
 callCabalInstall
-    :: Env => PackageDbDir -> CabalSourceDir -> Either HEAD Version-> IO ()
-callCabalInstall (PackageDbDir db) (CabalSourceDir srcdir) ever = do
+    :: Env
+    => PackageDbDir
+    -> CabalSourceDir
+    -> GhcVersion
+    -> UnpackedCabalVersion
+    -> IO ()
+callCabalInstall
+  (PackageDbDir db)
+  (CabalSourceDir srcdir)
+  ghcVer
+  unpackedCabalVer
+  = do
   civ@CabalInstallVersion {..} <- cabalInstallVersion
   cabal_opts <- return $ concat
       [
@@ -117,30 +124,34 @@ callCabalInstall (PackageDbDir db) (CabalSourceDir srcdir) ever = do
 
   callProcessStderr (Just "/") (cabalProgram ?progs) cabal_opts
 
-  runSetupHs db srcdir ever civ
+  runSetupHs ghcVer db srcdir unpackedCabalVer civ
 
   hPutStrLn stderr "done"
 
 runSetupHs
     :: Env
-    => FilePath
+    => GhcVersion
     -> FilePath
-    -> Either HEAD Version
+    -> FilePath
+    -> UnpackedCabalVersion
     -> CabalInstallVersion
     -> IO ()
-runSetupHs db srcdir ever CabalInstallVersion {..}
+runSetupHs ghcVer db srcdir iCabalVer CabalInstallVersion {..}
     | cabalInstallVer >= parseVer "1.24" = do
       go $ \args -> callProcessStderr (Just srcdir) (cabalProgram ?progs) $
         [ "act-as-setup", "--" ] ++ args
     | otherwise = do
-      SetupProgram {..} <- compileSetupHs db srcdir
+      SetupProgram {..} <- compileSetupHs ghcVer db srcdir
       go $ callProcessStderr (Just srcdir) setupProgram
   where
     parmake_opt :: Maybe Int -> [String]
     parmake_opt nproc'
-        | Left _ <- ever = ["-j"++nproc]
-        | Right ver <- ever,  ver >= Version [1,20] [] = ["-j"++nproc]
-        | otherwise = []
+        | CabalHEAD _ <- iCabalVer =
+            ["-j"++nproc]
+        | CabalVersion ver <- iCabalVer,  ver >= Version [1,20] [] =
+            ["-j"++nproc]
+        | otherwise =
+            []
       where
         nproc = fromMaybe "" $ show <$> nproc'
     go :: ([String] -> IO ()) -> IO ()
@@ -153,12 +164,11 @@ runSetupHs db srcdir ever CabalInstallVersion {..}
       run [ "register" ]
 
 newtype SetupProgram = SetupProgram { setupProgram :: FilePath }
-compileSetupHs :: Env => FilePath -> FilePath -> IO SetupProgram
-compileSetupHs db srcdir = do
-  ver <- ghcVersion
+compileSetupHs :: Env => GhcVersion -> FilePath -> FilePath -> IO SetupProgram
+compileSetupHs (GhcVersion ghcVer) db srcdir = do
   let no_version_macros
-        | ver >= Version [8] [] = [ "-fno-version-macros" ]
-        | otherwise             = []
+        | ghcVer >= Version [8] [] = [ "-fno-version-macros" ]
+        | otherwise                = []
 
       file = srcdir </> "Setup"
 
@@ -180,6 +190,43 @@ cabalWithGHCProgOpts = concat
   -- might break cabal's guessing logic
   , if ghcPkgProgram ?cprogs /= ghcPkgProgram defaultCompPrograms
       then [ "--with-ghc-pkg=" ++ ghcPkgProgram ?cprogs ]
+      else []
+  ]
+
+installCabalLibV2 :: Env => GhcVersion -> UnpackedCabalVersion -> PackageEnvFile -> IO ()
+installCabalLibV2 _ (CabalHEAD _) _ = error "TODO: `installCabalLibV2 _ CabalHEAD _` is unimplemented"
+installCabalLibV2 _ghcVer (CabalVersion cabalVer) (PackageEnvFile env_file) = do
+  exists <- doesFileExist env_file
+  if exists
+    then return ()
+    else do
+    CabalInstallVersion {..} <- cabalInstallVersion
+    cabal_opts <- return $ concat
+        [ if cabalInstallVer >= Version [1,20] []
+             then ["--no-require-sandbox"]
+             else []
+        , [ if cabalInstallVer >= Version [2,4] []
+              then "v2-install"
+              else "new-install"
+          ]
+        , cabalV2WithGHCProgOpts
+        , [ "--package-env=" ++ env_file
+          , "--lib"
+          , "Cabal-"++showVersion cabalVer
+          ]
+        , if ?verbose
+            then ["-v"]
+            else []
+        ]
+    tmp <- getTemporaryDirectory
+    callProcessStderr (Just tmp) (cabalProgram ?progs) cabal_opts
+    hPutStrLn stderr "done"
+
+cabalV2WithGHCProgOpts :: Progs => [String]
+cabalV2WithGHCProgOpts = concat
+  [ [ "--with-compiler=" ++ ghcProgram ?cprogs ]
+  , if ghcPkgProgram ?cprogs /= ghcPkgProgram defaultCompPrograms
+      then error "cabalV2WithGHCProgOpts: ghc-pkg path was changed from default but cabal v2-install does not support passing --with-ghc-pkg!"
       else []
   ]
 

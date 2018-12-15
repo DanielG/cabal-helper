@@ -123,6 +123,7 @@ import CabalHelper.Compiletime.Compile
 import qualified CabalHelper.Compiletime.Program.Stack as Stack
 import qualified CabalHelper.Compiletime.Program.GHC as GHC
 import qualified CabalHelper.Compiletime.Program.CabalInstall as CabalInstall
+import CabalHelper.Compiletime.Cabal
 import CabalHelper.Compiletime.Sandbox
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Types.RelativePath
@@ -517,7 +518,7 @@ writeAutogenFiles Unit{uCabalFile, uDistDir} = Query $ \qe -> do
 getSandboxPkgDb
     :: String
     -- ^ Cabal build platform, i.e. @buildPlatform@
-    -> Version
+    -> GHC.GhcVersion
     -- ^ GHC version (@cProjectVersion@ is your friend)
     -> FilePath
     -- ^ Path to the project directory, i.e. a directory containing a
@@ -593,22 +594,24 @@ wrapper'
   (DistDirV1 distdir)
   ProjInfo{piCabalVersion}
   = CompHelperEnv
-    { cheCabalVer = piCabalVersion
+    { cheCabalVer = CabalVersion piCabalVersion
     , cheProjDir  = plV1Dir projloc
-    , cheCacheDir = distdir
+    , cheProjLocalCacheDir = distdir
     , chePkgDb    = Nothing
-    , cheNewstyle = Nothing
+    , chePlanJson = Nothing
+    , cheDistV2 = Nothing
     }
 wrapper'
   (ProjLocV2Dir projdir)
   (DistDirV2 distdir)
   ProjInfo{piImpl=ProjInfoV2{piV2Plan=plan}}
   = CompHelperEnv
-    { cheCabalVer = makeDataVersion pjCabalLibVersion
+    { cheCabalVer = CabalVersion $ makeDataVersion pjCabalLibVersion
     , cheProjDir  = projdir
-    , cheCacheDir = distdir </> "cache"
+    , cheProjLocalCacheDir = distdir </> "cache"
     , chePkgDb    = Nothing
-    , cheNewstyle = Just (plan, distdir)
+    , chePlanJson = Just plan
+    , cheDistV2   = Just distdir
     }
   where
     PlanJson {pjCabalLibVersion=Ver pjCabalLibVersion } = plan
@@ -624,9 +627,10 @@ wrapper'
     }
   = let workdir = fromMaybe ".stack-work" $ unRelativePath <$> mworkdir in
     CompHelperEnv
-    { cheCabalVer = piCabalVersion
+    { cheCabalVer = CabalVersion $ piCabalVersion
     , cheProjDir  = projdir
-    , cheCacheDir = projdir </> workdir
+    , cheProjLocalCacheDir = projdir </> workdir
     , chePkgDb    = Just sppGlobalPkgDb
-    , cheNewstyle = Nothing
+    , chePlanJson = Nothing
+    , cheDistV2 = Nothing
     }
