@@ -1,4 +1,9 @@
 {-# LANGUAGE TupleSections, ScopedTypeVariables, RecordWildCards, RankNTypes, DataKinds #-}
+
+{-| This test ensures we can get a GHC API session up and running in a variety of
+  project environments.
+-}
+
 module Main where
 
 import GHC
