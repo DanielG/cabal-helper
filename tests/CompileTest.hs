@@ -11,7 +11,7 @@ import System.FilePath
 import System.Process
 import System.Exit
 import System.IO
-import Control.Exception as E
+import System.IO.Temp
 import Data.List
 import Data.Maybe
 import Data.Version
@@ -20,6 +20,7 @@ import Data.Function
 import Distribution.Version (VersionRange, withinRange)
 import Control.Arrow
 import Control.Monad
+import Control.Monad.Trans.Maybe
 import Prelude
 
 import CabalHelper.Compiletime.Compat.Environment
@@ -27,7 +28,7 @@ import CabalHelper.Compiletime.Compat.Version
 import CabalHelper.Compiletime.Compat.Parsec
 import CabalHelper.Compiletime.Cabal
 import CabalHelper.Compiletime.Compile
-import CabalHelper.Compiletime.Program.CabalInstall
+--import CabalHelper.Compiletime.Program.CabalInstall
 import CabalHelper.Compiletime.Program.GHC
 import CabalHelper.Compiletime.Types
 import CabalHelper.Shared.Common
@@ -56,7 +57,7 @@ main = do
     "list-versions":[] -> do
         mapM_ print =<< (allCabalVersions <$> ghcVersion)
     "list-versions":ghc_ver_str:[] ->
-        mapM_ print $ allCabalVersions (parseVer ghc_ver_str)
+        mapM_ print $ allCabalVersions (GhcVersion (parseVer ghc_ver_str))
     _ ->
         test args
 
@@ -72,12 +73,12 @@ test args = do
 
   action
 
-parseVer' :: String -> Either HEAD Version
-parseVer' "HEAD" = Left HEAD
-parseVer' v      = Right $ parseVer v
+parseVer' :: String -> CabalVersion
+parseVer' "HEAD" = CabalHEAD ()
+parseVer' v      = CabalVersion $ parseVer v
 
-allCabalVersions :: Version -> [Version]
-allCabalVersions ghc_ver = let
+allCabalVersions :: GhcVersion -> [Version]
+allCabalVersions (GhcVersion ghc_ver) = let
     cabal_versions :: [Version]
     cabal_versions = map parseVer
          -- , "1.18.0"
@@ -143,17 +144,44 @@ testAllCabalVersions :: Env => IO ()
 testAllCabalVersions = do
   ghc_ver <- ghcVersion
   let relevant_cabal_versions = allCabalVersions ghc_ver
-  testCabalVersions $ map Right relevant_cabal_versions ++ [Left HEAD]
+  testCabalVersions $ map CabalVersion relevant_cabal_versions ++ [CabalHEAD ()]
 
-testCabalVersions :: Env => [Either HEAD Version] -> IO ()
+testCabalVersions :: Env => [CabalVersion] -> IO ()
 testCabalVersions versions = do
-  rvs <- forM versions $ \ver -> do
-           let sver = either show showVersion ver
-           hPutStrLn stderr $ "\n\n\n\n\n\n====== Compiling with Cabal-" ++ sver
-           compilePrivatePkgDb ver
+--  ghcVer <- ghcVersion
+  rvs <- forM versions $ \cv -> do
+    withSystemTempDirectory "cabal-helper.proj-local-tmp" $ \tmpdir -> do
+
+    let sver = showCabalVersion cv
+    hPutStrLn stderr $ "\n\n\n\n\n\n====== Compiling with Cabal-" ++ sver
+
+    let che0 = \icv db -> CompHelperEnv
+          { cheCabalVer = icv
+          , chePkgDb = db
+          , cheProjDir = tmpdir
+          , chePlanJson = Nothing
+          , cheDistV2 = Just $ tmpdir </> "dist-newstyle"
+          , cheProjLocalCacheDir =
+              tmpdir </> "dist-newstyle" </> "cache"
+          }
+
+    che <- case cv of
+      CabalHEAD () -> do
+        rcv <- resolveCabalVersion cv
+        db <- getPrivateCabalPkgDb rcv
+        mcabalVersions <- runMaybeT $ listCabalVersions (Just db)
+        case mcabalVersions of
+          Just [hdver] ->
+            return $ che0 (CabalVersion hdver) (Just db)
+          _ ->
+            return $ che0 (CabalHEAD ()) Nothing
+      (CabalVersion ver) ->
+        return $ che0 (CabalVersion ver) Nothing
+
+    compileHelper che
 
   let printStatus (cv, rv) = putStrLn $ "- Cabal "++ver++" "++status
-        where  ver = case cv of Left _ -> "HEAD"; Right v -> showVersion v
+        where  ver = showCabalVersion cv
                status = case rv of
                          Right _ ->
                              "succeeded"
@@ -163,38 +191,10 @@ testCabalVersions versions = do
   let drvs = versions `zip` rvs
 
   mapM_ printStatus drvs
-  if any isLeft' $ map snd $ filter ((/=Left HEAD) . fst) drvs
+  if any isLeft' $ map snd $ filter ((/=(CabalHEAD ())) . fst) drvs
      then exitFailure
      else exitSuccess
 
  where
    isLeft' (Left _) = True
    isLeft' (Right _) = False
-
-compilePrivatePkgDb
-    :: Env => Either HEAD Version -> IO (Either ExitCode FilePath)
-compilePrivatePkgDb eCabalVer = do
-    res <- E.try $ installCabalLib eCabalVer
-    case res of
-      Right (db, cabalVer) ->
-          compileWithPkg db cabalVer
-      Left (ioe :: IOException) -> do
-          print ioe
-          return $ Left (ExitFailure 1)
-
-compileWithPkg :: Env
-               => PackageDbDir
-               -> CabalVersion
-               -> IO (Either ExitCode FilePath)
-compileWithPkg db cabalVer = do
-    appdir <- appCacheDir
-    let comp =
-          CompileWithCabalPackage (Just db) cabalVer [cabalPkgId cabalVer] CPSGlobal
-    compile
-      comp
-      (compPaths appdir (error "compile-test: distdir not available") comp)
-
-
-cabalPkgId :: CabalVersion -> String
-cabalPkgId (CabalHEAD _commitid) = "Cabal"
-cabalPkgId (CabalVersion v) = "Cabal-" ++ showVersion v

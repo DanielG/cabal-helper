@@ -301,3 +301,4 @@ defaultCompileOptions =
     CompileOptions False Nothing Nothing defaultPrograms
 
 newtype PackageDbDir = PackageDbDir { unPackageDbDir :: FilePath }
+newtype PackageEnvFile = PackageEnvFile { unPackageEnvFile :: FilePath }

@@ -20,10 +20,13 @@ Description : cabal-install program interface
 License     : GPL-3
 -}
 
+{-# LANGUAGE DeriveFunctor #-}
+
 module CabalHelper.Compiletime.Cabal where
 
 import Control.Exception (bracket)
 import Control.Monad.IO.Class
+import Data.Char
 import Data.List
 import Data.Maybe
 import Data.Version
@@ -34,30 +37,40 @@ import System.FilePath
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Process
 import CabalHelper.Shared.Common (trim, replace)
-import Paths_cabal_helper (version)
+
+type UnpackedCabalVersion = CabalVersion' (CommitId, CabalSourceDir)
+type ResolvedCabalVersion = CabalVersion' CommitId
+type CabalVersion = CabalVersion' ()
+
+unpackedToResolvedCabalVersion :: UnpackedCabalVersion -> ResolvedCabalVersion
+unpackedToResolvedCabalVersion (CabalHEAD (commit, _)) = CabalHEAD commit
+unpackedToResolvedCabalVersion (CabalVersion ver) = CabalVersion ver
 
 -- | Cabal library version we're compiling the helper exe against.
-data CabalVersion
-    = CabalHEAD { cvCommitId :: CommitId }
-    | CabalVersion { cabalVersion :: Version }
+data CabalVersion' a
+    = CabalHEAD a
+    | CabalVersion { cvVersion :: Version }
+      deriving (Eq, Ord, Functor)
 
 newtype CommitId = CommitId { unCommitId :: String }
 
-showCabalVersion :: CabalVersion -> String
-showCabalVersion (CabalHEAD commitid) =
+showUnpackedCabalVersion :: UnpackedCabalVersion -> String
+showUnpackedCabalVersion (CabalHEAD (commitid, _)) =
   "HEAD-" ++ unCommitId commitid
-showCabalVersion CabalVersion {cabalVersion} =
-  showVersion cabalVersion
+showUnpackedCabalVersion CabalVersion {cvVersion} =
+  showVersion cvVersion
 
-exeName :: CabalVersion -> String
-exeName (CabalHEAD commitid) = intercalate "--"
-  [ "cabal-helper-" ++ showVersion version
-  , "Cabal-HEAD" ++ unCommitId commitid
-  ]
-exeName CabalVersion {cabalVersion} = intercalate "--"
-  [ "cabal-helper-" ++ showVersion version
-  , "Cabal-" ++ showVersion cabalVersion
-  ]
+showResolvedCabalVersion :: ResolvedCabalVersion -> String
+showResolvedCabalVersion (CabalHEAD commitid) =
+  "HEAD-" ++ unCommitId commitid
+showResolvedCabalVersion CabalVersion {cvVersion} =
+  showVersion cvVersion
+
+showCabalVersion :: CabalVersion -> String
+showCabalVersion (CabalHEAD ()) =
+  "HEAD"
+showCabalVersion CabalVersion {cvVersion} =
+  showVersion cvVersion
 
 data CabalPatchDescription = CabalPatchDescription
   { cpdVersions      :: [Version]
@@ -123,23 +136,41 @@ patchyCabalVersions = [
 
 unpackPatchedCabal :: Env => Version -> FilePath -> IO CabalSourceDir
 unpackPatchedCabal cabalVer tmpdir = do
-    res@(CabalSourceDir dir) <- unpackCabal cabalVer tmpdir variant
+    res@(CabalSourceDir dir) <- unpackCabalHackage cabalVer tmpdir variant
     patch dir
     return res
   where
     CabalPatchDescription _ variant patch = fromMaybe nopCabalPatchDescription $
       find ((cabalVer `elem`) . cpdVersions) patchyCabalVersions
 
+-- legacy, for `installCabalLib` v1
+unpackCabalV1
+  :: Env
+  => UnpackedCabalVersion
+  -> FilePath
+  -> IO CabalSourceDir
+unpackCabalV1 (CabalVersion ver) tmpdir = do
+  csdir <- unpackPatchedCabal ver tmpdir
+  return csdir
+unpackCabalV1 (CabalHEAD (_commit, csdir)) _tmpdir =
+  return csdir
+
+unpackCabal :: Env => CabalVersion -> FilePath -> IO UnpackedCabalVersion
+unpackCabal (CabalVersion ver) _tmpdir = do
+  return $ CabalVersion ver
+unpackCabal (CabalHEAD ()) tmpdir = do
+  (commit, csdir) <- unpackCabalHEAD tmpdir
+  return $ CabalHEAD (commit, csdir)
 
 data UnpackCabalVariant = Pristine | LatestRevision
 newtype CabalSourceDir = CabalSourceDir { unCabalSourceDir :: FilePath }
-unpackCabal
+unpackCabalHackage
     :: (Verbose, Progs)
     => Version
     -> FilePath
     -> UnpackCabalVariant
     -> IO CabalSourceDir
-unpackCabal cabalVer tmpdir variant = do
+unpackCabalHackage cabalVer tmpdir variant = do
   let cabal = "Cabal-" ++ showVersion cabalVer
       dir = tmpdir </> cabal
       variant_opts = case variant of Pristine -> [ "--pristine" ]; _ -> []
@@ -147,14 +178,14 @@ unpackCabal cabalVer tmpdir variant = do
   callProcessStderr (Just tmpdir) (cabalProgram ?progs) args
   return $ CabalSourceDir dir
 
-unpackCabalHEAD :: Env => FilePath -> IO (CabalSourceDir, CommitId)
+unpackCabalHEAD :: Env => FilePath -> IO (CommitId, CabalSourceDir)
 unpackCabalHEAD tmpdir = do
   let dir = tmpdir </> "cabal-head.git"
       url = "https://github.com/haskell/cabal.git"
   ExitSuccess <- rawSystem "git" [ "clone", "--depth=1", url, dir]
   commit <-
       withDirectory_ dir $ trim <$> readProcess' "git" ["rev-parse", "HEAD"] ""
-  return (CabalSourceDir $ dir </> "Cabal", CommitId commit)
+  return (CommitId commit, CabalSourceDir $ dir </> "Cabal")
  where
    withDirectory_ :: FilePath -> IO a -> IO a
    withDirectory_ dir action =
@@ -162,6 +193,14 @@ unpackCabalHEAD tmpdir = do
          (liftIO getCurrentDirectory)
          (liftIO . setCurrentDirectory)
          (\_ -> liftIO (setCurrentDirectory dir) >> action)
+
+resolveCabalVersion :: Verbose => CabalVersion -> IO ResolvedCabalVersion
+resolveCabalVersion (CabalVersion ver) = return $ CabalVersion ver
+resolveCabalVersion (CabalHEAD ()) = do
+  out <- readProcess' "git"
+    [ "ls-remote", "https://github.com/haskell/cabal.git", "-h", "master" ] ""
+  let commit = takeWhile isHexDigit out
+  return $ CabalHEAD $ CommitId commit
 
 findCabalFile :: FilePath -> IO FilePath
 findCabalFile pkgdir = do
