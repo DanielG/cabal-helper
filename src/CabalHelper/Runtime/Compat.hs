@@ -134,7 +134,6 @@ import Distribution.Types.GenericPackageDescription
 #endif
 
 
-import CabalHelper.Shared.Sandbox
 import CabalHelper.Shared.Common
 import CabalHelper.Shared.InterfaceTypes
 

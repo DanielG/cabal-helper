@@ -20,7 +20,7 @@ Description : Extracting information from @cabal.sandbox.config@ files
 License     : GPL-3
 -}
 
-module CabalHelper.Shared.Sandbox where
+module CabalHelper.Compiletime.Sandbox where
 
 import Control.Applicative
 import Data.Char
@@ -67,7 +67,7 @@ extractSandboxDbDir conf = extractValue <$> parse conf
     keyLen = length key
 
     parse = listToMaybe . filter (key `isPrefixOf`) . lines
-    extractValue = CabalHelper.Shared.Sandbox.dropWhileEnd isSpace . dropWhile isSpace . drop keyLen
+    extractValue = CabalHelper.Compiletime.Sandbox.dropWhileEnd isSpace . dropWhile isSpace . drop keyLen
 
 -- dropWhileEnd is not provided prior to base 4.5.0.0.
 dropWhileEnd :: (a -> Bool) -> [a] -> [a]

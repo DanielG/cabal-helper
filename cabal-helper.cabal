@@ -116,11 +116,11 @@ library c-h-internal
                        CabalHelper.Compiletime.Program.CabalInstall
                        CabalHelper.Compiletime.Program.Stack
                        CabalHelper.Compiletime.Program.GHC
+                       CabalHelper.Compiletime.Sandbox
                        CabalHelper.Compiletime.Types
                        CabalHelper.Compiletime.Types.RelativePath
                        CabalHelper.Shared.Common
                        CabalHelper.Shared.InterfaceTypes
-                       CabalHelper.Shared.Sandbox
   other-modules:
                        Paths_cabal_helper
   autogen-modules:
@@ -165,7 +165,6 @@ executable cabal-helper-main
                        CabalHelper.Runtime.Compat
                        CabalHelper.Shared.Common
                        CabalHelper.Shared.InterfaceTypes
-                       CabalHelper.Shared.Sandbox
                        CabalHelper.Shared.Common
 
   -- This component is usually built at runtime but during development it's
