@@ -243,7 +243,7 @@ usage = do
      ++"  | config-flags\n"
      ++"  | non-default-config-flags\n"
      ++"  | write-autogen-files\n"
-     ++"  | compiler-version\n"
+     ++"  | compiler-id\n"
      ++"  | component-info\n"
      ++"  | print-lbi [--human]\n"
      ++"  ) ...\n"
@@ -253,7 +253,7 @@ commands = [ "flags"
            , "config-flags"
            , "non-default-config-flags"
            , "write-autogen-files"
-           , "compiler-version"
+           , "compiler-id"
            , "package-db-stack"
            , "component-info"
            , "print-lbi"
@@ -346,7 +346,7 @@ main = do
       initialBuildStepsForAllComponents distdir pd lbi v
       return Nothing
 
-    "compiler-version":[] -> do
+    "compiler-id":[] -> do
       let CompilerId comp ver = compilerId $ compiler lbi
       return $ Just $ ChResponseVersion $ (,) (show comp) (toDataVersion ver)
 
