@@ -37,6 +37,9 @@ import System.Posix.Types
 import CabalHelper.Compiletime.Types.RelativePath
 import CabalHelper.Shared.InterfaceTypes
 
+import Data.List.NonEmpty (NonEmpty)
+--import qualified Data.List.NonEmpty as NonEmpty
+
 
 -- | The kind of project being managed by a 'QueryEnv' (pun intended).
 data ProjType
@@ -217,7 +220,7 @@ newtype ProjConfModTimes = ProjConfModTimes [(FilePath, EpochTime)]
 data ProjInfo pt = ProjInfo
   { piCabalVersion     :: !Version
   , piProjConfModTimes :: !ProjConfModTimes
-  , piUnits            :: ![Unit pt]
+  , piUnits            :: !(NonEmpty (Unit pt))
   , piImpl             :: !(ProjInfoImpl pt)
   }
 
