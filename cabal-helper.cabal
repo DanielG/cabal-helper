@@ -109,6 +109,7 @@ library c-h-internal
                        CabalHelper.Compiletime.Compat.Environment
                        CabalHelper.Compiletime.Compat.ProgramDb
                        CabalHelper.Compiletime.Compat.Version
+                       CabalHelper.Compiletime.Compat.Parsec
                        CabalHelper.Compiletime.Compile
                        CabalHelper.Compiletime.Data
                        CabalHelper.Compiletime.Log

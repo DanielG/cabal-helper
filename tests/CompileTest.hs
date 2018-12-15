@@ -17,26 +17,20 @@ import Data.Maybe
 import Data.Version
 import Data.Functor
 import Data.Function
-import qualified Distribution.Compat.ReadP as Dist
 import Distribution.Version (VersionRange, withinRange)
-import Distribution.Text
 import Control.Arrow
 import Control.Monad
 import Prelude
 
 import CabalHelper.Compiletime.Compat.Environment
 import CabalHelper.Compiletime.Compat.Version
+import CabalHelper.Compiletime.Compat.Parsec
 import CabalHelper.Compiletime.Cabal
 import CabalHelper.Compiletime.Compile
 import CabalHelper.Compiletime.Program.CabalInstall
 import CabalHelper.Compiletime.Program.GHC
 import CabalHelper.Compiletime.Types
 import CabalHelper.Shared.Common
-
-runReadP'Dist :: Dist.ReadP t t -> String -> t
-runReadP'Dist p i = case filter ((=="") . snd) $ Dist.readP_to_S p i of
-                 (a,""):[] -> a
-                 _ -> error $ "Error parsing: " ++ show i
 
 withinRange'CH :: Version -> VersionRange -> Bool
 withinRange'CH v r =
@@ -123,14 +117,14 @@ allCabalVersions ghc_ver = let
          ]
 
     constraint :: VersionRange
-    constraint =
-        fromMaybe (snd $ last constraint_table) $
+    Just constraint =
         fmap snd $
         find (and . (zipWith (==) `on` versionBranch) ghc_ver . fst) $
         constraint_table
 
+    constraint_table :: [(Version, VersionRange)]
     constraint_table =
-        map (parseVer *** runReadP'Dist parse) $
+        map (parseVer *** (absorbParsecFailure "constraint_table" . eitherParsec)) $
             -- , ("7.8"  , ">= 1.18    && < 2")
             [ ("7.10" , ">= 1.22.2  && < 2")
             , ("8.0.1", ">= 1.24          ")

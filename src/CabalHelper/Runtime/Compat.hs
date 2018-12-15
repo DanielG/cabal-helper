@@ -133,6 +133,12 @@ import Distribution.Types.GenericPackageDescription
   )
 #endif
 
+#if CH_MIN_VERSION_Cabal(2,5,0)
+import Distribution.Types.LibraryName
+  ( LibraryName (..)
+  )
+#endif
+
 
 import CabalHelper.Shared.Common
 import CabalHelper.Shared.InterfaceTypes
@@ -150,9 +156,16 @@ type UnitId = InstalledPackageId
 
 
 componentNameToCh :: ComponentName -> ChComponentName
+#if CH_MIN_VERSION_Cabal(2,5,0)
+componentNameToCh (CLibName LMainLibName) = ChLibName ChMainLibName
+componentNameToCh (CLibName (LSubLibName n)) = ChLibName $ ChSubLibName (unUnqualComponentName' n)
+#elif CH_MIN_VERSION_Cabal(2,0,0)
 componentNameToCh CLibName = ChLibName ChMainLibName
-#if CH_MIN_VERSION_Cabal(2,0,0)
 componentNameToCh (CSubLibName n) = ChLibName $ ChSubLibName (unUnqualComponentName' n)
+#else
+componentNameToCh CLibName = ChLibName ChMainLibName
+#endif
+#if CH_MIN_VERSION_Cabal(2,0,0)
 componentNameToCh (CFLibName n) = ChFLibName (unUnqualComponentName' n)
 #endif
 componentNameToCh (CExeName n) = ChExeName (unUnqualComponentName' n)
@@ -171,14 +184,18 @@ unUnqualComponentName' = id
 
 
 componentNameFromComponent :: Component -> ComponentName
-#if !CH_MIN_VERSION_Cabal(1,25,0)
--- CPP < 1.25
-componentNameFromComponent (CLib Library {}) = CLibName
+#if CH_MIN_VERSION_Cabal(2,5,0)
+componentNameFromComponent (CLib Library { libName = Nothing }) = CLibName LMainLibName
+componentNameFromComponent (CLib Library { libName = Just n })  = CLibName $ LSubLibName n
+componentNameFromComponent (CFLib ForeignLib {..}) = CFLibName foreignLibName
 #elif CH_MIN_VERSION_Cabal(1,25,0)
 -- CPP >= 1.25 (redundant)
 componentNameFromComponent (CLib Library { libName = Nothing }) = CLibName
 componentNameFromComponent (CLib Library { libName = Just n })  = CSubLibName n
 componentNameFromComponent (CFLib ForeignLib {..}) = CFLibName foreignLibName
+#else
+-- CPP < 1.25
+componentNameFromComponent (CLib Library {}) = CLibName
 #endif
 componentNameFromComponent (CExe Executable {..}) = CExeName exeName
 componentNameFromComponent (CTest TestSuite {..}) = CTestName testName
