@@ -430,7 +430,7 @@ readUnitInfo
            [ "package-id"
            , "package-db-stack"
            , "flags"
-           , "compiler-version"
+           , "compiler-id"
            , "config-flags"
            , "non-default-config-flags"
            , "component-info"
@@ -438,7 +438,7 @@ readUnitInfo
     let [ Just (ChResponseVersion        uiPackageId),
           Just (ChResponsePkgDbs         uiPackageDbStack),
           Just (ChResponseFlags          uiPackageFlags),
-          Just (ChResponseVersion        uiCompilerVersion),
+          Just (ChResponseVersion        uiCompilerId),
           Just (ChResponseFlags          uiConfigFlags),
           Just (ChResponseFlags          uiNonDefaultConfigFlags),
           Just (ChResponseComponentsInfo uiComponents)

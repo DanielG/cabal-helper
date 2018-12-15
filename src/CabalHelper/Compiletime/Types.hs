@@ -172,7 +172,7 @@ data UnitInfo = UnitInfo
     -- ^ The components of the unit: libraries, executables, test-suites,
     -- benchmarks and so on.
 
-    , uiCompilerVersion       :: !(String, Version)
+    , uiCompilerId            :: !(String, Version)
     -- ^ The version of GHC the unit is configured to use
 
     , uiPackageDbStack        :: !([ChPkgDb])
