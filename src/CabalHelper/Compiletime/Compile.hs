@@ -58,10 +58,11 @@ import CabalHelper.Compiletime.Data
 import CabalHelper.Compiletime.Log
 import CabalHelper.Compiletime.Program.GHC
 import CabalHelper.Compiletime.Program.CabalInstall
+import CabalHelper.Compiletime.Sandbox
+    ( getSandboxPkgDb )
 import CabalHelper.Compiletime.Types
 
 import CabalHelper.Shared.Common
-import CabalHelper.Shared.Sandbox (getSandboxPkgDb)
 
 data Compile
     = CompileWithCabalSource

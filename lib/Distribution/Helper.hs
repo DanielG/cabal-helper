@@ -123,10 +123,10 @@ import CabalHelper.Compiletime.Compile
 import qualified CabalHelper.Compiletime.Program.Stack as Stack
 import qualified CabalHelper.Compiletime.Program.GHC as GHC
 import qualified CabalHelper.Compiletime.Program.CabalInstall as CabalInstall
+import CabalHelper.Compiletime.Sandbox
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Types.RelativePath
 import CabalHelper.Shared.InterfaceTypes
-import CabalHelper.Shared.Sandbox
 import CabalHelper.Shared.Common
 
 import CabalHelper.Compiletime.Compat.Version
@@ -523,8 +523,8 @@ getSandboxPkgDb
     -- ^ Path to the project directory, i.e. a directory containing a
     -- @cabal.sandbox.config@ file
     -> IO (Maybe FilePath)
-getSandboxPkgDb buildPlat ghc_ver projdir =
-  CabalHelper.Shared.Sandbox.getSandboxPkgDb buildPlat ghc_ver projdir
+getSandboxPkgDb buildPlat ghcVer projdir =
+  CabalHelper.Compiletime.Sandbox.getSandboxPkgDb buildPlat ghcVer projdir
 
 buildPlatform :: String
 buildPlatform = display Distribution.System.buildPlatform

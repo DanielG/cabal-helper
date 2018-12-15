@@ -226,7 +226,6 @@ import System.IO
 import System.IO.Unsafe (unsafeInterleaveIO, unsafePerformIO)
 import Text.Printf
 
-import CabalHelper.Shared.Sandbox
 import CabalHelper.Shared.Common
 import CabalHelper.Shared.InterfaceTypes
 import CabalHelper.Runtime.Compat

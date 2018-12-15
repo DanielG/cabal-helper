@@ -87,7 +87,6 @@ runtimeSources = $(
         [ ("Runtime/Main.hs")
         , ("Runtime/Compat.hs")
         , ("Shared/Common.hs")
-        , ("Shared/Sandbox.hs")
         , ("Shared/InterfaceTypes.hs")
         ]
   in do
