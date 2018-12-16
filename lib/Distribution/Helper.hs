@@ -30,6 +30,9 @@ Portability : POSIX
 -}
 
 module Distribution.Helper (
+  -- * Type Variable Naming Conventions
+  -- $type-conventions
+
   -- * Running Queries
     Query
   , runQuery
@@ -142,6 +145,18 @@ import Distribution.Text (display)
 import Distribution.Verbosity (silent, deafening)
 --import Distribution.Package (packageName, packageVersion)
 import Distribution.Simple.GHC as GHC (configure)
+
+-- $type-conventions
+-- Throughout the API we use the following conventions for type variables:
+--
+-- * @pt@ stands for "project type", when instantiated is always of kind
+--   'ProjType'.
+--
+-- * @c@ stands for "cache". It is used internally to make the cache
+--   inaccessible for some parts of the implementation. Users of the API may
+--   ignore it. See the internal 'qeCacheRef' field accessor of 'QueryEnv' for
+--   details.
+
 
 -- | A lazy, cached, query against a package's Cabal configuration. Use
 -- 'runQuery' to execute it.
