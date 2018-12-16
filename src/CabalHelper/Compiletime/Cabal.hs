@@ -205,7 +205,7 @@ resolveCabalVersion (CabalHEAD ()) = do
 findCabalFile :: FilePath -> IO FilePath
 findCabalFile pkgdir = do
     [cfile] <- filter isCabalFile <$> getDirectoryContents pkgdir
-    return cfile
+    return $ pkgdir </> cfile
   where
     isCabalFile :: FilePath -> Bool
     isCabalFile f = takeExtension' f == ".cabal"
