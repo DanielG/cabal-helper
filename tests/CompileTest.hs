@@ -78,8 +78,6 @@ test args = do
 
   setupHOME
 
-  _ <- rawSystem "cabal" ["update"]
-
   action
 
 parseVer' :: String -> CabalVersion
