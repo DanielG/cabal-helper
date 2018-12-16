@@ -42,6 +42,7 @@ module Distribution.Helper (
 
   -- ** Unit queries
   , Unit -- abstract
+  , uComponentName
   , UnitId -- abstract
   , UnitInfo(..)
   , unitInfo

@@ -154,11 +154,25 @@ data UnitImpl pt where
   UnitImplV1 :: UnitImpl 'V1
 
   UnitImplV2 ::
-    { uiV2Components :: ![String]
+    { uiV2ComponentNames :: ![ChComponentName]
+    , uiV2Components     :: ![String]
     } -> UnitImpl 'V2
 
   UnitImplStack :: UnitImpl 'Stack
 
+-- | This returns the component a 'Unit' corresponds to. This information is
+-- only available if the correspondence happens to be unique and known before
+-- querying setup-config for the respective project type. Currently this only
+-- applies to @pt=@'V2'.
+--
+-- This is intended to be used as an optimization, to allow reducing the number
+-- of helper invocations for clients that don't need to know the entire project
+-- structure.
+uComponentName :: Unit pt -> Maybe ChComponentName
+uComponentName Unit { uImpl=UnitImplV2 { uiV2ComponentNames=[comp] } } =
+    Just comp
+uComponentName _ =
+    Nothing
 
 newtype UnitId = UnitId String
     deriving (Eq, Ord, Read, Show)
