@@ -39,10 +39,19 @@ withinRange'CH v r =
 
 setupHOME :: IO ()
 setupHOME = do
+  mhome <- lookupEnv "HOME"
+  case mhome of
+    Just home -> do
+      exists <- doesDirectoryExist home
+      when (not exists) createHOME
+    Nothing -> createHOME
+
+createHOME :: IO ()
+createHOME = do
   tmp <- fromMaybe "/tmp" <$> lookupEnv "TMPDIR"
   let home = tmp </> "compile-test-home"
   _ <- rawSystem "rm" ["-r", home]
-  createDirectory    home
+  createDirectory home
   setEnv "HOME" home
 
 main :: IO ()
