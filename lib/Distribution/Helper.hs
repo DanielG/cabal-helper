@@ -110,6 +110,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.Version
 import Data.Function
 import Data.Functor.Apply
+import System.Clock as Clock
 import System.Environment
 import System.FilePath hiding ((<.>))
 import System.Directory
@@ -124,6 +125,7 @@ import qualified CabalHelper.Compiletime.Program.Stack as Stack
 import qualified CabalHelper.Compiletime.Program.GHC as GHC
 import qualified CabalHelper.Compiletime.Program.CabalInstall as CabalInstall
 import CabalHelper.Compiletime.Cabal
+import CabalHelper.Compiletime.Log
 import CabalHelper.Compiletime.Sandbox
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Types.RelativePath
@@ -576,7 +578,12 @@ getHelperExe proj_info QueryEnv{..} = do
     let comp = wrapper' qeProjLoc qeDistDir proj_info
     let ?progs = qePrograms
         ?cprogs = qeCompPrograms
+    t0 <- Clock.getTime Monotonic
     eexe <- compileHelper comp
+    t1 <- Clock.getTime Monotonic
+    let dt = (/10e9) $ fromInteger $ Clock.toNanoSecs $ Clock.diffTimeSpec t0 t1
+        dt :: Float
+    vLog $ printf "compileHelper took %.5fs" dt
     case eexe of
       Left rv ->
         panicIO $ "compileHelper': compiling helper failed! exit code "++ show rv
