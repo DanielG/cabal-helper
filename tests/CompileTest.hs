@@ -28,7 +28,6 @@ import CabalHelper.Compiletime.Compat.Version
 import CabalHelper.Compiletime.Compat.Parsec
 import CabalHelper.Compiletime.Cabal
 import CabalHelper.Compiletime.Compile
---import CabalHelper.Compiletime.Program.CabalInstall
 import CabalHelper.Compiletime.Program.GHC
 import CabalHelper.Compiletime.Types
 import CabalHelper.Shared.Common

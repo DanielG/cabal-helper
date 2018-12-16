@@ -90,9 +90,12 @@ data DistDir (pt :: ProjType) where
     -- /work-dir/. If you just want to use Stack's default set to @Nothing@
     DistDirStack :: Maybe RelativePath -> DistDir 'Stack
 
--- | Environment for running a 'Query' value. The real constructor is
--- not exposed, use the 'mkQueryEnv' smart constructor instead. The field
--- accessors are exported and may be used to override the defaults, see below.
+-- | Environment for running a 'Query' value. The constructor is not exposed in
+-- the API to allow extending the environment without breaking user code.
+--
+-- To create a 'QueryEnv' use the 'mkQueryEnv' smart constructor. The field
+-- accessors are exported and may be used to override the defaults filled in by
+-- 'mkQueryEnv'. See below.
 type QueryEnv (pt :: ProjType)
     = QueryEnvI QueryCache pt
 
@@ -117,9 +120,10 @@ data QueryEnvI c (pt :: ProjType) = QueryEnv
     -- ^ Field accessor for 'QueryEnv'. Defines path to the @dist/@ or
     -- @dist-newstyle/@ directory, aka. /builddir/ in Cabal terminology.
 
-    -- ^ Cache for query results, only accessible when type parameter @cache@ is
-    -- instantiated and not forall quantified.
     , qeCacheRef     :: !(IORef (c pt))
+    -- ^ Cache for query results, only accessible when type parameter @c@ is
+    -- instantiated with 'QueryCache'. This is the case wherever the type alias
+    -- 'QueryEnv' is used.
     }
 
 data QueryCache pt = QueryCache
@@ -130,18 +134,10 @@ data QueryCache pt = QueryCache
 newtype DistDirLib = DistDirLib FilePath
     deriving (Eq, Ord, Read, Show)
 
--- | Abstractly speaking a Unit consists of a set of components (exes, libs,
--- tests etc.) which are managed by an instance of the Cabal build system. The
--- distinction between a Unit and a set of components is somewhat hard to
--- explain if you're not already familliar with the concept from
--- cabal-install. Luckily for most purposes the details may be ignored.
---
--- We merely use the concept of a Unit for caching purposes. It is necessary to
--- extract the information on all components in a Unit at the same time as we
--- must load all of it into memory before extracting any of it.
---
--- As opposed to components, different 'Unit's can be queried independently
--- since their on-disk information is stored separately.
+-- | A 'Unit' is used as reference to a set of components (exes, libs, tests
+-- etc.) which are managed by an certain instance of the Cabal build system. We
+-- may get information on the components in a unit by retriving the
+-- corresponding 'UnitInfo'.
 data Unit pt = Unit
     { uUnitId      :: !UnitId
     , uPackageDir  :: !FilePath
@@ -177,10 +173,10 @@ uComponentName _ =
 newtype UnitId = UnitId String
     deriving (Eq, Ord, Read, Show)
 
--- | The information extracted from a 'Unit's on-disk configuration.
+-- | The information extracted from a 'Unit'\'s on-disk configuration cache.
 data UnitInfo = UnitInfo
     { uiUnitId                :: !UnitId
-    -- ^ A unique identifier of this init within the project.
+    -- ^ A unique identifier of this unit within the project.
 
     , uiPackageId             :: !(String, Version)
     -- ^ The package-name and version this unit belongs to.
@@ -207,10 +203,13 @@ data UnitInfo = UnitInfo
     -- i.e. don't rely on these being the flags set by the user directly.
 
     , uiModTimes              :: !UnitModTimes
+    -- ^ Key for cache invalidation. When this is not equal to the value
+    -- returned by 'getUnitModTimes' this 'UnitInfo' is considered invalid.
     } deriving (Eq, Ord, Read, Show)
 
--- | Files relevant to the project-scope configuration of a project. We gather
--- them here so we can refer to their paths conveniently.
+-- | Files relevant to the project-scope configuration. We gather them here so
+-- we can refer to their paths conveniently throughout the code. These files are
+-- not necessarily guaranteed to even exist.
 data ProjConf pt where
   ProjConfV1 ::
     { pcV1CabalFile :: !FilePath
@@ -231,11 +230,14 @@ data ProjConf pt where
 newtype ProjConfModTimes = ProjConfModTimes [(FilePath, EpochTime)]
     deriving (Eq)
 
+-- | Project-scope information cache.
 data ProjInfo pt = ProjInfo
   { piCabalVersion     :: !Version
-  , piProjConfModTimes :: !ProjConfModTimes
   , piUnits            :: !(NonEmpty (Unit pt))
   , piImpl             :: !(ProjInfoImpl pt)
+  , piProjConfModTimes :: !ProjConfModTimes
+  -- ^ Key for cache invalidation. When this is not equal to the return
+  -- value of 'getProjConfModTime' this 'ProjInfo' is considered invalid.
   }
 
 data ProjInfoImpl pt where
