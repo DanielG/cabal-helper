@@ -426,8 +426,8 @@ errorInstallCabal (CabalVersion cabalVer) = panicIO $ printf "\
 \        $ cabal clean && cabal configure\n\
 \\n\
 \- If that fails you can try to install the version of Cabal mentioned above\n\
-\  into your global/user package-db somehow, you'll probably have to fix\n\
-\  something otherwise it wouldn't have failed above:\n\
+\  into your global/user package-db somehow, though you'll probably have to\n\
+\  fix something otherwise it wouldn't have failed above:\n\
 \        $ cabal install Cabal --constraint 'Cabal == %s'\n\
 \\n\
 \- If you're using `Build-Type: Simple`:\n\
