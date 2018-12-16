@@ -49,6 +49,8 @@ import CabalHelper.Compiletime.Program.GHC
 import CabalHelper.Compiletime.Cabal
   ( CabalSourceDir(..), UnpackedCabalVersion, CabalVersion'(..), unpackCabalV1 )
 import CabalHelper.Compiletime.Process
+import CabalHelper.Shared.InterfaceTypes
+  ( ChComponentName(..), ChLibraryName(..) )
 import CabalHelper.Shared.Common
   ( parseVer, trim, appCacheDir, panicIO )
 
@@ -248,8 +250,10 @@ planUnits plan = do
       , uPId=CP.PkgId pkg_name _
       } = do
         cabal_file <- Cabal.findCabalFile pkgdir
+        let comp_names = Map.keys comps
         let uiV2Components =
               map (Text.unpack . CP.dispCompNameTarget pkg_name) $ Map.keys comps
+        let uiV2ComponentNames = map cpCompNameToChComponentName comp_names
         return $ Just $ Right $ Unit
           { uUnitId     = UnitId $ Text.unpack (coerce (CP.uId u))
           , uPackageDir = pkgdir
@@ -261,3 +265,14 @@ planUnits plan = do
       return $ Just $ Left u
     takeunit _ =
       return $ Nothing
+
+cpCompNameToChComponentName :: CP.CompName -> ChComponentName
+cpCompNameToChComponentName cn =
+    case cn of
+      CP.CompNameSetup         -> ChSetupHsName
+      CP.CompNameLib           -> ChLibName     ChMainLibName
+      (CP.CompNameSubLib name) -> ChLibName   $ ChSubLibName $ Text.unpack name
+      (CP.CompNameFLib name)   -> ChFLibName  $ Text.unpack name
+      (CP.CompNameExe name)    -> ChExeName   $ Text.unpack name
+      (CP.CompNameTest name)   -> ChTestName  $ Text.unpack name
+      (CP.CompNameBench name)  -> ChBenchName $ Text.unpack name
