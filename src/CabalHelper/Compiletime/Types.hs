@@ -93,15 +93,15 @@ data DistDir (pt :: ProjType) where
 -- | Environment for running a 'Query' value. The real constructor is
 -- not exposed, use the 'mkQueryEnv' smart constructor instead. The field
 -- accessors are exported and may be used to override the defaults, see below.
-type QueryEnv (proj_type :: ProjType)
-    = QueryEnvI (QueryCache proj_type) proj_type
+type QueryEnv (pt :: ProjType)
+    = QueryEnvI QueryCache pt
 
-data QueryEnvI cache (proj_type :: ProjType) = QueryEnv
+data QueryEnvI c (pt :: ProjType) = QueryEnv
     { qeReadProcess
           :: !(Maybe FilePath -> FilePath -> [String] -> String -> IO String)
     -- ^ Field accessor for 'QueryEnv'. Function used to to start
     -- processes. Useful if you need to, for example, redirect standard error
-    -- output away from the user\'s terminal.
+    -- output of programs started by cabal-helper.
 
     , qePrograms     :: !Programs
     -- ^ Field accessor for 'QueryEnv'.
@@ -109,17 +109,17 @@ data QueryEnvI cache (proj_type :: ProjType) = QueryEnv
     , qeCompPrograms :: !CompPrograms
     -- ^ Field accessor for 'QueryEnv'.
 
-    , qeProjLoc      :: !(ProjLoc proj_type)
+    , qeProjLoc      :: !(ProjLoc pt)
     -- ^ Field accessor for 'QueryEnv'. Defines path to the project directory,
     -- i.e. a directory containing a @cabal.project@ file
 
-    , qeDistDir      :: !(DistDir proj_type)
+    , qeDistDir      :: !(DistDir pt)
     -- ^ Field accessor for 'QueryEnv'. Defines path to the @dist/@ or
     -- @dist-newstyle/@ directory, aka. /builddir/ in Cabal terminology.
 
-    , qeCacheRef     :: !(IORef cache)
     -- ^ Cache for query results, only accessible when type parameter @cache@ is
     -- instantiated and not forall quantified.
+    , qeCacheRef     :: !(IORef (c pt))
     }
 
 data QueryCache pt = QueryCache
