@@ -143,19 +143,18 @@ import qualified CabalHelper.Compiletime.Compat.ProgramDb as ProgDb
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
 import Distribution.Verbosity (silent, deafening)
---import Distribution.Package (packageName, packageVersion)
 import Distribution.Simple.GHC as GHC (configure)
 
 -- $type-conventions
 -- Throughout the API we use the following conventions for type variables:
 --
--- * @pt@ stands for "project type", when instantiated is always of kind
+-- * @pt@ stands for "project type", when instantiated it is always of kind
 --   'ProjType'.
 --
 -- * @c@ stands for "cache". It is used internally to make the cache
 --   inaccessible for some parts of the implementation. Users of the API may
---   ignore it. See the internal 'qeCacheRef' field accessor of 'QueryEnv' for
---   details.
+--   completely ignore this parameter. See the internal 'qeCacheRef' field
+--   accessor of 'QueryEnv' for details.
 
 
 -- | A lazy, cached, query against a package's Cabal configuration. Use
@@ -443,7 +442,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
         let ?cprogs = cprogs in
         let ?progs  = qePrograms qe in
         GHC.listCabalVersions (Just (sppGlobalPkgDb proj_paths))
-      -- ^ See [Note Stack Cabal Version]
+        --  ^ See [Note Stack Cabal Version]
       return ProjInfo
         { piCabalVersion = cabalVer
         , piProjConfModTimes = pcm

@@ -91,6 +91,8 @@ data ChComponentInfo = ChComponentInfo
     -- be built in memory and instead needs proper build output.
     } deriving (Eq, Ord, Read, Show)
 
+-- TODO: we know the source-dir now so we can resolve ChSetupEntrypoint
+-- internally
 data ChEntrypoint = ChSetupEntrypoint -- ^ Almost like 'ChExeEntrypoint' but
                                       -- @main-is@ could either be @"Setup.hs"@
                                       -- or @"Setup.lhs"@. Since we don't know
