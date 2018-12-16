@@ -158,6 +158,14 @@ test-suite ghc-session
                      , cabal-helper
                      , c-h-internal
 
+test-suite examples
+  import:              build-deps, extensions
+  type:                exitcode-stdio-1.0
+  main-is:             Examples.hs
+  hs-source-dirs:      tests
+  ghc-options:         -Wall
+  build-depends:       cabal-helper
+
 executable cabal-helper-main
   default-language:    Haskell2010
   default-extensions:  NondecreasingIndentation
