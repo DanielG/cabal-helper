@@ -39,6 +39,7 @@ import Data.Maybe
 import Data.String
 import Data.Version
 import Text.Printf
+import qualified System.Clock as Clock
 import System.Directory
 import System.FilePath
 import System.Exit
@@ -114,6 +115,7 @@ compileHelper'
     => CompHelperEnv' UnpackedCabalVersion
     -> IO (Either ExitCode FilePath)
 compileHelper' CompHelperEnv {..} = do
+  t0 <- Clock.getTime Clock.Monotonic
   ghcVer <- ghcVersion
   Just (prepare, comp) <- case cheCabalVer of
     cabalVer@CabalHEAD {} -> do
@@ -143,6 +145,10 @@ compileHelper' CompHelperEnv {..} = do
       vLog $ "helper exe does not exist, compiling "++compExePath
       prepare >> compile cp comp
 
+  t1 <- Clock.getTime Clock.Monotonic
+  let dt = (/10e9) $ fromInteger $ Clock.toNanoSecs $ Clock.diffTimeSpec t0 t1
+      dt :: Float
+  vLog $ printf "compileHelper took %.5fs" dt
   return rv
 
 
