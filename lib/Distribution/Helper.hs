@@ -348,7 +348,7 @@ shallowReconfigureProject QueryEnv
            ["new-build", "--dry-run", "all"] ""
     return ()
 shallowReconfigureProject QueryEnv
-  { qeProjLoc = ProjLocStackDir projdir, .. } = do
+  { qeProjLoc = ProjLocStackDir _projdir, .. } = do
     -- -- In case we ever need to read the cabal files before the Unit stage, this command regenerates them from package.yaml
     -- _ <- liftIO $ qeReadProcess (Just projdir) (stackProgram qePrograms)
     --        ["build", "--dry-run"] ""
