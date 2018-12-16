@@ -71,19 +71,19 @@ import Paths_cabal_helper (version)
 
 data Compile
     = CompileWithCabalSource
-      { compCabalSourceDir     :: CabalSourceDir
-      , compCabalSourceVersion :: Version
+      { compCabalSourceDir     :: !CabalSourceDir
+      , compCabalSourceVersion :: !Version
       }
     | CompileWithCabalPackage
-      { compPackageSource  :: GhcPackageSource
-      , compCabalVersion   :: ResolvedCabalVersion
-      , compProductTarget  :: CompilationProductScope
+      { compPackageSource  :: !GhcPackageSource
+      , compCabalVersion   :: !ResolvedCabalVersion
+      , compProductTarget  :: !CompilationProductScope
       }
 
 data CompPaths = CompPaths
-    { compBuildDir:: FilePath
-    , compOutDir  :: FilePath
-    , compExePath :: FilePath
+    { compBuildDir:: !FilePath
+    , compOutDir  :: !FilePath
+    , compExePath :: !FilePath
     }
 
 -- | The Helper executable we produce as a compilation product can either be

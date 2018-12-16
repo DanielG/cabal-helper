@@ -49,15 +49,15 @@ data GhcPackageSource
     | GPSPackageEnv !PackageEnvFile
 
 data GhcInvocation = GhcInvocation
-    { giOutDir          :: FilePath
-    , giOutput          :: FilePath
-    , giCPPOptions      :: [String]
-    , giIncludeDirs     :: [FilePath]
-    , giHideAllPackages :: Bool
-    , giPackages        :: [String]
-    , giWarningFlags    :: [String]
-    , giInputs          :: [String]
+    { giOutDir          :: !FilePath
+    , giOutput          :: !FilePath
+    , giCPPOptions      :: ![String]
     , giPackageSource   :: !GhcPackageSource
+    , giIncludeDirs     :: ![FilePath]
+    , giHideAllPackages :: !Bool
+    , giPackages        :: ![String]
+    , giWarningFlags    :: ![String]
+    , giInputs          :: ![String]
     }
 
 newtype GhcVersion = GhcVersion { unGhcVersion :: Version }
