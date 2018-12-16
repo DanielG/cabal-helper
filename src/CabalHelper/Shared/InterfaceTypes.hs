@@ -21,7 +21,7 @@ Module      : CabalHelper.Shared.InterfaceTypes
 Description : Types which are used by c-h library and executable to communicate
 License     : GPL-3
 
-These types are used to communicate between the cabal-helper library and main
+These types are used to communicate between the cabal-helper library and helper
 executable, using Show/Read. If any types in this module change the major
 version must be bumped since this will be exposed in the @Distribution.Helper@
 module.
