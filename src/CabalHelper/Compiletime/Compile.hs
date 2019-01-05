@@ -78,6 +78,7 @@ data Compile
       { compPackageSource  :: !GhcPackageSource
       , compCabalVersion   :: !ResolvedCabalVersion
       , compProductTarget  :: !CompilationProductScope
+      , compUsesNewBuild   :: !UsesNewBuild
       }
 
 data CompPaths = CompPaths
@@ -91,6 +92,8 @@ data CompPaths = CompPaths
 -- home directory. This type controls where the compilation process places the
 -- executable.
 data CompilationProductScope = CPSGlobal | CPSProject
+
+data UsesNewBuild = UsesNewBuild | UsesOldBuild
 
 type CompHelperEnv = CompHelperEnv' CabalVersion
 data CompHelperEnv' cv = CompHelperEnv
@@ -164,6 +167,7 @@ compileHelper' CompHelperEnv {..} = do
            { compPackageSource = GPSPackageDBs [db]
            , compCabalVersion  = CabalVersion cabalVer
            , compProductTarget = CPSProject
+           , compUsesNewBuild  = UsesOldBuild
            }
 
    -- | Check if this version is globally available
@@ -172,7 +176,7 @@ compileHelper' CompHelperEnv {..} = do
        cabal_versions <- listCabalVersions Nothing
        _ <- MaybeT $ return $ find (== cabalVer) cabal_versions
        vLog $ logMsg ++ "user/global package-db"
-       return $ (return (), compileWithPkg GPSAmbient cabalVer CPSGlobal)
+       return $ (return (), compileWithPkg GPSAmbient cabalVer CPSGlobal UsesOldBuild)
 
    -- | Check if this version is available in the project sandbox
    compileSandbox :: Env => GhcVersion -> Version -> MaybeT IO (IO (), Compile)
@@ -182,7 +186,7 @@ compileHelper' CompHelperEnv {..} = do
        cabal_versions <- listCabalVersions (Just sandbox)
        _ <- MaybeT $ return $ find (== cabalVer) cabal_versions
        vLog $ logMsg ++ "sandbox package-db"
-       return $ (return (), compileWithPkg (GPSPackageDBs [sandbox]) cabalVer CPSProject)
+       return $ (return (), compileWithPkg (GPSPackageDBs [sandbox]) cabalVer CPSProject UsesOldBuild)
 
    -- | Check if the requested Cabal version is available in a v2-build
    -- project's inplace package-db.
@@ -204,7 +208,7 @@ compileHelper' CompHelperEnv {..} = do
        cabal_versions <- listCabalVersions (Just inplace_db)
        _ <- MaybeT $ return $ find (== cabalVer) cabal_versions
        vLog $ logMsg ++ "v2-build package-db " ++ inplace_db_path
-       return $ (return (), compileWithPkg (GPSPackageDBs [inplace_db]) cabalVer CPSProject)
+       return $ (return (), compileWithPkg (GPSPackageDBs [inplace_db]) cabalVer CPSProject UsesNewBuild)
 
    -- | If this is a v2-build project it makes sense to use @v2-install@ for
    -- installing Cabal as this will use the @~/.cabal/store@. We use
@@ -219,7 +223,7 @@ compileHelper' CompHelperEnv {..} = do
        env@(PackageEnvFile env_file)
            <- liftIO $ getPrivateCabalPkgEnv ghcVer cabalVer
        vLog $ logMsg ++ "v2-build package-env " ++ env_file
-       return $ (prepare env, compileWithPkg (GPSPackageEnv env) cabalVer CPSGlobal)
+       return $ (prepare env, compileWithPkg (GPSPackageEnv env) cabalVer CPSGlobal UsesNewBuild)
      where
        prepare env = do
          -- exists_in_env <- liftIO $ cabalVersionExistsInPkgDb cheCabalVer db
@@ -250,6 +254,7 @@ compileHelper' CompHelperEnv {..} = do
            { compPackageSource = GPSPackageDBs [db]
            , compCabalVersion  = unpackedToResolvedCabalVersion cabalVer
            , compProductTarget = CPSGlobal
+           , compUsesNewBuild  = UsesOldBuild
            }
      where
        prepare db = do
@@ -287,11 +292,12 @@ compileHelper' CompHelperEnv {..} = do
           , compCabalSourceVersion   = ver
           }
 
-   compileWithPkg pkg_src ver target =
+   compileWithPkg pkg_src ver target useNewBuild =
        CompileWithCabalPackage
           { compPackageSource        = pkg_src
           , compCabalVersion         = CabalVersion ver
           , compProductTarget        = target
+           , compUsesNewBuild        = useNewBuild
           }
 
 compile :: Env => CompPaths -> Compile -> IO (Either ExitCode FilePath)
@@ -364,10 +370,12 @@ compGhcInvocation comp CompPaths {..} =
               , "process"
               , "bytestring"
               , "ghc-prim"
-              , case compCabalVersion of
-                  CabalHEAD {} -> "Cabal"
-                  CabalVersion ver -> "Cabal-" ++ showVersion ver
-              ]
+              ] ++ case compUsesNewBuild of
+                      UsesNewBuild -> []
+                      UsesOldBuild ->
+                        case compCabalVersion of
+                          CabalHEAD {} -> ["Cabal"]
+                          CabalVersion ver -> ["Cabal-" ++ showVersion ver]
           , giCPPOptions = cppOptions (unCabalVersion compCabalVersion)
           , ..
           }
