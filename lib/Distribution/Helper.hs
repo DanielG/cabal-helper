@@ -380,8 +380,10 @@ invokeHelper QueryEnv {..} args = do
 
 getPackageId :: MonadQuery m => m (String, Version)
 getPackageId = ask >>= \QueryEnv {..} -> do
-  [ Just (ChResponseVersion pkgName pkgVer) ] <- readHelper [ "package-id" ]
-  return (pkgName, pkgVer)
+  pkgId <- readHelper [ "package-id" ]
+  case pkgId of
+    [ Just (ChResponseVersion pkgName pkgVer) ] -> return (pkgName, pkgVer)
+    _ -> error "getPackageId: unexpected response"
 
 getSomeConfigState :: MonadQuery m => m SomeLocalBuildInfo
 getSomeConfigState = ask >>= \QueryEnv {..} -> do
