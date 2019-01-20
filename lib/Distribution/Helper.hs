@@ -125,6 +125,8 @@ import Text.Printf
 import Prelude
 
 import CabalHelper.Compiletime.Compile
+import qualified CabalHelper.Compiletime.Compat.ProgramDb as ProgDb
+    ( defaultProgramDb, programPath, lookupProgram, ghcProgram, ghcPkgProgram)
 import qualified CabalHelper.Compiletime.Program.Stack as Stack
 import qualified CabalHelper.Compiletime.Program.GHC as GHC
 import qualified CabalHelper.Compiletime.Program.CabalInstall as CabalInstall
@@ -138,8 +140,10 @@ import CabalHelper.Shared.Common
 
 import CabalHelper.Compiletime.Compat.Version
 
+import Distribution.Simple.GHC as GHC (configure)
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
+import Distribution.Verbosity (silent, deafening)
 
 -- $type-conventions
 -- Throughout the API we use the following conventions for type variables:
@@ -550,11 +554,38 @@ withVerbosity act = do
 
 withProgs :: Verbose => ProjInfoImpl pt -> QueryEnvI c pt -> (Env => IO a) -> IO a
 withProgs impl QueryEnv{..} f = do
-  cprogs <- case impl of
-    ProjInfoStack projPaths -> Stack.patchCompPrograms projPaths qeCompPrograms
-    _ -> return qeCompPrograms
+  cprogs <- guessCompProgramPaths $ case impl of
+    ProjInfoStack projPaths ->
+      Stack.patchCompPrograms projPaths qeCompPrograms
+    _ -> qeCompPrograms
   let ?cprogs = cprogs in
     let ?progs = qePrograms in f
+  where
+    -- | Determine ghc-pkg path from ghc path
+    guessCompProgramPaths :: Verbose => CompPrograms -> IO CompPrograms
+    guessCompProgramPaths progs = do
+        let v | ?verbose  = deafening
+              | otherwise = silent
+            mGhcPath0    | same ghcProgram progs dprogs = Nothing
+                        | otherwise = Just $ ghcProgram progs
+            mGhcPkgPath0 | same ghcPkgProgram progs dprogs = Nothing
+                        | otherwise = Just $ ghcPkgProgram progs
+        (_compiler, _mplatform, progdb)
+            <- GHC.configure
+                  v
+                  mGhcPath0
+                  mGhcPkgPath0
+                  ProgDb.defaultProgramDb
+        let getProg p = ProgDb.programPath <$> ProgDb.lookupProgram p progdb
+            mghcPath1    = getProg ProgDb.ghcProgram
+            mghcPkgPath1 = getProg ProgDb.ghcPkgProgram
+        return progs
+          { ghcProgram    = fromMaybe (ghcProgram progs) mghcPath1
+          , ghcPkgProgram = fromMaybe (ghcProgram progs) mghcPkgPath1
+          }
+      where
+        same f o o'  = f o == f o'
+        dprogs = defaultCompPrograms
 
 getHelperExe
     :: ProjInfo pt -> QueryEnvI c pt -> IO FilePath
