@@ -33,8 +33,13 @@ import Data.Function
 import System.FilePath hiding ((<.>))
 import Prelude
 
+import qualified CabalHelper.Compiletime.Compat.ProgramDb as ProgDb
+    ( defaultProgramDb, programPath, lookupProgram, ghcProgram, ghcPkgProgram)
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Types.RelativePath
+
+import Distribution.Simple.GHC as GHC (configure)
+import Distribution.Verbosity (silent, deafening)
 
 getUnit :: QueryEnvI c 'Stack -> CabalFile -> IO (Unit 'Stack)
 getUnit qe cabal_file@(CabalFile cabal_file_path) = do
@@ -88,6 +93,35 @@ workdirArg :: QueryEnvI c 'Stack -> [String]
 workdirArg QueryEnv{qeDistDir=DistDirStack mworkdir} =
   maybeToList $ ("--work-dir="++) . unRelativePath <$> mworkdir
 
-patchCompPrograms :: StackProjPaths -> CompPrograms -> CompPrograms
-patchCompPrograms StackProjPaths{sppCompExe} cprogs =
-  cprogs { ghcProgram = sppCompExe }
+
+patchCompPrograms :: Verbose => StackProjPaths -> CompPrograms -> IO CompPrograms
+patchCompPrograms StackProjPaths{sppCompExe} compProgs =
+  guessCompProgramPaths $ patchGhc compProgs
+  where 
+    patchGhc cprogs = cprogs { ghcProgram = sppCompExe }
+
+    -- | Determine ghc-pkg path from ghc path
+    guessCompProgramPaths :: Verbose => CompPrograms -> IO CompPrograms
+    guessCompProgramPaths progs = do
+        let v | ?verbose  = deafening
+              | otherwise = silent
+            mGhcPath0    | same ghcProgram progs dprogs = Nothing
+                        | otherwise = Just $ ghcProgram progs
+            mGhcPkgPath0 | same ghcPkgProgram progs dprogs = Nothing
+                        | otherwise = Just $ ghcPkgProgram progs
+        (_compiler, _mplatform, progdb)
+            <- GHC.configure
+                  v
+                  mGhcPath0
+                  mGhcPkgPath0
+                  ProgDb.defaultProgramDb
+        let getProg p = ProgDb.programPath <$> ProgDb.lookupProgram p progdb
+            mghcPath1    = getProg ProgDb.ghcProgram
+            mghcPkgPath1 = getProg ProgDb.ghcPkgProgram
+        return progs
+          { ghcProgram    = fromMaybe (ghcProgram progs) mghcPath1
+          , ghcPkgProgram = fromMaybe (ghcProgram progs) mghcPkgPath1
+          }
+      where
+        same f o o'  = f o == f o'
+        dprogs = defaultCompPrograms
