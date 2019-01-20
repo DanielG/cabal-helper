@@ -457,22 +457,15 @@ readProjInfo qe pc pcm = withVerbosity $ do
       Just cabal_files <- NonEmpty.nonEmpty <$> Stack.listPackageCabalFiles qe
       units <- mapM (Stack.getUnit qe) cabal_files
       proj_paths <- Stack.projPaths qe
-      cprogs <-
-        guessCompProgramPaths $
-        Stack.patchCompPrograms proj_paths $
-        qeCompPrograms qe
-      Just (cabalVer:_) <- runMaybeT $
-        let ?cprogs = cprogs in
-        let ?progs  = qePrograms qe in
+      let piImpl = ProjInfoStack { piStackProjPaths = proj_paths }
+      Just (cabalVer:_) <- withProgs piImpl qe $ runMaybeT $
         GHC.listCabalVersions (Just (sppGlobalPkgDb proj_paths))
         --  ^ See [Note Stack Cabal Version]
       return ProjInfo
         { piCabalVersion = cabalVer
         , piProjConfModTimes = pcm
         , piUnits = units
-        , piImpl = ProjInfoStack
-          { piStackProjPaths = proj_paths
-          }
+        , ..
         }
 
 readUnitInfo :: QueryEnvI c pt -> FilePath -> Unit pt -> IO UnitInfo
@@ -573,33 +566,6 @@ buildPlatform = display Distribution.System.buildPlatform
 lookupEnv' :: String -> IO (Maybe String)
 lookupEnv' k = lookup k <$> getEnvironment
 
--- | Determine ghc-pkg path from ghc path
-guessCompProgramPaths :: Verbose => CompPrograms -> IO CompPrograms
-guessCompProgramPaths progs = do
-    let v | ?verbose  = deafening
-          | otherwise = silent
-        mGhcPath0    | same ghcProgram progs dprogs = Nothing
-                     | otherwise = Just $ ghcProgram progs
-        mGhcPkgPath0 | same ghcPkgProgram progs dprogs = Nothing
-                     | otherwise = Just $ ghcPkgProgram progs
-    (_compiler, _mplatform, progdb)
-        <- GHC.configure
-               v
-               mGhcPath0
-               mGhcPkgPath0
-               ProgDb.defaultProgramDb
-    let getProg p = ProgDb.programPath <$> ProgDb.lookupProgram p progdb
-        mghcPath1    = getProg ProgDb.ghcProgram
-        mghcPkgPath1 = getProg ProgDb.ghcPkgProgram
-    return progs
-      { ghcProgram    = fromMaybe (ghcProgram progs) mghcPath1
-      , ghcPkgProgram = fromMaybe (ghcProgram progs) mghcPkgPath1
-      }
-
-  where
-   same f o o'  = f o == f o'
-   dprogs = defaultCompPrograms
-
 withVerbosity :: (Verbose => IO a) -> IO a
 withVerbosity act = do
   x <- lookup  "CABAL_HELPER_DEBUG" <$> getEnvironment
@@ -609,10 +575,47 @@ withVerbosity act = do
           _ -> False
   act
 
+-- | Bring 'Programs' and 'CompPrograms' into scope as implicit parameters
+withProgs
+    :: Verbose => ProjInfoImpl pt -> QueryEnvI c pt -> (Env => IO a) -> IO a
+withProgs impl QueryEnv{..} f = do
+  cprogs <- guessCompProgramPaths $ case impl of
+    ProjInfoStack projPaths ->
+      Stack.patchCompPrograms projPaths qeCompPrograms
+    _ -> qeCompPrograms
+  let ?cprogs = cprogs in
+    let ?progs = qePrograms in f
+  where
+    -- | Determine ghc-pkg path from ghc path
+    guessCompProgramPaths :: Verbose => CompPrograms -> IO CompPrograms
+    guessCompProgramPaths progs = do
+        let v | ?verbose  = deafening
+              | otherwise = silent
+            mGhcPath0    | same ghcProgram progs dprogs = Nothing
+                        | otherwise = Just $ ghcProgram progs
+            mGhcPkgPath0 | same ghcPkgProgram progs dprogs = Nothing
+                        | otherwise = Just $ ghcPkgProgram progs
+        (_compiler, _mplatform, progdb)
+            <- GHC.configure
+                  v
+                  mGhcPath0
+                  mGhcPkgPath0
+                  ProgDb.defaultProgramDb
+        let getProg p = ProgDb.programPath <$> ProgDb.lookupProgram p progdb
+            mghcPath1    = getProg ProgDb.ghcProgram
+            mghcPkgPath1 = getProg ProgDb.ghcPkgProgram
+        return progs
+          { ghcProgram    = fromMaybe (ghcProgram progs) mghcPath1
+          , ghcPkgProgram = fromMaybe (ghcProgram progs) mghcPkgPath1
+          }
+      where
+        same f o o'  = f o == f o'
+        dprogs = defaultCompPrograms
+
 getHelperExe
     :: ProjInfo pt -> QueryEnvI c pt -> IO FilePath
-getHelperExe proj_info QueryEnv{..} = do
-  withVerbosity $ do
+getHelperExe proj_info qe@QueryEnv{..} = do
+  withVerbosity $ withProgs (piImpl proj_info) qe $ do
     let comp = wrapper' qeProjLoc qeDistDir proj_info
     let ?progs = qePrograms
         ?cprogs = qeCompPrograms

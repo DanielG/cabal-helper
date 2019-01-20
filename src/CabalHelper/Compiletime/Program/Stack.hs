@@ -117,10 +117,6 @@ workdirArg :: QueryEnvI c 'Stack -> [String]
 workdirArg QueryEnv{qeDistDir=DistDirStack mworkdir} =
   maybeToList $ ("--work-dir="++) . unRelativePath <$> mworkdir
 
-patchCompPrograms :: StackProjPaths -> CompPrograms -> CompPrograms
-patchCompPrograms StackProjPaths{sppCompExe} cprogs =
-  cprogs { ghcProgram = sppCompExe }
-
 doStackCmd :: (QueryEnvI c 'Stack -> CallProcessWithCwd a)
            -> QueryEnvI c 'Stack -> Maybe FilePath -> [String] -> IO a
 doStackCmd procfn qe mcwd args =
@@ -132,3 +128,7 @@ callStackCmd :: QueryEnvI c 'Stack -> Maybe FilePath -> [String] -> IO ()
 
 readStackCmd = doStackCmd (\qe -> qeReadProcess qe "")
 callStackCmd = doStackCmd qeCallProcess
+
+patchCompPrograms :: StackProjPaths -> CompPrograms -> CompPrograms
+patchCompPrograms StackProjPaths{sppCompExe} cprogs =
+  cprogs { ghcProgram = sppCompExe }
