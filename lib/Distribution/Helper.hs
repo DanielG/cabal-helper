@@ -125,8 +125,6 @@ import Text.Printf
 import Prelude
 
 import CabalHelper.Compiletime.Compile
-import qualified CabalHelper.Compiletime.Compat.ProgramDb as ProgDb
-    ( defaultProgramDb, programPath, lookupProgram, ghcProgram, ghcPkgProgram)
 import qualified CabalHelper.Compiletime.Program.Stack as Stack
 import qualified CabalHelper.Compiletime.Program.GHC as GHC
 import qualified CabalHelper.Compiletime.Program.CabalInstall as CabalInstall
@@ -139,11 +137,13 @@ import CabalHelper.Shared.InterfaceTypes
 import CabalHelper.Shared.Common
 
 import CabalHelper.Compiletime.Compat.Version
+import qualified CabalHelper.Compiletime.Compat.ProgramDb as ProgDb
+    ( defaultProgramDb, programPath, lookupProgram, ghcProgram, ghcPkgProgram)
 
-import Distribution.Simple.GHC as GHC (configure)
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
 import Distribution.Verbosity (silent, deafening)
+import Distribution.Simple.GHC as GHC (configure)
 
 -- $type-conventions
 -- Throughout the API we use the following conventions for type variables:

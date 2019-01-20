@@ -88,7 +88,6 @@ workdirArg :: QueryEnvI c 'Stack -> [String]
 workdirArg QueryEnv{qeDistDir=DistDirStack mworkdir} =
   maybeToList $ ("--work-dir="++) . unRelativePath <$> mworkdir
 
-
 patchCompPrograms :: StackProjPaths -> CompPrograms -> CompPrograms
 patchCompPrograms StackProjPaths{sppCompExe} cprogs =
   cprogs { ghcProgram = sppCompExe }
