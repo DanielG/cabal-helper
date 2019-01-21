@@ -79,8 +79,10 @@ data ChComponentInfo = ChComponentInfo
     -- ^ Only Haskell language extension related options, i.e. @-XSomeExtension@
 
     , ciSourceDirs            :: [String]
-    -- ^ A component's @source-dirs@ field, beware since if this is empty
-    -- implicit behaviour in GHC kicks in which you might have to emulate.
+    -- ^ A component's @hs-source-dirs@ field, note that this only contains the
+    -- directories specified by the cabal file, however cabal also adds the
+    -- output directory of preprocessors to GHC's search path when
+    -- building. TODO: make this easier to use.
 
     , ciEntrypoints           :: ChEntrypoint
     -- ^ Modules or files Cabal would have the compiler build directly. Can be
