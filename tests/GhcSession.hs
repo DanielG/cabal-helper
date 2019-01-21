@@ -1,4 +1,6 @@
-{-# LANGUAGE TupleSections, ScopedTypeVariables, RecordWildCards, RankNTypes, DataKinds #-}
+{-# LANGUAGE TupleSections, ScopedTypeVariables, RecordWildCards, RankNTypes,
+  DataKinds, ExistentialQuantification, PolyKinds, ViewPatterns,
+  DeriveFunctor, MonoLocalBinds, GADTs, MultiWayIf #-}
 
 {-| This test ensures we can get a GHC API session up and running in a variety of
   project environments.
@@ -8,8 +10,10 @@ module Main where
 
 import GHC
 import GHC.Paths (libdir)
+import Outputable
 import DynFlags
 
+import Control.Arrow ((***))
 import qualified Control.Exception as E
 import Control.Monad
 import Control.Monad.IO.Class
@@ -18,121 +22,174 @@ import Data.Version
 import qualified Data.Map as Map
 import System.Environment (getArgs)
 import System.Exit
-import System.FilePath ((</>), takeFileName, takeDirectory)
+import System.FilePath ((</>), (<.>), makeRelative, takeDirectory)
 import System.Directory
 import System.IO
 import System.IO.Temp
 import System.Process (readProcess)
+import Text.Printf (printf)
+import Text.Show.Pretty
 
 import Distribution.Helper
 
 import CabalHelper.Shared.Common
 import CabalHelper.Compiletime.Process
 
+data TestConfig = TC
+  { location        :: TestLocation
+  , cabalLowerBound :: Version
+  , ghcLowerBound   :: Version
+  , projTypes       :: [ProjType]
+  } deriving (Show)
+
+data TestLocation
+  = TN String
+  | TF FilePath FilePath FilePath
+    deriving (Show)
 
 main :: IO ()
 main = do
   args <- getArgs
-  topdir <- getCurrentDirectory
-  res <- mapM (setup topdir test) $ case args of
-    [] -> [ ("tests/exelib/exelib.cabal",       parseVer "1.10", parseVer "0")
-          , ("tests/exeintlib/exeintlib.cabal", parseVer "2.0",  parseVer "0")
-          , ("tests/fliblib/fliblib.cabal",     parseVer "2.0",  parseVer "0")
-          , ("tests/bkpregex/bkpregex.cabal",   parseVer "2.0",  parseVer "8.1")
-          --                           min Cabal lib ver -^   min GHC ver -^
-          ]
-    xs -> map (, parseVer "0", parseVer "0") xs
+--  topdir <- getCurrentDirectory
+
+  ci_ver <- cabalInstallVersion
+  c_ver <- cabalInstallBuiltinCabalVersion
+  g_ver <- ghcVersion
+  s_ver <- stackVersion
+    `E.catch` \(_ :: IOError) -> return (makeVersion [0])
+
+  putStrLn $ "cabal-install version: " ++ showVersion ci_ver
+  putStrLn $ "Cabal version: " ++ showVersion c_ver
+  putStrLn $ "GHC version: " ++ showVersion g_ver
+  putStrLn $ "Stack version: " ++ showVersion s_ver
+
+  let proj_impls :: [(ProjType, ProjSetup0)]
+      proj_impls =
+        [ (V1,    oldBuildProjSetup)
+        , (V2,    newBuildProjSetup)
+        , (Stack, stackProjSetup g_ver)
+        ]
+
+  tests <- return $ case args of
+    xs@(_:_) -> flip map xs $ \loc ->
+      let (topdir, ':':x0) = span (/=':') loc
+          (projdir0, ':':x1) = span (/=':') x0
+          (cabal_file0, ':':pt) = span (/=':') x1
+          projdir = makeRelative topdir projdir0
+          cabal_file = makeRelative topdir cabal_file0 in
+      TC (TF topdir projdir cabal_file) (parseVer "0") (parseVer "0") [read pt]
+    [] ->
+      [ TC (TN "exelib")    (parseVer "1.10") (parseVer "0")   []
+      , TC (TN "exeintlib") (parseVer "2.0")  (parseVer "0")   []
+      , TC (TN "fliblib")   (parseVer "2.0")  (parseVer "0")   []
+      , TC (TN "bkpregex")  (parseVer "2.0")  (parseVer "8.1") [V1, V2]
+      , let multipkg_loc = TF "tests/multipkg/" "proj/" "proj/proj.cabal" in
+        TC  multipkg_loc    (parseVer "1.10") (parseVer "0")   [V2, Stack]
+      --            min Cabal lib ver -^    min GHC ver -^
+      ]
+
+  -- pPrint tests
+  -- mapM_ (\(TC loc _ _ _) -> pPrint $ testLocPath loc) tests
+
+  res :: [[Bool]] <- sequence $ do
+    tc@TC {..} <- tests
+    (pt, ps0 :: ProjSetup0) <- proj_impls
+    guard (null projTypes || pt `elem` projTypes)
+
+    let skip (SkipReason reason) = do
+          hPutStrLn stderr $ intercalate " "
+            [ "Skipping test"
+            , psdHeading ps0
+            , "'" ++ projdir_rel ++ "'"
+            , "because"
+            , reason
+            ]
+          where
+            (_, projdir_rel, _) = testLocPath location
+
+    case psdImpl ps0 of
+      Left reason -> return $ skip reason >> return []
+      Right eximpl -> do
+        let ps1 = ps0 { psdImpl = eximpl }
+        case checkAndRunTestConfig VerEnv{..} ps1 tc of
+          Left reason -> return $ skip reason >> return []
+          Right (Message msg, act) -> return $ hPutStrLn stderr msg >> act
 
   if any (==False) $ concat res
     then exitFailure
     else exitSuccess
 
-cabalInstallVersion :: IO Version
-cabalInstallVersion =
-    parseVer . trim <$> readProcess "cabal" ["--numeric-version"] ""
+data VerEnv = VerEnv
+  { ci_ver :: Version
+  , c_ver  :: Version
+  , g_ver  :: Version
+  , s_ver  :: Version
+  }
 
-ghcVersion :: IO Version
-ghcVersion =
-    parseVer . trim <$> readProcess "ghc" ["--numeric-version"] ""
+data Message = Message String
+data SkipReason = SkipReason String
 
-cabalInstallBuiltinCabalVersion :: IO Version
-cabalInstallBuiltinCabalVersion =
-    parseVer . trim <$> readProcess "cabal"
-        ["act-as-setup", "--", "--numeric-version"] ""
+testLocPath :: TestLocation -> (FilePath, FilePath, FilePath)
+testLocPath (TN test_name) = (projdir, ".", cabal_file)
+  where
+    projdir :: FilePath
+    projdir = "tests" </> test_name
+    cabal_file :: FilePath
+    cabal_file = test_name <.> "cabal"
+testLocPath (TF topdir projdir cabal_file) =
+    (topdir, projdir, cabal_file)
 
-data ProjSetup pt =
-  ProjSetup
-    { psDistDir   :: FilePath -> DistDir pt
-    , psProjDir   :: FilePath -> ProjLoc pt
-    , psConfigure :: FilePath -> IO ()
-    , psBuild     :: FilePath -> IO ()
-    , psSdist     :: FilePath -> FilePath -> IO ()
-    }
+data Ex a = forall x. Ex (a x)
 
-oldBuild :: ProjSetup 'V1
-oldBuild = ProjSetup
-    { psDistDir   = \dir -> DistDirV1 (dir </> "dist")
-    , psProjDir   = \cabal_file -> ProjLocCabalFile cabal_file
-    , psConfigure = \dir ->
-        runWithCwd dir "cabal" [ "configure" ]
-    , psBuild     = \dir ->
-        runWithCwd dir "cabal" [ "build" ]
-    , psSdist     = \srcdir destdir ->
-        runWithCwd srcdir "cabal" [ "sdist", "-v0", "--output-dir", destdir ]
-    }
+checkAndRunTestConfig
+    :: VerEnv
+    -> ProjSetup1
+    -> TestConfig
+    -> Either SkipReason (Message, IO [Bool])
+checkAndRunTestConfig
+  VerEnv { ci_ver, c_ver, g_ver, s_ver }
+  ps1@(psdImpl -> Ex psdImpl2)
+  (TC test_loc min_cabal_ver min_ghc_ver _proj_types)
+  = let
+  (topdir, projdir_rel, cabal_file) = testLocPath test_loc
+  mreason
+    | SStack <- psiProjType psdImpl2
+    , s_ver < parseVer "1.9.4" =
+      if| g_ver >= parseVer "8.2.2" ->
+          error $ printf
+            "stack-%s is too old, but GHC %s is recent enough to build it.\n\
+            \The CI scripts should have installed it! See 25-deps.sh\n"
+            (showVersion s_ver) (showVersion g_ver)
+        | otherwise ->
+          Just $ "stack-" ++ showVersion s_ver ++ " is too old"
+    | (ci_ver < parseVer "1.24") =
+      Just $ "cabal-install-" ++ showVersion ci_ver ++ " is too old"
+    | c_ver < min_cabal_ver =
+      Just $ "Cabal-" ++ showVersion c_ver
+             ++ " < " ++ showVersion min_cabal_ver
+    | g_ver < min_ghc_ver =
+      Just $ "ghc-" ++ showVersion g_ver
+             ++ " < " ++ showVersion min_ghc_ver
+    | otherwise =
+      Nothing
+  in case mreason of
+    Just reason -> do
+      Left $ SkipReason reason
+    Nothing -> do
+      Right $ (,)
+        (Message $ intercalate " "
+          [ "\n\n\nRunning test"
+          , psdHeading ps1
+          , "'" ++ topdir ++ "'"
+          ])
+        (runTest ps1{ psdImpl = psdImpl2 } topdir projdir_rel cabal_file)
 
-newBuild :: ProjSetup 'V2
-newBuild = ProjSetup
-    { psDistDir   = \dir  -> DistDirV2 (dir </> "dist-newstyle")
-    , psProjDir   = \cabal_file -> ProjLocV2Dir (takeDirectory cabal_file)
-    , psConfigure = \dir ->
-        runWithCwd dir "cabal" [ "new-configure" ]
-    , psBuild     = \dir ->
-        runWithCwd dir "cabal" [ "new-build" ]
-    , psSdist     = \srcdir destdir ->
-        runWithCwd srcdir "cabal" [ "sdist", "-v0", "--output-dir", destdir ]
-    }
-
-setup :: FilePath -> (forall pt . ProjSetup pt -> FilePath -> IO [Bool]) -> (FilePath, Version, Version) -> IO [Bool]
-setup topdir act (cabal_file, min_cabal_ver, min_ghc_ver) = do
-    let projdir = takeDirectory cabal_file
-    ci_ver <- cabalInstallVersion
-    c_ver <- cabalInstallBuiltinCabalVersion
-    g_ver <- ghcVersion
-    let mreason
-          | (ci_ver < parseVer "1.24") =
-            Just $ "cabal-install-" ++ showVersion ci_ver ++ " is too old"
-          | c_ver < min_cabal_ver =
-            Just $ "Cabal-" ++ showVersion c_ver
-                   ++ " < " ++ showVersion min_cabal_ver
-          | g_ver < min_ghc_ver =
-            Just $ "ghc-" ++ showVersion g_ver
-                   ++ " < " ++ showVersion min_ghc_ver
-          | otherwise =
-            Nothing
-
-    case mreason of
-      Just reason -> do
-        putStrLn $ "Skipping test '" ++ projdir ++ "' because " ++ reason ++ "."
-        return []
-      Nothing -> do
-        putStrLn $ "Running test '" ++ projdir ++ "' with " ++ showVersion ci_ver ++ "."
-        putStrLn "Old build -------------------------------------"
-        rold <- runTest oldBuild topdir projdir cabal_file act
-        putStrLn "New build -------------------------------------"
-        rnew <- runTest newBuild topdir projdir cabal_file act
-        return (rold ++ rnew)
-
-runTest :: ProjSetup pt -> FilePath -> String -> FilePath
-        -> (ProjSetup pt -> FilePath -> IO [Bool]) -> IO [Bool]
-runTest ps@ProjSetup{..} topdir projdir cabal_file act = do
-  putStrLn $ "Running test '" ++ projdir ++ "'-------------------------"
+runTest :: ProjSetup2 pt -> FilePath -> FilePath -> FilePath -> IO [Bool]
+runTest ps2@(psdImpl -> ProjSetupImpl{..}) topdir projdir cabal_file = do
   withSystemTempDirectory' "cabal-helper.ghc-session.test" $ \tmpdir -> do
-
-    psSdist (topdir </> projdir) tmpdir
-    psConfigure tmpdir
-
-    act ps $ tmpdir </> takeFileName cabal_file
+    psiSdist topdir tmpdir
+    psiConfigure (tmpdir </> projdir)
+    test ps2 (tmpdir </> projdir) (tmpdir </> cabal_file)
 
 runWithCwd :: FilePath -> String -> [String] -> IO ()
 runWithCwd cwd x xs = do
@@ -144,25 +201,27 @@ run x xs = do
   let ?verbose = True
   callProcessStderr Nothing x xs
 
-test :: ProjSetup pt -> FilePath -> IO [Bool]
-test ProjSetup{..} cabal_file = do
-    let projdir = takeDirectory cabal_file
-    qe <- mkQueryEnv
-            (psProjDir cabal_file)
-            (psDistDir projdir)
-    cs <- concat <$> runQuery (allUnits (Map.elems . uiComponents)) qe
-    forM cs $ \ChComponentInfo{..} -> do
-        putStrLn $ "\n" ++ show ciComponentName ++ ":::: " ++ show ciNeedsBuildOutput
+test :: ProjSetup2 pt -> FilePath -> FilePath -> IO [Bool]
+test (psdImpl -> ProjSetupImpl{..}) projdir cabal_file = do
+    qe <- psiQEmod <$> mkQueryEnv
+            (psiProjLoc (CabalFile cabal_file) projdir)
+            (psiDistDir projdir)
 
-        when (ciNeedsBuildOutput == ProduceBuildOutput) $ do
-          psBuild projdir
+    cs <- concat <$> runQuery (allUnits (Map.elems . uiComponents)) qe
+
+    when (any ((==ProduceBuildOutput) . ciNeedsBuildOutput) cs) $
+      psiBuild projdir
+
+    let pkgdir = takeDirectory cabal_file
+    forM cs $ \ChComponentInfo{..} -> do
+        putStrLn $ "\n" ++ show ciComponentName
+                        ++ ":::: " ++ show ciNeedsBuildOutput
 
         let opts' = "-Werror" : ciGhcOptions
-
-        let sopts = intercalate " " $ map formatArg $ "\nghc" : opts'
-        putStrLn $ "\n" ++ show ciComponentName ++ ": " ++ sopts
+        let sopts = intercalate " " $ map formatArg $ "ghc" : opts'
+        putStrLn $ "\n" ++ show ciComponentName ++ ":\n" ++ "cd " ++ pkgdir ++ "\n" ++ sopts
         hFlush stdout
-        compileModule projdir ciNeedsBuildOutput ciEntrypoints opts'
+        compileModule pkgdir ciNeedsBuildOutput ciEntrypoints ciSourceDirs opts'
   where
     formatArg x
         | "-" `isPrefixOf` x = "\n  "++x
@@ -173,11 +232,13 @@ addCabalProject dir = do
   writeFile (dir </> "cabal.project") "packages: .\n"
 
 compileModule
-    :: FilePath -> NeedsBuildOutput -> ChEntrypoint -> [String] -> IO Bool
-compileModule projdir nb ep opts = do
-    setCurrentDirectory projdir
+    :: FilePath -> NeedsBuildOutput -> ChEntrypoint -> [FilePath] -> [String] -> IO Bool
+compileModule pkgdir nb ep srcdirs opts = do
+    cwd_before <- getCurrentDirectory
+    setCurrentDirectory pkgdir
+    flip E.finally (setCurrentDirectory cwd_before) $ do
 
-    putStrLn $ "compiling:" ++ show ep ++ " (" ++ show nb ++ ")"
+    putStrLn $ "compiling: " ++ show ep ++ " (" ++ show nb ++ ")"
 
     E.handle (\(ec :: ExitCode) -> print ec >> return False) $ do
 
@@ -202,27 +263,28 @@ compileModule projdir nb ep opts = do
     (dflags2, _, _) <- parseDynamicFlags dflags1 (map noLoc opts)
     _ <- setSessionDynFlags dflags2
 
-    ts <- mapM (\t -> guessTarget t Nothing) $
+    ts <- mapM (\t -> guessTarget t Nothing) =<<
          case ep of
-           ChLibEntrypoint ms ms' ss -> map unChModuleName $ ms ++ ms' ++ ss
-           ChExeEntrypoint m'  ms    ->
-             let
-
-               -- The options first clear out includes, then put in the build
-               -- dir. We want the first one after that, so "regex-example" in
-               -- the following case
-               --
-               -- ,"-i"
-               -- ,"-idist/build/regex-example"
-               -- ,"-iregex-example"
-               firstInclude = drop 2 $ head $ drop 2 $ filter (isPrefixOf "-i") opts
-               m = firstInclude </> m'
-             in [m] ++ map unChModuleName ms
-           ChSetupEntrypoint         -> ["Setup.hs"]
+           ChLibEntrypoint ms ms' ss -> return $
+             map unChModuleName $ ms ++ ms' ++ ss
+           ChExeEntrypoint m  ms -> do
+             -- TODO: this doesn't take preprocessor outputs in
+             -- dist/build/$pkg/$pkg-tmp/ into account.
+             m1 <- liftIO $ findFile srcdirs m
+             case m1 of
+               Just m2 -> return $ [m2] ++ map unChModuleName ms
+               Nothing -> error $ printf
+                 "Couldn't find source file for Main module (%s), search path:\n\
+                 \%s\n" m (show srcdirs)
+           ChSetupEntrypoint         -> return $
+             -- TODO: this doesn't support Setup.lhs
+             ["Setup.hs"]
 
     let ts' = case nb of
                 NoBuildOutput -> map (\t -> t { targetAllowObjCode = False }) ts
                 ProduceBuildOutput -> ts
+
+    liftIO $ putStrLn $ "targets: " ++ showPpr dflags2 ts'
 
     setTargets ts'
     _ <- load LoadAllTargets
@@ -239,8 +301,142 @@ compileModule projdir nb ep opts = do
     liftIO $ print ExitSuccess
     return True
 
+
+data CabalFile = CabalFile FilePath
+
+type ProjSetup0 = ProjSetupDescr (Either SkipReason (Ex ProjSetupImpl))
+type ProjSetup1 = ProjSetupDescr (Ex ProjSetupImpl)
+type ProjSetup2 pt = ProjSetupDescr (ProjSetupImpl pt)
+
+data ProjSetupDescr a =
+  ProjSetupDescr
+    { psdHeading :: !String
+    , psdImpl    :: !a
+    } deriving (Functor)
+
+data ProjSetupImpl pt =
+  ProjSetupImpl
+    { psiProjType   :: !(SProjType pt)
+    , psiDistDir   :: !(FilePath -> DistDir pt)
+    , psiProjLoc   :: !(CabalFile -> FilePath -> ProjLoc pt)
+    , psiConfigure :: !(FilePath -> IO ())
+    , psiBuild     :: !(FilePath -> IO ())
+    , psiSdist     :: !(FilePath -> FilePath -> IO ())
+    , psiQEmod     :: !(QueryEnv pt -> QueryEnv pt)
+    }
+
+oldBuildProjSetup :: ProjSetup0
+oldBuildProjSetup = ProjSetupDescr "cabal-v1" $ Right $ Ex $ ProjSetupImpl
+    { psiProjType  = SV1
+    , psiDistDir   = \dir -> DistDirV1 (dir </> "dist")
+    , psiProjLoc   = \(CabalFile cf) _projdir -> ProjLocCabalFile cf
+    , psiConfigure = \dir ->
+        runWithCwd dir "cabal" [ "configure" ]
+    , psiBuild     = \dir ->
+        runWithCwd dir "cabal" [ "build" ]
+    , psiSdist     = \srcdir destdir ->
+        copyMuliPackageProject srcdir destdir (\_ _ -> return ())
+    , psiQEmod     = id
+    }
+
+newBuildProjSetup :: ProjSetup0
+newBuildProjSetup = ProjSetupDescr "cabal-v2" $ Right $ Ex $ ProjSetupImpl
+    { psiProjType  = SV2
+    , psiDistDir   = \dir  -> DistDirV2 (dir </> "dist-newstyle")
+    , psiProjLoc   = \_cabal_file projdir -> ProjLocV2File $ projdir </> "cabal.project"
+                     -- TODO: check if cabal.project is there and only use
+                     -- V2File then, also remove addCabalProject below so we
+                     -- cover both cases.
+    , psiConfigure = \dir ->
+        runWithCwd dir "cabal" [ "new-configure" ]
+    , psiBuild     = \dir ->
+        runWithCwd dir "cabal" [ "new-build" ]
+    , psiSdist     = \srcdir destdir -> do
+        copyMuliPackageProject srcdir destdir $ \pkgsrc pkgdest -> do
+          exists <- doesFileExist (pkgsrc </> "cabal.project")
+          if exists then
+            copyFile (pkgsrc </> "cabal.project") (pkgdest </> "cabal.project")
+          else
+            addCabalProject pkgdest
+    , psiQEmod     = id
+    }
+
+stackProjSetup :: Version -> ProjSetup0
+stackProjSetup ghcVer =
+    ProjSetupDescr "stack" $
+    let msg = SkipReason $ "missing stack_resolver_table entry for "++
+                           showVersion ghcVer in
+    maybe (Left msg) Right $ do
+    res <- lookup ghcVer stack_resolver_table
+    let argsBefore = [ "--resolver="++res, "--system-ghc" ]
+    return $ Ex $ ProjSetupImpl
+      { psiProjType  = SStack
+      , psiDistDir   = \_dir  -> DistDirStack Nothing
+      , psiProjLoc   = \_cabal_file projdir ->
+          ProjLocStackYaml $ projdir </> "stack.yaml"
+      , psiConfigure = \dir ->
+          runWithCwd dir "stack" $ argsBefore ++ [ "build", "--dry-run" ]
+      , psiBuild     = \dir ->
+          runWithCwd dir "stack" $ argsBefore ++ [ "build" ]
+      , psiSdist     = \srcdir destdir -> do
+          copyMuliPackageProject srcdir destdir copyStackYamls
+      , psiQEmod     = \qe ->
+          qe { qePrograms = (qePrograms qe)
+               { stackArgsBefore = argsBefore
+               }
+             }
+      }
+
+stack_resolver_table :: [(Version, String)]
+stack_resolver_table = map (parseVer *** ("lts-"++))
+  [ ("7.10.3", "6.35")
+  , ("8.0.1",  "7.24")
+  , ("8.0.2",  "9.21")
+  , ("8.2.2",  "11.22")
+  , ("8.4.3",  "12.14")
+  , ("8.4.4",  "12.19")
+  ]
+
+copyStackYamls :: FilePath -> FilePath -> IO ()
+copyStackYamls srcdir destdir = do
+  files <- (\\ [".", ".."]) <$> getDirectoryContents srcdir
+  let ymls = filter (".yaml" `isSuffixOf`) $
+             filter ("stack-" `isPrefixOf`) $ files
+  forM_ ymls $ \filename -> copyFile (srcdir </> filename) (destdir </> filename)
+
+-- | For each Cabal package listed in a @packages.list@ file, copy the package
+-- to another directory while only including source files referenced in the
+-- cabal file.
+copyMuliPackageProject
+    :: FilePath -> FilePath -> (FilePath -> FilePath -> IO ()) -> IO ()
+copyMuliPackageProject srcdir destdir copyPkgExtra = do
+  let packages_file = srcdir </> "packages.list"
+  pkgdirs <- lines <$> readFile packages_file
+  forM_ pkgdirs $ \pkgdir -> do
+    runWithCwd (srcdir </> pkgdir) "cabal"
+      [ "act-as-setup", "--", "sdist"
+      , "--output-directory="++destdir </> pkgdir ]
+    copyPkgExtra (srcdir </> pkgdir) (destdir </> pkgdir)
+
 unChModuleName :: ChModuleName -> String
 unChModuleName (ChModuleName  mn) = mn
+
+cabalInstallVersion :: IO Version
+cabalInstallVersion =
+    parseVer . trim <$> readProcess "cabal" ["--numeric-version"] ""
+
+ghcVersion :: IO Version
+ghcVersion =
+    parseVer . trim <$> readProcess "ghc" ["--numeric-version"] ""
+
+stackVersion :: IO Version
+stackVersion =
+    parseVer . trim <$> readProcess "stack" [ "--numeric-version" ] ""
+
+cabalInstallBuiltinCabalVersion :: IO Version
+cabalInstallBuiltinCabalVersion =
+    parseVer . trim <$> readProcess "cabal"
+        ["act-as-setup", "--", "--numeric-version"] ""
 
 -- ---------------------------------------------------------------------
 -- | Create and use a temporary directory in the system standard temporary directory.

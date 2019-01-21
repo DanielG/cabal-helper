@@ -38,24 +38,45 @@ extra-source-files:  README.md
 
                      tests/exelib/*.hs
                      tests/exelib/*.cabal
+                     tests/exelib/packages.list
+                     tests/exelib/stack.yaml
                      tests/exelib/lib/*.hs
 
                      tests/exeintlib/*.hs
                      tests/exeintlib/*.cabal
+                     tests/exeintlib/packages.list
+                     tests/exeintlib/stack.yaml
                      tests/exeintlib/lib/*.hs
                      tests/exeintlib/intlib/*.hs
 
                      tests/fliblib/*.hs
                      tests/fliblib/*.cabal
+                     tests/fliblib/packages.list
+                     tests/fliblib/stack.yaml
                      tests/fliblib/lib/*.hs
 
-                     tests/bkpregex/*.cabal
                      tests/bkpregex/*.hs
+                     tests/bkpregex/*.cabal
+                     tests/bkpregex/packages.list
+                     tests/bkpregex/stack.yaml
                      tests/bkpregex/regex-example/*.hs
                      tests/bkpregex/regex-indef/*.hs
                      tests/bkpregex/regex-indef/*.hsig
                      tests/bkpregex/regex-types/Regex/*.hs
                      tests/bkpregex/str-impls/Str/*.hs
+
+                     tests/multipkg/packages.list
+                     tests/multipkg/pkg-oot/*.cabal
+                     tests/multipkg/pkg-oot/*.hs
+                     tests/multipkg/proj/*.cabal
+                     tests/multipkg/proj/*.hs
+                     tests/multipkg/proj/cabal.project
+                     tests/multipkg/proj/pkg-a/*.cabal
+                     tests/multipkg/proj/pkg-a/*.hs
+                     tests/multipkg/proj/pkg-b/*.cabal
+                     tests/multipkg/proj/pkg-b/*.hs
+                     tests/multipkg/proj/stack.yaml
+
 
 source-repository head
   type:     git

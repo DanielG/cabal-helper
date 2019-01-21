@@ -30,6 +30,7 @@ import System.FilePath
 -- | A path guaranteed to be relative. The constructor is not exposed, use the
 -- 'mkRelativePath' smart constructor.
 newtype RelativePath = RelativePath { unRelativePath :: FilePath }
+    deriving (Show)
 
 -- | Smart constructor for 'RelativePath'. Checks if the given path is absolute
 -- and throws 'UserError' if not.

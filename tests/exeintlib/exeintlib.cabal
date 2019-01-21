@@ -2,6 +2,7 @@ name:                exeintlib
 version:             0
 build-type:          Simple
 cabal-version:       >=2.0
+extra-source-files:  stack.yaml
 
 library
   exposed-modules:     Lib

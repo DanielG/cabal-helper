@@ -1,0 +1,6 @@
+resolver: lts-0.0 # will be overridden on the commandline
+packages:
+- ./
+- ./pkg-a
+- ./pkg-b
+- ../pkg-oot

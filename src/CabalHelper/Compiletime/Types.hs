@@ -30,7 +30,6 @@ import Cabal.Plan
 import Data.IORef
 import Data.Version
 import Data.Typeable
-import Data.Map.Strict (Map)
 import GHC.Generics
 import System.FilePath
 import System.Posix.Types
@@ -39,32 +38,41 @@ import CabalHelper.Shared.InterfaceTypes
 
 import Data.List.NonEmpty (NonEmpty)
 --import qualified Data.List.NonEmpty as NonEmpty
-
+import Data.Map.Strict (Map)
+--import qualified Data.Map.Strict as Strict
 
 -- | The kind of project being managed by a 'QueryEnv' (pun intended).
 data ProjType
     = V1    -- ^ @cabal v1-build@ project, see 'DistDirV1'
     | V2    -- ^ @cabal v2-build@ project, see 'DistDirV2'
     | Stack -- ^ @stack@ project.
+      deriving (Eq, Ord, Show, Read)
 
--- | The location of a project. The kind of location marker given determines the
--- 'ProjType'. The project type of a given directory can be determined by trying
--- to access a set of marker files. See below.
+data SProjType pt where
+    SV1 :: SProjType 'V1
+    SV2 :: SProjType 'V2
+    SStack :: SProjType 'Stack
+
+-- | Location of project sources. The project type of a given directory can be
+-- determined by trying to access a set of marker files. See below.
 data ProjLoc (pt :: ProjType) where
     -- | A @cabal v1-build@ project directory can be identified by one file
     -- ending in @.cabal@ existing in the directory. More than one such files
     -- existing is a user error. Note: For this project type the concepts of
     -- project and package coincide.
-    ProjLocCabalFile :: { plCabalFile :: FilePath } -> ProjLoc 'V1
+    ProjLocCabalFile :: { plCabalFile :: !FilePath } -> ProjLoc 'V1
 
     -- | A @cabal v2-build@ project\'s marker file is called
     -- @cabal.project@. This configuration file points to the packages that make
     -- up this project.
-    ProjLocV2Dir     :: { plV2Dir :: FilePath } -> ProjLoc 'V2
+    ProjLocV2File    :: { plCabalProjectFile :: !FilePath } -> ProjLoc 'V2
+    ProjLocV2Dir     :: { plV2Dir :: !FilePath } -> ProjLoc 'V2
 
     -- | A @stack@ project\'s marker file is called @stack.yaml@. This
     -- configuration file points to the packages that make up this project.
-    ProjLocStackDir  :: { plStackDir :: FilePath } -> ProjLoc 'Stack
+    ProjLocStackYaml :: { plStackYaml :: !FilePath } -> ProjLoc 'Stack
+
+deriving instance Show (ProjLoc pt)
 
 plV1Dir :: ProjLoc 'V1 -> FilePath
 plV1Dir (ProjLocCabalFile cabal_file) = takeDirectory cabal_file
@@ -76,7 +84,7 @@ data DistDir (pt :: ProjType) where
     --
     -- You can tell a builddir is a /v1/ builddir by looking for a file
     -- called @setup-config@ directly underneath it.
-    DistDirV1 :: FilePath -> DistDir 'V1
+    DistDirV1 :: !FilePath -> DistDir 'V1
 
     -- | Build directory for cabal /new-build/ aka. /v2-build/, as of the time
     -- of this writing it is usually called @dist-newstyle/@ but this will
@@ -84,11 +92,13 @@ data DistDir (pt :: ProjType) where
     --
     -- You can tell a builddir is a /v2/ builddir by trying to access the path
     -- @cache/plan.json@ directly underneath it.
-    DistDirV2 :: FilePath -> DistDir 'V2
+    DistDirV2 :: !FilePath -> DistDir 'V2
 
     -- | Build directory for stack, aka. /work-dir/. Optionally override Stack's
     -- /work-dir/. If you just want to use Stack's default set to @Nothing@
-    DistDirStack :: Maybe RelativePath -> DistDir 'Stack
+    DistDirStack :: !(Maybe RelativePath) -> DistDir 'Stack
+
+deriving instance Show (DistDir pt)
 
 -- | Environment for running a 'Query' value. The constructor is not exposed in
 -- the API to allow extending the environment without breaking user code.
@@ -100,11 +110,12 @@ type QueryEnv (pt :: ProjType)
     = QueryEnvI QueryCache pt
 
 data QueryEnvI c (pt :: ProjType) = QueryEnv
-    { qeReadProcess
-          :: !(Maybe FilePath -> FilePath -> [String] -> String -> IO String)
+    { qeReadProcess :: !ReadProcessWithCwd
     -- ^ Field accessor for 'QueryEnv'. Function used to to start
     -- processes. Useful if you need to, for example, redirect standard error
     -- output of programs started by cabal-helper.
+
+    , qeCallProcess :: !(CallProcessWithCwd ())
 
     , qePrograms     :: !Programs
     -- ^ Field accessor for 'QueryEnv'.
@@ -126,6 +137,9 @@ data QueryEnvI c (pt :: ProjType) = QueryEnv
     -- 'QueryEnv' is used.
     }
 
+type ReadProcessWithCwd   = String -> CallProcessWithCwd String
+type CallProcessWithCwd a = Maybe FilePath -> FilePath -> [String] -> IO a
+
 data QueryCache pt = QueryCache
     { qcProjInfo  :: !(Maybe (ProjInfo pt))
     , qcUnitInfos :: !(Map DistDirLib UnitInfo)
@@ -144,7 +158,7 @@ data Unit pt = Unit
     , uCabalFile   :: !CabalFile
     , uDistDir     :: !DistDirLib
     , uImpl        :: !(UnitImpl pt)
-    }
+    } deriving (Show)
 
 data UnitImpl pt where
   UnitImplV1 :: UnitImpl 'V1
@@ -155,6 +169,8 @@ data UnitImpl pt where
     } -> UnitImpl 'V2
 
   UnitImplStack :: UnitImpl 'Stack
+
+deriving instance Show (UnitImpl pt)
 
 -- | This returns the component a 'Unit' corresponds to. This information is
 -- only available if the correspondence happens to be unique and known before
@@ -228,7 +244,7 @@ data ProjConf pt where
 -- these are supposed to be opaque, as they are meant to be used only for cache
 -- invalidation
 newtype ProjConfModTimes = ProjConfModTimes [(FilePath, EpochTime)]
-    deriving (Eq)
+    deriving (Eq, Show)
 
 -- | Project-scope information cache.
 data ProjInfo pt = ProjInfo
@@ -238,7 +254,7 @@ data ProjInfo pt = ProjInfo
   , piProjConfModTimes :: !ProjConfModTimes
   -- ^ Key for cache invalidation. When this is not equal to the return
   -- value of 'getProjConfModTime' this 'ProjInfo' is considered invalid.
-  }
+  } deriving (Show)
 
 data ProjInfoImpl pt where
   ProjInfoV1 :: ProjInfoImpl 'V1
@@ -253,6 +269,21 @@ data ProjInfoImpl pt where
     { piStackProjPaths :: !StackProjPaths
     } -> ProjInfoImpl 'Stack
 
+instance Show (ProjInfoImpl pt) where
+    show ProjInfoV1 = "ProjInfoV1"
+    show ProjInfoV2 {..} = concat
+      [ "ProjInfoV2 {"
+      , "piV2Plan = ", show piV2Plan, ", " --
+      , "piV2PlanModTime = ", show piV2PlanModTime, ", "
+      , "piV2CompilerId = ", show piV2CompilerId
+      , "}"
+      ]
+    show ProjInfoStack {..} = concat
+      [ "ProjInfoStack {"
+      , "piStackProjPaths = ", show piStackProjPaths
+      , "}"
+      ]
+
 data UnitModTimes = UnitModTimes
     { umtPkgYaml     :: !(Maybe (FilePath, EpochTime))
     , umtCabalFile   :: !(FilePath, EpochTime)
@@ -260,13 +291,14 @@ data UnitModTimes = UnitModTimes
     } deriving (Eq, Ord, Read, Show)
 
 newtype CabalFile = CabalFile FilePath
+    deriving (Show)
 
 data StackProjPaths = StackProjPaths
     { sppGlobalPkgDb :: !PackageDbDir
     , sppSnapPkgDb   :: !PackageDbDir
     , sppLocalPkgDb  :: !PackageDbDir
     , sppCompExe     :: !FilePath
-    }
+    } deriving (Show)
 
 
 -- Beware: GHC 8.0.2 doesn't like these being recursively defined for some
@@ -277,19 +309,23 @@ type Progs   = (?cprogs :: CompPrograms, ?progs :: Programs)
 type CProgs  = (?cprogs :: CompPrograms)
 
 -- | Configurable paths to various programs we use.
-data Programs = Programs {
-      -- | The path to the @cabal@ program.
-      cabalProgram  :: FilePath,
+data Programs = Programs
+    { cabalProgram    :: !FilePath
+      -- ^ The path to the @cabal@ program.
+    , cabalArgsBefore :: ![String]
+    , cabalArgsAfter  :: ![String]
 
-      -- | The path to the @stack@ program.
-      stackProgram  :: FilePath
+    , stackProgram    :: !FilePath
+      -- ^ The path to the @stack@ program.
+    , stackArgsBefore :: ![String]
+    , stackArgsAfter  :: ![String]
     } deriving (Eq, Ord, Show, Read, Generic, Typeable)
 
 data CompPrograms = CompPrograms
-    { ghcProgram    :: FilePath
+    { ghcProgram    :: !FilePath
     -- ^ The path to the @ghc@ program.
 
-    , ghcPkgProgram :: FilePath
+    , ghcPkgProgram :: !FilePath
     -- ^ The path to the @ghc-pkg@ program. If not changed it will be derived
     -- from the path to 'ghcProgram'.
     } deriving (Eq, Ord, Show, Read, Generic, Typeable)
@@ -297,7 +333,7 @@ data CompPrograms = CompPrograms
 -- | By default all programs use their unqualified names, i.e. they will be
 -- searched for on @PATH@.
 defaultPrograms :: Programs
-defaultPrograms = Programs "cabal" "stack"
+defaultPrograms = Programs "cabal" [] []  "stack" [] []
 
 defaultCompPrograms :: CompPrograms
 defaultCompPrograms = CompPrograms "ghc" "ghc-pkg"
@@ -317,4 +353,6 @@ defaultCompileOptions =
     CompileOptions False Nothing Nothing defaultPrograms
 
 newtype PackageDbDir = PackageDbDir { unPackageDbDir :: FilePath }
+    deriving (Show)
 newtype PackageEnvFile = PackageEnvFile { unPackageEnvFile :: FilePath }
+    deriving (Show)

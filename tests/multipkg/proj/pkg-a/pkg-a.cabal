@@ -1,0 +1,24 @@
+name:                pkg-a
+version:             0
+build-type:          Simple
+cabal-version:       >=1.10
+
+library
+  exposed-modules:   Lib
+  build-depends:     base, filepath, directory 
+  default-language:  Haskell2010
+
+executable pkg-a-exe
+  main-is:           Exe.hs
+  build-depends:     base, pkg-a 
+  default-language:  Haskell2010
+
+test-suite pkg-a-test
+  type:              exitcode-stdio-1.0
+  main-is:           Exe.hs
+  build-depends:     base, pkg-a 
+
+benchmark pkg-a-bench
+  type:              exitcode-stdio-1.0
+  main-is:           Exe.hs
+  build-depends:     base, pkg-a 
