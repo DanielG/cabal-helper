@@ -83,11 +83,35 @@ paths qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml} cwd
     split l = let (key, ' ' : val) = span (not . isSpace) l in (key, val)
 
 listPackageCabalFiles :: QueryEnvI c 'Stack -> IO [CabalFile]
-listPackageCabalFiles qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml} = do
+listPackageCabalFiles qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml}
+  = handle ioerror $ do
   let projdir = takeDirectory stack_yaml
   out <- readStackCmd qe (Just projdir)
     [ "ide", "packages", "--cabal-files", "--stdout" ]
   return $ map CabalFile $ lines out
+  where
+    ioerror :: IOError -> IO a
+    ioerror ioe = (=<<) (fromMaybe (throwIO ioe)) $ runMaybeT $ do
+      stack_exe <- MaybeT $ findExecutable $ stackProgram $ qePrograms qe
+      stack_ver_str
+        <- liftIO $ trim <$> readStackCmd qe Nothing ["--numeric-version"]
+      stack_ver <- MaybeT $ return $ parseVerMay stack_ver_str
+      guard $ stack_ver < makeVersion [1,9,4]
+
+      let prog_cfg = ppShow $ qePrograms qe
+
+      liftIO $ hPutStrLn stderr $ printf
+        "\nerror: stack version too old!\
+        \\n\n\
+        \You have '%s' installed but cabal-helper needs at least\n\
+        \stack version 1.9.4+.\n\
+        \\n\
+        \FYI cabal-helper is using the following `stack` executable:\n\
+        \  %s\n\
+        \\n\
+        \Additional debugging info: QueryEnv qePrograms =\n\
+        \  %s\n" stack_ver_str stack_exe prog_cfg
+      mzero
 
 workdirArg :: QueryEnvI c 'Stack -> [String]
 workdirArg QueryEnv{qeDistDir=DistDirStack mworkdir} =

@@ -104,6 +104,9 @@ parsePkgId bs =
 parseVer :: String -> Version
 parseVer vers = runReadP parseVersion vers
 
+parseVerMay :: String -> Maybe Version
+parseVerMay vers = runReadPMay parseVersion vers
+
 trim :: String -> String
 trim = dropWhileEnd isSpace
 
@@ -114,9 +117,16 @@ sameMajorVersionAs :: Version -> Version -> Bool
 sameMajorVersionAs a b = majorVer a == majorVer b
 
 runReadP :: ReadP t -> String -> t
-runReadP p i = case filter ((=="") . snd) $ readP_to_S p i of
-                 (a,""):[] -> a
-                 _ -> error $ "Error parsing: " ++ show i
+runReadP p i =
+  case runReadPMay p i of
+    Just x -> x
+    Nothing -> error $ "Error parsing version: " ++ show i
+
+runReadPMay :: ReadP t -> String -> Maybe t
+runReadPMay p i = case filter ((=="") . snd) $ readP_to_S p i of
+                 (a,""):[] -> Just a
+                 _ -> Nothing
+
 
 appCacheDir :: IO FilePath
 appCacheDir =
