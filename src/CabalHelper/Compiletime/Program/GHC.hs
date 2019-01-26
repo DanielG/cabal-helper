@@ -61,6 +61,7 @@ data GhcInvocation = GhcInvocation
     }
 
 newtype GhcVersion = GhcVersion { unGhcVersion :: Version }
+    deriving (Eq, Ord, Read, Show)
 
 showGhcVersion :: GhcVersion -> String
 showGhcVersion (GhcVersion v) = showVersion v

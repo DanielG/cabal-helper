@@ -216,6 +216,7 @@ compileHelper' CompHelperEnv {..} = do
        CabalInstallVersion instVer <- liftIO cabalInstallVersion
        guard $ instVer >= (Version [2,4,1,0] [])
        --  ^ didn't test with older versions
+       guard $ ghcVer  >= (GhcVersion (Version [8,0] []))
        env@(PackageEnvFile env_file)
            <- liftIO $ getPrivateCabalPkgEnv ghcVer cabalVer
        vLog $ logMsg ++ "v2-build package-env " ++ env_file
