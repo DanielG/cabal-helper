@@ -112,7 +112,7 @@ allCabalVersions (GhcVersion ghc_ver) = let
          , "1.22.7.0"
          , "1.22.8.0"
          , "1.24.0.0"
-         , "1.24.1.0"
+         -- , "1.24.1.0" -- deprecated
          , "1.24.2.0"
          , "2.0.0.2"
          , "2.0.1.0"
@@ -121,6 +121,7 @@ allCabalVersions (GhcVersion ghc_ver) = let
          , "2.2.0.1"
          , "2.4.0.0"
          , "2.4.0.1"
+         , "2.4.1.0"
          ]
 
     constraint :: VersionRange
@@ -136,11 +137,9 @@ allCabalVersions (GhcVersion ghc_ver) = let
             [ ("7.10" , ">= 1.22.2  && < 2")
             , ("8.0.1", ">= 1.24          ")
             , ("8.0.2", ">= 1.24.2        ")
-            , ("8.2.1", ">= 2.0.0.2       ")
-            , ("8.2.2", ">= 2.0.0.2       ")
-            , ("8.4.1", ">= 2.0.0.2       ")
-            , ("8.4",   ">= 2.2.0.1       ")
-            , ("8.6",   ">= 2.4.0.0       ")
+            , ("8.2",   ">= 1.24.2.0      ")
+            , ("8.4",   ">= 2.0.0.2       ")
+            , ("8.6",   ">= 2.0.0.2       ")
             ]
   in
     reverse $ filter (flip withinRange'CH constraint) cabal_versions
