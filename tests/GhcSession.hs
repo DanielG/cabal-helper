@@ -13,11 +13,12 @@ import GHC.Paths (libdir)
 import Outputable
 import DynFlags
 
-import Control.Arrow ((***))
+import Control.Arrow (second)
 import qualified Control.Exception as E
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.List
+import Data.Tuple
 import Data.Version
 import qualified Data.Map as Map
 import System.Environment (getArgs)
@@ -388,13 +389,15 @@ stackProjSetup ghcVer =
       }
 
 stack_resolver_table :: [(Version, String)]
-stack_resolver_table = map (parseVer *** ("lts-"++))
-  [ ("7.10.3", "6.35")
-  , ("8.0.1",  "7.24")
-  , ("8.0.2",  "9.21")
-  , ("8.2.2",  "11.22")
-  , ("8.4.3",  "12.14")
-  , ("8.4.4",  "12.19")
+stack_resolver_table = map (swap . second parseVer)
+  [ ("lts-13.5",  "8.6.3")
+  , ("lts-12.26", "8.4.4")
+  , ("lts-12.14", "8.4.3")
+  , ("lts-11.22", "8.2.2")
+  , ("lts-9.21",  "8.0.2")
+  , ("lts-7.24",  "8.0.1")
+  , ("lts-6.35",  "7.10.3")
+  , ("lts-3.22",  "7.10.2")
   ]
 
 copyStackYamls :: FilePath -> FilePath -> IO ()
