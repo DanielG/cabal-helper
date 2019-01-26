@@ -66,8 +66,8 @@ main = do
 
   let proj_impls :: [(ProjType, ProjSetup0)]
       proj_impls =
-        [ (V1,    oldBuildProjSetup)
-        , (V2,    newBuildProjSetup)
+        [ (V2,    newBuildProjSetup)
+        , (V1,    oldBuildProjSetup)
         , (Stack, stackProjSetup g_ver)
         ]
 
@@ -83,7 +83,7 @@ main = do
       [ TC (TN "exelib")    (parseVer "1.10") (parseVer "0")   []
       , TC (TN "exeintlib") (parseVer "2.0")  (parseVer "0")   []
       , TC (TN "fliblib")   (parseVer "2.0")  (parseVer "0")   []
-      , TC (TN "bkpregex")  (parseVer "2.0")  (parseVer "8.1") [V1, V2]
+      , TC (TN "bkpregex")  (parseVer "2.0")  (parseVer "8.1") [V2, V1]
       , let multipkg_loc = TF "tests/multipkg/" "proj/" "proj/proj.cabal" in
         TC  multipkg_loc    (parseVer "1.10") (parseVer "0")   [V2, Stack]
       --            min Cabal lib ver -^    min GHC ver -^
