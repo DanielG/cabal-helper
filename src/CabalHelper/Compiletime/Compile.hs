@@ -14,7 +14,7 @@
 -- You should have received a copy of the GNU General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-{-# LANGUAGE DeriveFunctor, GADTs #-}
+{-# LANGUAGE DeriveFunctor, GADTs, ScopedTypeVariables #-}
 
 {-|
 Module      : CabalHelper.Compiletime.Compile
@@ -225,7 +225,7 @@ compileHelper' CompHelperEnv {..} = do
        prepare env = do
          -- exists_in_env <- liftIO $ cabalVersionExistsInPkgDb cheCabalVer db
          void $ installCabalLibV2 ghcVer cheCabalVer env `E.catch`
-           \(SomeException _) ->
+           \(ex :: IOError) -> print ex >>
                case cheCabalVer of
                  CabalHEAD _ -> panicIO "Installing Cabal HEAD failed."
                  CabalVersion ver -> errorInstallCabal (CabalVersion ver)
