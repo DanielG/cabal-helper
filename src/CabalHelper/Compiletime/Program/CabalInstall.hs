@@ -228,7 +228,7 @@ cabalV2WithGHCProgOpts :: Progs => [String]
 cabalV2WithGHCProgOpts = concat
   [ [ "--with-compiler=" ++ ghcProgram ?cprogs ]
   , if ghcPkgProgram ?cprogs /= ghcPkgProgram defaultCompPrograms
-      then error "cabalV2WithGHCProgOpts: ghc-pkg path was changed from default but cabal v2-install does not support passing --with-ghc-pkg!"
+      then [ "--with-hc-pkg=" ++ ghcPkgProgram ?cprogs ]
       else []
   ]
 

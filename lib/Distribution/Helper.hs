@@ -588,13 +588,15 @@ withProgs impl QueryEnv{..} f = do
   where
     -- | Determine ghc-pkg path from ghc path
     guessCompProgramPaths :: Verbose => CompPrograms -> IO CompPrograms
+    guessCompProgramPaths progs
+      | same ghcProgram progs dprogs = return progs
     guessCompProgramPaths progs = do
         let v | ?verbose  = deafening
               | otherwise = silent
             mGhcPath0    | same ghcProgram progs dprogs = Nothing
-                        | otherwise = Just $ ghcProgram progs
+                         | otherwise = Just $ ghcProgram progs
             mGhcPkgPath0 | same ghcPkgProgram progs dprogs = Nothing
-                        | otherwise = Just $ ghcPkgProgram progs
+                         | otherwise = Just $ ghcPkgProgram progs
         (_compiler, _mplatform, progdb)
             <- GHC.configure
                   v
@@ -608,9 +610,9 @@ withProgs impl QueryEnv{..} f = do
           { ghcProgram    = fromMaybe (ghcProgram progs) mghcPath1
           , ghcPkgProgram = fromMaybe (ghcProgram progs) mghcPkgPath1
           }
-      where
-        same f o o'  = f o == f o'
-        dprogs = defaultCompPrograms
+
+    same f o o'  = f o == f o'
+    dprogs = defaultCompPrograms
 
 getHelperExe
     :: ProjInfo pt -> QueryEnvI c pt -> IO FilePath
