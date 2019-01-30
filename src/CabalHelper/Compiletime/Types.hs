@@ -303,8 +303,10 @@ data StackProjPaths = StackProjPaths
 
 -- Beware: GHC 8.0.2 doesn't like these being recursively defined for some
 -- reason so just keep them unrolled.
-type Verbose = (?verbose :: Bool)
-type Env     = (?cprogs :: CompPrograms, ?progs :: Programs, ?verbose :: Bool)
+type Verbose = (?verbose :: Word -> Bool)
+type Env     = ( ?cprogs :: CompPrograms
+               , ?progs :: Programs
+               , ?verbose :: Word -> Bool)
 type Progs   = (?cprogs :: CompPrograms, ?progs :: Programs)
 type CProgs  = (?cprogs :: CompPrograms)
 

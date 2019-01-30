@@ -194,12 +194,12 @@ runTest ps2@(psdImpl -> ProjSetupImpl{..}) topdir projdir cabal_file = do
 
 runWithCwd :: FilePath -> String -> [String] -> IO ()
 runWithCwd cwd x xs = do
-  let ?verbose = True
+  let ?verbose = (==1)
   callProcessStderr (Just cwd) x xs
 
 run :: String -> [String] -> IO ()
 run x xs = do
-  let ?verbose = True
+  let ?verbose = (==1)
   callProcessStderr Nothing x xs
 
 test :: ProjSetup2 pt -> FilePath -> FilePath -> IO [Bool]

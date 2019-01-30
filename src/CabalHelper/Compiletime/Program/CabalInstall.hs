@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DataKinds, MultiWayIf #-}
 
 -- cabal-helper: Simple interface to Cabal's configuration state
 -- Copyright (C) 2018  Daniel Gröber <cabal-helper@dxld.at>
@@ -118,9 +118,9 @@ callCabalInstall
              then ["--no-require-sandbox"]
              else []
         , [ "install", srcdir ]
-        , if ?verbose
-            then ["-v"]
-            else []
+        , if | ?verbose 3 -> ["-v2"]
+             | ?verbose 4 -> ["-v3"]
+             | otherwise -> []
         , [ "--only-dependencies" ]
       ]
 
@@ -216,9 +216,9 @@ installCabalLibV2 _ghcVer (CabalVersion cabalVer) (PackageEnvFile env_file) = do
           , "--lib"
           , "Cabal-"++showVersion cabalVer
           ]
-        , if ?verbose
-            then ["-v"]
-            else []
+        , if | ?verbose 3 -> ["-v2"]
+             | ?verbose 4 -> ["-v3"]
+             | otherwise -> []
         ]
     tmp <- getTemporaryDirectory
     callProcessStderr (Just tmp) (cabalProgram ?progs) cabal_opts

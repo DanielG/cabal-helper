@@ -58,7 +58,7 @@ main = do
   let ?progs = defaultPrograms
   let ?cprogs = defaultCompPrograms
   let ?opts = defaultCompileOptions { oVerbose = True }
-  let ?verbose = True
+  let ?verbose = \level -> case level of 1 -> True; _ -> False
 
   args <- getArgs
   case args of

@@ -119,6 +119,7 @@ import System.Process
 import System.Posix.Types
 import System.PosixCompat.Files
 import Text.Printf
+import Text.Read
 import Prelude
 
 import CabalHelper.Compiletime.Compile
@@ -140,7 +141,7 @@ import qualified CabalHelper.Compiletime.Compat.ProgramDb as ProgDb
 
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
-import Distribution.Verbosity (silent, deafening)
+import Distribution.Verbosity (silent, normal, verbose, deafening)
 import Distribution.Simple.GHC as GHC (configure)
 
 -- $type-conventions
@@ -189,7 +190,8 @@ mkQueryEnv projloc distdir = do
     { qeReadProcess = \stdin mcwd exe args ->
         readCreateProcess (proc exe args){ cwd = mcwd } stdin
     , qeCallProcess  = \mcwd exe args -> do
-        let ?verbose = False -- TODO: we should get this from env or something
+        let ?verbose = \_ -> False -- TODO: we should get this from env or
+                                   -- something
         callProcessStderr mcwd exe args
     , qePrograms     = defaultPrograms
     , qeCompPrograms = defaultCompPrograms
@@ -569,9 +571,9 @@ lookupEnv' k = lookup k <$> getEnvironment
 withVerbosity :: (Verbose => IO a) -> IO a
 withVerbosity act = do
   x <- lookup  "CABAL_HELPER_DEBUG" <$> getEnvironment
-  let ?verbose =
-        case x of
-          Just xs | not (null xs) -> True
+  let ?verbose = \level ->
+        case x >>= readMaybe of
+          Just x | x >= level -> True
           _ -> False
   act
 
@@ -591,7 +593,9 @@ withProgs impl QueryEnv{..} f = do
     guessCompProgramPaths progs
       | same ghcProgram progs dprogs = return progs
     guessCompProgramPaths progs = do
-        let v | ?verbose  = deafening
+        let v | ?verbose 2 = normal
+              | ?verbose 3 = verbose
+              | ?verbose 4 = deafening
               | otherwise = silent
             mGhcPath0    | same ghcProgram progs dprogs = Nothing
                          | otherwise = Just $ ghcProgram progs

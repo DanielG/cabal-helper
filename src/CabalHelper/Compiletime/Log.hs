@@ -36,5 +36,5 @@ logIOError label a = do
 
 vLog :: (MonadIO m, Verbose) => String -> m ()
 vLog msg
-    | ?verbose  = liftIO $ hPutStrLn stderr msg
+    | ?verbose 0 = liftIO $ hPutStrLn stderr msg
     | otherwise = return ()
