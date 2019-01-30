@@ -16,7 +16,7 @@
 
 {-|
 Module      : CabalHelper.Compiletime.Program.Cabal
-Description : cabal-install program interface
+Description : Cabal library source unpacking
 License     : GPL-3
 -}
 
