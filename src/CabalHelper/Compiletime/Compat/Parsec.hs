@@ -21,7 +21,7 @@ module CabalHelper.Compiletime.Compat.Parsec
     ) where
 
 #if MIN_VERSION_Cabal(2,5,0)
-import Distribution.Parsec.Class
+import Distribution.Parsec
 #else
 import qualified Distribution.Compat.ReadP as Dist
 import Distribution.Text
