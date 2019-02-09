@@ -20,7 +20,7 @@ Description : Cabal library source unpacking
 License     : GPL-3
 -}
 
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFunctor, CPP #-}
 
 module CabalHelper.Compiletime.Cabal where
 
@@ -36,7 +36,7 @@ import System.FilePath
 
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Process
-import CabalHelper.Shared.Common (trim, replace)
+import CabalHelper.Shared.Common (trim, replace, parseVer)
 
 type UnpackedCabalVersion = CabalVersion' (CommitId, CabalSourceDir)
 type ResolvedCabalVersion = CabalVersion' CommitId
@@ -215,3 +215,6 @@ findCabalFile pkgdir = do
         if takeFileName p == takeExtension p
           then "" -- just ".cabal" is not a valid cabal file
           else takeExtension p
+
+bultinCabalVersion :: Version
+bultinCabalVersion = parseVer VERSION_Cabal

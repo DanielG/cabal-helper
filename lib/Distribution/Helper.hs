@@ -134,10 +134,11 @@ import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Types.RelativePath
 import CabalHelper.Shared.InterfaceTypes
 import CabalHelper.Shared.Common
+import CabalHelper.Runtime.HelperMain (helper_main)
 
 import CabalHelper.Compiletime.Compat.Version
 import qualified CabalHelper.Compiletime.Compat.ProgramDb as ProgDb
-    ( defaultProgramDb, programPath, lookupProgram, ghcProgram, ghcPkgProgram)
+    ( defaultProgramDb, programPath, lookupProgram, ghcProgram, ghcPkgProgram )
 
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
@@ -338,8 +339,8 @@ checkUpdateUnitInfo qe proj_info unit munit_info = do
   where
     reconf = do
       reconfigureUnit qe unit
-      helper <- getHelperExe proj_info qe
-      readUnitInfo qe helper unit
+      helper <- getHelper proj_info qe
+      readUnitInfo helper unit
 
 -- | Restrict 'UnitInfo' cache to units that are still active
 discardInactiveUnitInfos
@@ -470,10 +471,9 @@ readProjInfo qe pc pcm = withVerbosity $ do
         , ..
         }
 
-readUnitInfo :: QueryEnvI c pt -> FilePath -> Unit pt -> IO UnitInfo
-readUnitInfo
-  qe exe unit@Unit {uUnitId=uiUnitId, uCabalFile, uDistDir} = do
-    res <- readHelper qe exe uCabalFile uDistDir
+readUnitInfo :: Helper pt -> Unit pt -> IO UnitInfo
+readUnitInfo helper unit@Unit {uUnitId=uiUnitId} = do
+    res <- runHelper helper unit
            [ "package-id"
            , "package-db-stack"
            , "flags"
@@ -539,15 +539,15 @@ invokeHelper
 prepare :: QueryEnv pt -> IO ()
 prepare qe = do
   proj_info <- getProjInfo qe
-  void $ getHelperExe proj_info qe
+  void $ getHelper proj_info qe
 
 -- | Create @cabal_macros.h@ and @Paths_\<pkg\>@ possibly other generated files
 -- in the usual place. See 'Distribution.Simple.Build.initialBuildSteps'.
 writeAutogenFiles :: Unit pt -> Query pt ()
-writeAutogenFiles Unit{uCabalFile, uDistDir} = Query $ \qe -> do
+writeAutogenFiles unit = Query $ \qe -> do
   proj_info <- getProjInfo qe
-  exe <- getHelperExe proj_info qe
-  void $ invokeHelper qe exe uCabalFile uDistDir ["write-autogen-files"]
+  helper <- getHelper proj_info qe
+  void $ runHelper helper unit ["write-autogen-files"]
 
 -- | Get the path to the sandbox package-db in a project
 getSandboxPkgDb
@@ -618,11 +618,19 @@ withProgs impl QueryEnv{..} f = do
     same f o o'  = f o == f o'
     dprogs = defaultCompPrograms
 
-getHelperExe
-    :: ProjInfo pt -> QueryEnvI c pt -> IO FilePath
-getHelperExe proj_info qe@QueryEnv{..} = do
+newtype Helper pt
+  = Helper { runHelper :: Unit pt -> [String] -> IO [Maybe ChResponse] }
+
+getHelper :: ProjInfo pt -> QueryEnvI c pt -> IO (Helper pt)
+getHelper ProjInfo{piCabalVersion} QueryEnv{..}
+  | piCabalVersion == bultinCabalVersion = return $ Helper $
+      \Unit{ uCabalFile=CabalFile cabal_file
+           , uDistDir=DistDirLib distdir
+           } args ->
+        helper_main $ cabal_file : distdir : args
+getHelper proj_info qe@QueryEnv{..} = do
   withVerbosity $ withProgs (piImpl proj_info) qe $ do
-    let comp = wrapper' qeProjLoc qeDistDir proj_info
+    let comp = mkCompHelperEnv qeProjLoc qeDistDir proj_info
     let ?progs = qePrograms
         ?cprogs = qeCompPrograms
     t0 <- Clock.getTime Monotonic
@@ -635,15 +643,16 @@ getHelperExe proj_info qe@QueryEnv{..} = do
       Left rv ->
         panicIO $ "compileHelper': compiling helper failed! exit code "++ show rv
       Right exe ->
-        return exe
+        return $ Helper $ \Unit{uCabalFile, uDistDir} args ->
+          readHelper qe exe uCabalFile uDistDir args
 
-wrapper'
+mkCompHelperEnv
     :: Verbose
     => ProjLoc pt
     -> DistDir pt
     -> ProjInfo pt
     -> CompHelperEnv
-wrapper'
+mkCompHelperEnv
   projloc
   (DistDirV1 distdir)
   ProjInfo{piCabalVersion}
@@ -655,7 +664,7 @@ wrapper'
     , chePlanJson = Nothing
     , cheDistV2 = Nothing
     }
-wrapper'
+mkCompHelperEnv
   projloc
   (DistDirV2 distdir)
   ProjInfo{piImpl=ProjInfoV2{piV2Plan=plan}}
@@ -673,7 +682,7 @@ wrapper'
     chePlanJson = Just plan
     cheDistV2   = Just distdir
     PlanJson {pjCabalLibVersion=Ver pjCabalLibVersion } = plan
-wrapper'
+mkCompHelperEnv
   (ProjLocStackYaml stack_yaml)
   (DistDirStack mworkdir)
   ProjInfo

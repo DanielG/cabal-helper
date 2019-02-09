@@ -142,6 +142,8 @@ library c-h-internal
                        CabalHelper.Compiletime.Sandbox
                        CabalHelper.Compiletime.Types
                        CabalHelper.Compiletime.Types.RelativePath
+                       CabalHelper.Runtime.Compat
+                       CabalHelper.Runtime.HelperMain
                        CabalHelper.Shared.Common
                        CabalHelper.Shared.InterfaceTypes
   other-modules:
@@ -193,6 +195,7 @@ executable cabal-helper-main
   main-is:             CabalHelper/Runtime/Main.hs
   hs-source-dirs:      src
   other-modules:
+                       CabalHelper.Runtime.HelperMain
                        CabalHelper.Runtime.Compat
                        CabalHelper.Shared.Common
                        CabalHelper.Shared.InterfaceTypes
