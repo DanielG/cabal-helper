@@ -295,15 +295,11 @@ helper_main args = do
 
   let cmds = collectCmdOptions args'
 
-  if any (["version"] `isPrefixOf`) cmds
-    then do
-      putStrLn $
-       printf "using version %s of the Cabal library" (display cabalVersion)
-      exitSuccess
-    else return ()
-
   flip mapM cmds $$ \x -> do
   case x of
+    "version":[] ->
+      return $ Just $ ChResponseVersion ("Cabal", toDataVersion cabalVersion)
+
     "package-id":[] ->
       return $ Just $ ChResponseVersion $ (,)
         (display (packageName gpd))
