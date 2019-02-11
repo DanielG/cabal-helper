@@ -13,13 +13,13 @@ import GHC.Paths (libdir)
 import Outputable
 import DynFlags
 
-import Control.Arrow (second)
 import qualified Control.Exception as E
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.List
 import Data.Tuple
 import Data.Version
+import Data.Bifunctor
 import qualified Data.Map as Map
 import System.Environment (getArgs)
 import System.Exit
@@ -27,14 +27,13 @@ import System.FilePath ((</>), (<.>), makeRelative, takeDirectory)
 import System.Directory
 import System.IO
 import System.IO.Temp
-import System.Process (readProcess)
 import Text.Printf (printf)
-import Text.Show.Pretty
+-- import Text.Show.Pretty (pPrint)
 
 import Distribution.Helper
 
 import CabalHelper.Shared.Common
-import CabalHelper.Compiletime.Process
+import CabalHelper.Compiletime.Process (readProcess, callProcessStderr)
 
 data TestConfig = TC
   { location        :: TestLocation
@@ -53,16 +52,28 @@ main = do
   args <- getArgs
 --  topdir <- getCurrentDirectory
 
-  ci_ver <- cabalInstallVersion
-  c_ver <- cabalInstallBuiltinCabalVersion
   g_ver <- ghcVersion
+  ci_ver <- cabalInstallVersion
   s_ver <- stackVersion
     `E.catch` \(_ :: IOError) -> return (makeVersion [0])
 
+  f_c_ver :: ProjType -> Either SkipReason Version <- do
+    ci_c_ver <- Right <$> cabalInstallBuiltinCabalVersion
+    s_c_ver :: Either SkipReason Version
+      <- sequence $ stackBuiltinCabalVersion s_ver g_ver
+    return $ \pt -> case pt of
+      V1 -> ci_c_ver
+      V2 -> ci_c_ver
+      Stack -> s_c_ver
+
+  let showEsrVer = either (\(SkipReason msg) -> "dunno, "++msg) showVersion
+
   putStrLn $ "cabal-install version: " ++ showVersion ci_ver
-  putStrLn $ "Cabal version: " ++ showVersion c_ver
+  putStrLn $ "cabal-install builtin Cabal version: "
+             ++ showEsrVer (f_c_ver V1)
   putStrLn $ "GHC version: " ++ showVersion g_ver
   putStrLn $ "Stack version: " ++ showVersion s_ver
+  putStrLn $ "Stack Cabal version: " ++ showEsrVer (f_c_ver Stack)
 
   let proj_impls :: [(ProjType, ProjSetup0)]
       proj_impls =
@@ -121,10 +132,14 @@ main = do
     else exitSuccess
 
 data VerEnv = VerEnv
-  { ci_ver :: Version
-  , c_ver  :: Version
-  , g_ver  :: Version
-  , s_ver  :: Version
+  { ci_ver :: !Version
+  -- ^ cabal-install exe version
+  , f_c_ver :: !(ProjType -> Either SkipReason Version)
+  -- ^ cabal-install/Stack builtin Cabal library version
+  , g_ver  :: !Version
+  -- ^ GHC exe version
+  , s_ver  :: !Version
+  -- ^ Stack exe version
   }
 
 data Message = Message String
@@ -142,48 +157,48 @@ testLocPath (TF topdir projdir cabal_file) =
 
 data Ex a = forall x. Ex (a x)
 
+-- | Check version bounds of tests against available versions, if successful run
+-- the test.
 checkAndRunTestConfig
     :: VerEnv
     -> ProjSetup1
     -> TestConfig
     -> Either SkipReason (Message, IO [Bool])
 checkAndRunTestConfig
-  VerEnv { ci_ver, c_ver, g_ver, s_ver }
+  VerEnv { ci_ver, f_c_ver, g_ver, s_ver }
   ps1@(psdImpl -> Ex psdImpl2)
   (TC test_loc min_cabal_ver min_ghc_ver _proj_types)
   = let
-  (topdir, projdir_rel, cabal_file) = testLocPath test_loc
-  mreason
-    | SStack <- psiProjType psdImpl2
-    , s_ver < parseVer "1.9.4" =
-      if| g_ver >= parseVer "8.2.2" ->
-          error $ printf
-            "stack-%s is too old, but GHC %s is recent enough to build it.\n\
-            \The CI scripts should have installed it! See 25-deps.sh\n"
-            (showVersion s_ver) (showVersion g_ver)
-        | otherwise ->
-          Just $ "stack-" ++ showVersion s_ver ++ " is too old"
-    | (ci_ver < parseVer "1.24") =
-      Just $ "cabal-install-" ++ showVersion ci_ver ++ " is too old"
-    | c_ver < min_cabal_ver =
-      Just $ "Cabal-" ++ showVersion c_ver
+  pt = psiProjType psdImpl2
+  (topdir, projdir_rel, cabal_file) = testLocPath test_loc in do
+  ci_c_ver <- f_c_ver V1
+  s_c_ver  <- f_c_ver Stack
+  first SkipReason $ do
+  if| SStack <- pt, Left (SkipReason msg) <- stackCheckCompat s_ver g_ver ->
+      Left msg
+    | ci_ver < parseVer "1.24" ->
+      Left $ "cabal-install-" ++ showVersion ci_ver ++ " is too old"
+    | ci_c_ver < min_cabal_ver ->
+      Left $ "cabal-install's builtin Cabal version is too old:\n"
+             ++ "Cabal-" ++ showVersion ci_c_ver
              ++ " < " ++ showVersion min_cabal_ver
-    | g_ver < min_ghc_ver =
-      Just $ "ghc-" ++ showVersion g_ver
+    | s_c_ver < min_cabal_ver ->
+      Left $ "Stack's builtin Cabal version is too old:\n"
+             ++ "Cabal-" ++ showVersion s_c_ver
+             ++ " < " ++ showVersion min_cabal_ver
+    | g_ver < min_ghc_ver ->
+      Left $ "ghc-" ++ showVersion g_ver
              ++ " < " ++ showVersion min_ghc_ver
-    | otherwise =
-      Nothing
-  in case mreason of
-    Just reason -> do
-      Left $ SkipReason reason
-    Nothing -> do
-      Right $ (,)
-        (Message $ intercalate " "
-          [ "\n\n\nRunning test"
-          , psdHeading ps1
-          , "'" ++ topdir ++ "'"
-          ])
-        (runTest ps1{ psdImpl = psdImpl2 } topdir projdir_rel cabal_file)
+    | otherwise ->
+      Right ()
+
+  return $ (,)
+    (Message $ intercalate " "
+      [ "\n\n\nRunning test"
+      , psdHeading ps1
+      , "'" ++ topdir ++ "'"
+      ])
+    (runTest ps1{ psdImpl = psdImpl2 } topdir projdir_rel cabal_file)
 
 runTest :: ProjSetup2 pt -> FilePath -> FilePath -> FilePath -> IO [Bool]
 runTest ps2@(psdImpl -> ProjSetupImpl{..}) topdir projdir cabal_file = do
@@ -317,7 +332,7 @@ data ProjSetupDescr a =
 
 data ProjSetupImpl pt =
   ProjSetupImpl
-    { psiProjType   :: !(SProjType pt)
+    { psiProjType  :: !(SProjType pt)
     , psiDistDir   :: !(FilePath -> DistDir pt)
     , psiProjLoc   :: !(CabalFile -> FilePath -> ProjLoc pt)
     , psiConfigure :: !(FilePath -> IO ())
@@ -364,11 +379,8 @@ newBuildProjSetup = ProjSetupDescr "cabal-v2" $ Right $ Ex $ ProjSetupImpl
 
 stackProjSetup :: Version -> ProjSetup0
 stackProjSetup ghcVer =
-    ProjSetupDescr "stack" $
-    let msg = SkipReason $ "missing stack_resolver_table entry for "++
-                           showVersion ghcVer in
-    maybe (Left msg) Right $ do
-    res <- lookup ghcVer stack_resolver_table
+    ProjSetupDescr "stack" $ do
+    res <- lookupStackResolver ghcVer
     let argsBefore = [ "--resolver="++res, "--system-ghc" ]
     return $ Ex $ ProjSetupImpl
       { psiProjType  = SStack
@@ -387,6 +399,13 @@ stackProjSetup ghcVer =
                }
              }
       }
+
+lookupStackResolver :: Version -> Either SkipReason String
+lookupStackResolver ghcVer = maybe (Left msg) Right $
+    lookup ghcVer stack_resolver_table
+  where
+    msg = SkipReason $ "missing stack_resolver_table entry for "++
+                       showVersion ghcVer
 
 stack_resolver_table :: [(Version, String)]
 stack_resolver_table = map (swap . second parseVer)
@@ -435,6 +454,28 @@ ghcVersion =
 stackVersion :: IO Version
 stackVersion =
     parseVer . trim <$> readProcess "stack" [ "--numeric-version" ] ""
+
+stackBuiltinCabalVersion :: Version -> Version -> Either SkipReason (IO Version)
+stackBuiltinCabalVersion s_ver g_ver = do
+    _ <- stackCheckCompat s_ver g_ver
+    res <- lookupStackResolver g_ver
+    return $ parseVer . trim <$> readProcess "stack"
+        [ "--resolver="++res, "--system-ghc", "exec", "--"
+        , "ghc-pkg", "--simple-output", "field", "Cabal", "version"
+        ] ""
+
+stackCheckCompat :: Version -> Version -> Either SkipReason ()
+stackCheckCompat s_ver g_ver =
+  if| s_ver < parseVer "1.9.4" ->
+      if| g_ver >= parseVer "8.2.2" ->
+          error $ printf
+            "stack-%s is too old, but GHC %s is recent enough to build it.\n\
+            \The CI scripts should have installed it! See 25-deps.sh\n"
+            (showVersion s_ver) (showVersion g_ver)
+        | otherwise ->
+          Left $ SkipReason $ "stack-" ++ showVersion s_ver ++ " is too old"
+    | otherwise ->
+        Right ()
 
 cabalInstallBuiltinCabalVersion :: IO Version
 cabalInstallBuiltinCabalVersion =
