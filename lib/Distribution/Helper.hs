@@ -66,6 +66,7 @@ module Distribution.Helper (
   , DistDir(..)
   , ProjType(..)
   , SProjType(..)
+  , demoteSProjType
   , ProjLoc(..)
 
   , Programs(..)

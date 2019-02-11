@@ -53,6 +53,11 @@ data SProjType pt where
     SV2 :: SProjType 'V2
     SStack :: SProjType 'Stack
 
+demoteSProjType :: SProjType pt -> ProjType
+demoteSProjType SV1 = V1
+demoteSProjType SV2 = V2
+demoteSProjType SStack = Stack
+
 -- | Location of project sources. The project type of a given directory can be
 -- determined by trying to access a set of marker files. See below.
 data ProjLoc (pt :: ProjType) where
