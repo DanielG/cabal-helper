@@ -323,6 +323,7 @@ data Programs = Programs
     , stackArgsAfter  :: ![String]
     } deriving (Eq, Ord, Show, Read, Generic, Typeable)
 
+-- | Configurable paths to programs only used during helper compilation.
 data CompPrograms = CompPrograms
     { ghcProgram    :: !FilePath
     -- ^ The path to the @ghc@ program.
