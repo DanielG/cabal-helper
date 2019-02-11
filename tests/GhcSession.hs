@@ -91,6 +91,10 @@ main = do
           cabal_file = makeRelative topdir cabal_file0 in
       TC (TF topdir projdir cabal_file) (parseVer "0") (parseVer "0") [read pt]
     [] ->
+      -- below V2 is sorted before Stack and V1 since we rely on v2-build's
+      -- fucking awesome store cache to keep CI times down.
+      --
+      -- TODO: Better test coverage for helper compilation with the other two!
       [ TC (TN "exelib")    (parseVer "1.10") (parseVer "0")   []
       , TC (TN "exeintlib") (parseVer "2.0")  (parseVer "0")   []
       , TC (TN "fliblib")   (parseVer "2.0")  (parseVer "0")   []

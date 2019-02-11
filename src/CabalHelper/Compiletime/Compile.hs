@@ -191,6 +191,8 @@ compileHelper' CompHelperEnv {..} = do
    -- we're operating on Cabal itself!
    compileWithCabalV2Inplace :: Env => GhcVersion -> Version -> MaybeT IO (IO (), Compile)
    compileWithCabalV2Inplace ghcVer cabalVer = do
+       -- TODO: Test coverage! Neither compile-test nor ghc-session test out
+       -- this code path
        PlanJson {pjUnits} <- maybe mzero pure chePlanJson
        distdir_newstyle   <- maybe mzero pure cheDistV2
        let cabal_pkgid =

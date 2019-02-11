@@ -2,7 +2,13 @@
 
 {-| This test tries to compile the Helper against every supported version of the
   Cabal library. Since we compile the Helper at runtime, on the user's machine,
-  it is very important to make sure this will not fail.
+  it is very important to make sure this will not fail to compile.
+
+  This test only covers using v2-build to install the requested Cabal library
+  version because it has the best build product caching (keeps CI times
+  down). We could also use stack since it has a global package cache but we
+  don't support that because stack always comes with the right Cabal library
+  version available for a given resolver anyways.
 -}
 
 import System.Environment (getArgs)
