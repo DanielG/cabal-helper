@@ -20,23 +20,27 @@ Description : Cabal library source unpacking
 License     : GPL-3
 -}
 
-{-# LANGUAGE DeriveFunctor, CPP #-}
+{-# LANGUAGE DeriveFunctor, ViewPatterns, CPP #-}
 
 module CabalHelper.Compiletime.Cabal where
 
-import Control.Exception (bracket)
-import Control.Monad.IO.Class
 import Data.Char
 import Data.List
 import Data.Maybe
+import Data.Time.Calendar
+import Data.Time.Clock
+import Data.Time.Clock.POSIX
 import Data.Version
-import System.Exit
 import System.Directory
+import System.Exit
 import System.FilePath
+import Text.Printf
+
+
 
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Process
-import CabalHelper.Shared.Common (trim, replace, parseVer)
+import CabalHelper.Shared.Common (replace, parseVer, parseVerMay)
 
 type UnpackedCabalVersion = CabalVersion' (CommitId, CabalSourceDir)
 type ResolvedCabalVersion = CabalVersion' CommitId
@@ -182,17 +186,50 @@ unpackCabalHEAD :: Env => FilePath -> IO (CommitId, CabalSourceDir)
 unpackCabalHEAD tmpdir = do
   let dir = tmpdir </> "cabal-head.git"
       url = "https://github.com/haskell/cabal.git"
-  ExitSuccess <- rawSystem "git" [ "clone", "--depth=1", url, dir]
-  commit <-
-      withDirectory_ dir $ trim <$> readProcess' "git" ["rev-parse", "HEAD"] ""
-  return (CommitId commit, CabalSourceDir $ dir </> "Cabal")
- where
-   withDirectory_ :: FilePath -> IO a -> IO a
-   withDirectory_ dir action =
-       bracket
-         (liftIO getCurrentDirectory)
-         (liftIO . setCurrentDirectory)
-         (\_ -> liftIO (setCurrentDirectory dir) >> action)
+  callProcessStderr (Just "/") "git" [ "clone", "--depth=1", url, dir]
+  callProcessStderr (Just (dir </> "Cabal")) "cabal"
+    [ "act-as-setup", "--", "sdist"
+    , "--output-directory=" ++ tmpdir </> "Cabal" ]
+  commit <- takeWhile isHexDigit <$>
+    readCreateProcess (proc "git" ["rev-parse", "HEAD"]){ cwd = Just dir } ""
+  ts <-
+    readCreateProcess (proc "git" [ "show", "-s", "--format=%ct", "HEAD" ])
+      { cwd = Just dir } ""
+  let ut = posixSecondsToUTCTime $ fromInteger (read ts)
+      (y,m,d) = toGregorian $ utctDay ut
+      sec = round $ utctDayTime ut
+      datecode = read $ show y ++ show m ++ show d ++ printf "%5d\n" sec
+      sec :: Int; datecode :: Int
+  let cabal_file = tmpdir </> "Cabal/Cabal.cabal"
+  cf0 <- readFile cabal_file
+  let Just cf1 = replaceVersionDecl (setVersion datecode) cf0
+  writeFile (cabal_file<.>"tmp") cf1
+  renameFile (cabal_file<.>"tmp") cabal_file
+  return (CommitId commit, CabalSourceDir $ tmpdir </> "Cabal")
+  where
+    -- If the released version of cabal has 4 components but we use only three
+    -- theirs will always be larger than this one here. That's not really
+    -- critical though.
+    setVersion i (versionBranch -> mj:mi:_:_:[])
+        | odd mi = Just $ makeVersion $ mj:mi:[i]
+    setVersion _ _ = error "unpackCabalHEAD.setVersion: Wrong version format"
+
+-- | Replace the version declaration in a cabal file
+replaceVersionDecl :: (Version -> Maybe Version) -> String -> Maybe String
+replaceVersionDecl ver_fn cf = let
+  Just (before_ver,m) = find (\(_i,t) -> "version:" `isPrefixOf` t) $ splits cf
+  Just (ver_decl,after_ver)
+    = find (\s -> case s of (_i,'\n':x:_) -> not $ isSpace x; _ -> False)
+    $ filter (\(_i,t) -> "\n" `isPrefixOf` t)
+    $ splits m
+  Just vers0 = dropWhile isSpace <$> stripPrefix "version:" ver_decl
+  (vers1,rest) = span (\c -> isDigit c || c == '.') vers0
+  Just verp | all isSpace rest = parseVerMay $ vers1 in do
+  new_ver <- ver_fn verp
+  return $ concat
+    [ before_ver, "version: ", showVersion new_ver, after_ver ]
+  where
+    splits xs = inits xs `zip` tails xs
 
 resolveCabalVersion :: Verbose => CabalVersion -> IO ResolvedCabalVersion
 resolveCabalVersion (CabalVersion ver) = return $ CabalVersion ver

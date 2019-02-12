@@ -138,7 +138,7 @@ runSetupHs
     -> UnpackedCabalVersion
     -> CabalInstallVersion
     -> IO ()
-runSetupHs ghcVer db srcdir iCabalVer CabalInstallVersion {..}
+runSetupHs ghcVer db srcdir cabalVer CabalInstallVersion {..}
     | cabalInstallVer >= parseVer "1.24" = do
       go $ \args -> callProcessStderr (Just srcdir) (cabalProgram ?progs) $
         [ "act-as-setup", "--" ] ++ args
@@ -148,9 +148,9 @@ runSetupHs ghcVer db srcdir iCabalVer CabalInstallVersion {..}
   where
     parmake_opt :: Maybe Int -> [String]
     parmake_opt nproc'
-        | CabalHEAD _ <- iCabalVer =
+        | CabalHEAD _ <- cabalVer =
             ["-j"++nproc]
-        | CabalVersion ver <- iCabalVer,  ver >= Version [1,20] [] =
+        | CabalVersion ver <- cabalVer, ver >= Version [1,20] [] =
             ["-j"++nproc]
         | otherwise =
             []
@@ -195,13 +195,19 @@ cabalWithGHCProgOpts = concat
       else []
   ]
 
+-- TODO: This needs the big message blub from above
 installCabalLibV2 :: Env => GhcVersion -> UnpackedCabalVersion -> PackageEnvFile -> IO ()
-installCabalLibV2 _ (CabalHEAD _) _ = error "TODO: `installCabalLibV2 _ CabalHEAD _` is unimplemented"
-installCabalLibV2 _ghcVer (CabalVersion cabalVer) (PackageEnvFile env_file) = do
+installCabalLibV2 _ghcVer cv (PackageEnvFile env_file) = do
   exists <- doesFileExist env_file
   if exists
     then return ()
     else do
+    (target, cwd) <- case cv of
+      CabalVersion cabalVer -> do
+        tmp <- getTemporaryDirectory
+        return $ ("Cabal-"++showVersion cabalVer, tmp)
+      CabalHEAD (_commitid, CabalSourceDir srcdir) -> do
+        return (".", srcdir)
     CabalInstallVersion {..} <- cabalInstallVersion
     cabal_opts <- return $ concat
         [ if cabalInstallVer >= Version [1,20] []
@@ -214,15 +220,15 @@ installCabalLibV2 _ghcVer (CabalVersion cabalVer) (PackageEnvFile env_file) = do
         , cabalV2WithGHCProgOpts
         , [ "--package-env=" ++ env_file
           , "--lib"
-          , "Cabal-"++showVersion cabalVer
+          , target
           ]
         , if | ?verbose 3 -> ["-v2"]
              | ?verbose 4 -> ["-v3"]
              | otherwise -> []
         ]
-    tmp <- getTemporaryDirectory
-    callProcessStderr (Just tmp) (cabalProgram ?progs) cabal_opts
+    callProcessStderr (Just cwd) (cabalProgram ?progs) cabal_opts
     hPutStrLn stderr "done"
+
 
 cabalV2WithGHCProgOpts :: Progs => [String]
 cabalV2WithGHCProgOpts = concat

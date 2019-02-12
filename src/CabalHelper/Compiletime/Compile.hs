@@ -118,8 +118,10 @@ compileHelper' CompHelperEnv {..} = do
   t0 <- Clock.getTime Clock.Monotonic
   ghcVer <- ghcVersion
   Just (prepare, comp) <- case cheCabalVer of
-    cabalVer@CabalHEAD {} -> do
-      Just <$> compileWithCabalInPrivatePkgDb' ghcVer cabalVer
+    cabalVer@CabalHEAD {} -> runMaybeT $ msum  $ map (\f -> f ghcVer cabalVer)
+      [ compileWithCabalV2GhcEnv'
+      , compileWithCabalInPrivatePkgDb'
+      ]
     CabalVersion cabalVerPlain -> do
       runMaybeT $ msum $ map (\f -> f ghcVer cabalVerPlain) $
         case chePkgDb of
@@ -208,21 +210,31 @@ compileHelper' CompHelperEnv {..} = do
        vLog $ logMsg ++ "v2-build package-db " ++ inplace_db_path
        return $ (return (), compileWithPkg (GPSPackageDBs [inplace_db]) cabalVer CPSProject)
 
+   compileWithCabalV2GhcEnv :: Env => GhcVersion -> Version -> MaybeT IO (IO (), Compile)
+   compileWithCabalV2GhcEnv ghcVer cabalVer =
+     compileWithCabalV2GhcEnv' ghcVer (CabalVersion cabalVer)
+
    -- | If this is a v2-build project it makes sense to use @v2-install@ for
    -- installing Cabal as this will use the @~/.cabal/store@. We use
    -- @--package-env@ to instruct cabal to not meddle with the user's package
    -- environment.
-   compileWithCabalV2GhcEnv :: Env => GhcVersion -> Version -> MaybeT IO (IO (), Compile)
-   compileWithCabalV2GhcEnv ghcVer cabalVer = do
+   compileWithCabalV2GhcEnv' :: Env => GhcVersion -> UnpackedCabalVersion -> MaybeT IO (IO (), Compile)
+   compileWithCabalV2GhcEnv' ghcVer cabalVer = do
        _ <- maybe mzero pure cheDistV2 -- bail if this isn't a v2-build project
        CabalInstallVersion instVer <- liftIO cabalInstallVersion
        guard $ instVer >= (Version [2,4,1,0] [])
        --  ^ didn't test with older versions
        guard $ ghcVer  >= (GhcVersion (Version [8,0] []))
-       env@(PackageEnvFile env_file)
-           <- liftIO $ getPrivateCabalPkgEnv ghcVer cabalVer
+       env@(PackageEnvFile env_file) <- liftIO $
+         getPrivateCabalPkgEnv ghcVer $ unpackedToResolvedCabalVersion cabalVer
        vLog $ logMsg ++ "v2-build package-env " ++ env_file
-       return $ (prepare env, compileWithPkg (GPSPackageEnv env) cabalVer CPSGlobal)
+       return $ (,)
+         (prepare env)
+         CompileWithCabalPackage
+           { compPackageSource = GPSPackageEnv env
+           , compCabalVersion  = unpackedToResolvedCabalVersion cabalVer
+           , compProductTarget = CPSGlobal
+           }
      where
        prepare env = do
          -- exists_in_env <- liftIO $ cabalVersionExistsInPkgDb cheCabalVer db
@@ -237,15 +249,15 @@ compileHelper' CompHelperEnv {..} = do
    compileWithCabalInPrivatePkgDb
        :: (Env, MonadIO m) => GhcVersion -> Version -> m (IO (), Compile)
    compileWithCabalInPrivatePkgDb ghcVer cabalVer =
-       liftIO $ compileWithCabalInPrivatePkgDb' ghcVer (CabalVersion cabalVer)
+       compileWithCabalInPrivatePkgDb' ghcVer (CabalVersion cabalVer)
 
    -- | Compile the requested Cabal version into an isolated package-db if it's
    -- not there already
    compileWithCabalInPrivatePkgDb'
-       :: Env => GhcVersion -> UnpackedCabalVersion -> IO (IO (), Compile)
+       :: (Env, MonadIO m) => GhcVersion -> UnpackedCabalVersion -> m (IO (), Compile)
    compileWithCabalInPrivatePkgDb' ghcVer cabalVer = do
-       db@(PackageDbDir db_path)
-           <- getPrivateCabalPkgDb $ unpackedToResolvedCabalVersion cabalVer
+       db@(PackageDbDir db_path) <- liftIO $
+         getPrivateCabalPkgDb $ unpackedToResolvedCabalVersion cabalVer
        vLog $ logMsg ++ "private package-db in " ++ db_path
        return $ (,)
          (prepare db)

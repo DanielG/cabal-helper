@@ -94,12 +94,12 @@ getPrivateCabalPkgDb cabalVer = do
   return $ PackageDbDir db_path
 
 getPrivateCabalPkgEnv
-    :: Verbose => GhcVersion -> Version -> IO PackageEnvFile
+    :: Verbose => GhcVersion -> ResolvedCabalVersion -> IO PackageEnvFile
 getPrivateCabalPkgEnv ghcVer cabalVer = do
   appdir <- appCacheDir
   let env_path =
         appdir </> "ghc-" ++ showGhcVersion ghcVer ++ ".package-envs"
-               </> "Cabal-" ++ showVersion cabalVer ++ ".package-env"
+               </> "Cabal-" ++ showResolvedCabalVersion cabalVer ++ ".package-env"
   return $ PackageEnvFile env_path
 
 listCabalVersions
