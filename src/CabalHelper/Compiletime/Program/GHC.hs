@@ -124,6 +124,7 @@ cabalVersionExistsInPkgDb cabalVer db@(PackageDbDir db_path) = do
     return $
       case (cabalVer, vers) of
         (CabalVersion ver, _) -> ver `elem` vers
+        (CabalHEAD _, []) -> False
         (CabalHEAD _, [_headver]) -> True
         (CabalHEAD _, _) ->
           error $ msg ++ db_path)
