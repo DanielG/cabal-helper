@@ -274,7 +274,7 @@ compileHelper' CompHelperEnv {..} = do
              \(SomeException _) -> errorInstallCabal cabalVer
 
    -- | See if we're in a cabal source tree
---   compileCabalSource :: Env => MaybeT IO (IO (), Compile)
+   --   compileCabalSource :: Env => MaybeT IO (IO (), Compile)
    compileCabalSource _ghcVer _cabalVer = do
        let cabalFile = cheProjDir </> "Cabal.cabal"
        cabalSrc <- liftIO $ doesFileExist cabalFile
