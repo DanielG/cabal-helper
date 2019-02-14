@@ -185,8 +185,7 @@ unUnqualComponentName' = id
 
 componentNameFromComponent :: Component -> ComponentName
 #if CH_MIN_VERSION_Cabal(2,5,0)
-componentNameFromComponent (CLib Library { libName = Nothing }) = CLibName LMainLibName
-componentNameFromComponent (CLib Library { libName = Just n })  = CLibName $ LSubLibName n
+componentNameFromComponent (CLib Library { libName = n }) = CLibName n
 componentNameFromComponent (CFLib ForeignLib {..}) = CFLibName foreignLibName
 #elif CH_MIN_VERSION_Cabal(1,25,0)
 -- CPP >= 1.25 (redundant)
