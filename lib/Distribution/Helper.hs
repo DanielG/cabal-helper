@@ -202,7 +202,7 @@ mkQueryEnv projloc distdir = do
     , qeCacheRef     = cr
     }
 
--- | Construct paths to project configuration files.
+-- | Construct paths to project configuration files given where the project is.
 projConf :: ProjLoc pt -> ProjConf pt
 projConf (ProjLocCabalFile cabal_file) =
    ProjConfV1 cabal_file
@@ -218,6 +218,11 @@ projConf (ProjLocStackYaml stack_yaml) =
   ProjConfStack
     { pcStackYaml = stack_yaml }
 
+-- | Get the current modification-time for each file involved in configuring a
+-- project. Optional files in 'ProjConf' are handled by not including them in
+-- the result list in 'ProjConfModTimes' if they don\'t exist. This causes the
+-- lists to be different if the files end up existing later, which is all we
+-- need for cache invalidation.
 getProjConfModTime :: ProjConf pt -> IO ProjConfModTimes
 getProjConfModTime ProjConfV1{pcV1CabalFile} =
   fmap ProjConfModTimes $ mapM getFileModTime
@@ -263,14 +268,14 @@ compilerVersion = Query $ \qe ->
   getProjInfo qe >>= \proj_info ->
     let someUnit = NonEmpty.head $ piUnits proj_info in
     --  ^ TODO: ASSUMPTION: Here we assume the compiler version is uniform
-    --  across all units so here we just pick any one. I'm not sure this is true
-    --  for Stack.
+    --  across all units so we just pick any one. I'm not sure this is true for
+    --  Stack.
     case piImpl proj_info of
       ProjInfoV1 -> uiCompilerId <$> getUnitInfo qe someUnit
       ProjInfoV2 { piV2CompilerId } -> return piV2CompilerId
       ProjInfoStack {} -> uiCompilerId <$> getUnitInfo qe someUnit
 
--- | All units currently active in a project\'s build plan.
+-- | All local units currently active in a project\'s build plan.
 projectUnits          :: Query pt (NonEmpty (Unit pt))
 projectUnits = Query $ \qe -> piUnits <$> getProjInfo qe
 
@@ -377,7 +382,9 @@ shallowReconfigureProject QueryEnv
     return ()
 shallowReconfigureProject QueryEnv
   { qeProjLoc = ProjLocStackYaml _stack_yaml, .. } = do
-    -- -- In case we ever need to read the cabal files before the Unit stage, this command regenerates them from package.yaml
+    -- In case we ever need to read the cabal files before the Unit stage, this
+    -- command regenerates them from package.yaml
+    --
     -- _ <- liftIO $ qeCallProcess (Just projdir) (stackProgram qePrograms)
     --        ["build", "--dry-run"] ""
     return ()

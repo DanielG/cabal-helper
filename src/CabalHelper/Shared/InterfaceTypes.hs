@@ -91,6 +91,7 @@ data ChComponentInfo = ChComponentInfo
     , ciNeedsBuildOutput      :: NeedsBuildOutput
     -- ^ If a component has a non-default module renaming (backpack) it cannot
     -- be built in memory and instead needs proper build output.
+    -- TODO: This is a ghc-mod legacy thing and has to be removed
     } deriving (Eq, Ord, Read, Show)
 
 -- TODO: we know the source-dir now so we can resolve ChSetupEntrypoint

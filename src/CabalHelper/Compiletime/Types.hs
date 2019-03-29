@@ -105,12 +105,19 @@ data DistDir (pt :: ProjType) where
 
 deriving instance Show (DistDir pt)
 
--- | Environment for running a 'Query' value. The constructor is not exposed in
--- the API to allow extending the environment without breaking user code.
+-- | Environment for running a 'Query'. The constructor is not exposed in the
+-- API to allow extending it with more fields without breaking user code.
 --
--- To create a 'QueryEnv' use the 'mkQueryEnv' smart constructor. The field
--- accessors are exported and may be used to override the defaults filled in by
--- 'mkQueryEnv'. See below.
+-- To create a 'QueryEnv' use the 'mkQueryEnv' smart constructor instead. The
+-- field accessors are exported and may be used to override the defaults filled
+-- in by 'mkQueryEnv'. See below.
+--
+-- Note that this environment contains an 'IORef' used as a cache. If you want
+-- to take advantage of this you should not simply discard the value returned by
+-- the smart constructor after one use.
+--
+-- If you do not wish to use the built-in caching feel free to discard the
+-- 'QueryEnv' value though.
 type QueryEnv (pt :: ProjType)
     = QueryEnvI QueryCache pt
 
@@ -157,6 +164,9 @@ newtype DistDirLib = DistDirLib FilePath
 -- etc.) which are managed by an certain instance of the Cabal build system. We
 -- may get information on the components in a unit by retriving the
 -- corresponding 'UnitInfo'.
+--
+-- Note that a 'Unit' value is only valid within the 'QueryEnv' context it was
+-- created in. However this is not enforced in the API.
 data Unit pt = Unit
     { uUnitId      :: !UnitId
     , uPackageDir  :: !FilePath
@@ -197,7 +207,7 @@ newtype UnitId = UnitId String
 -- | The information extracted from a 'Unit'\'s on-disk configuration cache.
 data UnitInfo = UnitInfo
     { uiUnitId                :: !UnitId
-    -- ^ A unique identifier of this unit within the project.
+    -- ^ A unique identifier of this unit within the originating project.
 
     , uiPackageId             :: !(String, Version)
     -- ^ The package-name and version this unit belongs to.
@@ -246,8 +256,8 @@ data ProjConf pt where
     { pcStackYaml :: !FilePath
     } -> ProjConf 'Stack
 
--- these are supposed to be opaque, as they are meant to be used only for cache
--- invalidation
+-- This is supposed to be opaque, as it's only meant to be used only for cache
+-- invalidation.
 newtype ProjConfModTimes = ProjConfModTimes [(FilePath, EpochTime)]
     deriving (Eq, Show)
 
@@ -278,7 +288,7 @@ instance Show (ProjInfoImpl pt) where
     show ProjInfoV1 = "ProjInfoV1"
     show ProjInfoV2 {..} = concat
       [ "ProjInfoV2 {"
-      , "piV2Plan = ", show piV2Plan, ", " --
+      , "piV2Plan = ", show piV2Plan, ", "
       , "piV2PlanModTime = ", show piV2PlanModTime, ", "
       , "piV2CompilerId = ", show piV2CompilerId
       , "}"
