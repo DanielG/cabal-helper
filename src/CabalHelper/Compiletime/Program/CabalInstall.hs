@@ -65,10 +65,25 @@ cabalInstallVersion = do
 
 installCabalLibV1 :: Env => GhcVersion -> UnpackedCabalVersion -> IO PackageDbDir
 installCabalLibV1 ghcVer cabalVer = do
-  appdir <- appCacheDir
-  let message (CabalHEAD {}) = return ()
-      message (CabalVersion ver) = do
+  withSystemTempDirectory "cabal-helper.install-cabal-tmp" $ \tmpdir -> do
+    installingMessage cabalVer
+    srcdir <- unpackCabalV1 cabalVer tmpdir
+
+    db <- createPkgDb cabalVer
+
+    callCabalInstall db srcdir ghcVer cabalVer
+
+    return db
+
+installingMessage :: CabalVersion' a -> IO ()
+installingMessage = message
+  where
+    message (CabalHEAD {}) = return () -- only used for tests
+    message (CabalVersion ver) = do
+      appdir <- appCacheDir
       let sver = showVersion ver
+      -- TODO: dumping this to stderr is not really acceptable, we need to have
+      -- a way to let API clients override this!
       hPutStr stderr $ printf "\
 \cabal-helper: Installing a private copy of Cabal because we couldn't\n\
 \find the right version in your global/user package-db. This might take a\n\
@@ -82,15 +97,6 @@ installCabalLibV1 ghcVer cabalVer = do
 \    $ cabal install Cabal --constraint \"Cabal == %s\"\n\
 \\n\
 \Installing Cabal %s ...\n" appdir sver sver sver
-  withSystemTempDirectory "cabal-helper.install-cabal-tmp" $ \tmpdir -> do
-    message cabalVer
-    srcdir <- unpackCabalV1 cabalVer tmpdir
-
-    db <- createPkgDb cabalVer
-
-    callCabalInstall db srcdir ghcVer cabalVer
-
-    return db
 
 callCabalInstall
     :: Env
@@ -195,13 +201,13 @@ cabalWithGHCProgOpts = concat
       else []
   ]
 
--- TODO: This needs the big message blub from above
 installCabalLibV2 :: Env => GhcVersion -> UnpackedCabalVersion -> PackageEnvFile -> IO ()
 installCabalLibV2 _ghcVer cv (PackageEnvFile env_file) = do
   exists <- doesFileExist env_file
   if exists
     then return ()
     else do
+    installingMessage cv
     (target, cwd) <- case cv of
       CabalVersion cabalVer -> do
         tmp <- getTemporaryDirectory
