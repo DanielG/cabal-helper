@@ -58,7 +58,7 @@ data ChLibraryName = ChMainLibName
                    | ChSubLibName String
   deriving (Eq, Ord, Read, Show, Generic)
 
-newtype ChModuleName = ChModuleName String
+newtype ChModuleName = ChModuleName { unChModuleName :: String }
     deriving (Eq, Ord, Read, Show, Generic)
 
 data ChComponentInfo = ChComponentInfo

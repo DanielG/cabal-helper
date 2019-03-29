@@ -444,9 +444,6 @@ copyMuliPackageProject srcdir destdir copyPkgExtra = do
       , "--output-directory="++destdir </> pkgdir ]
     copyPkgExtra (srcdir </> pkgdir) (destdir </> pkgdir)
 
-unChModuleName :: ChModuleName -> String
-unChModuleName (ChModuleName  mn) = mn
-
 cabalInstallVersion :: IO Version
 cabalInstallVersion =
     parseVer . trim <$> readProcess "cabal" ["--numeric-version"] ""
