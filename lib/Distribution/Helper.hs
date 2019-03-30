@@ -72,7 +72,8 @@ module Distribution.Helper (
 
   , Programs(..)
   , defaultPrograms
-
+  , CompPrograms(..)
+  , defaultCompPrograms
 
   -- * Result types
   , ChComponentInfo(..)
