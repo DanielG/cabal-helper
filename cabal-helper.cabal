@@ -156,6 +156,7 @@ library c-h-internal
 library
   import:              build-deps, extensions
   exposed-modules:     Distribution.Helper
+                       Distribution.Helper.Discover
   other-modules:
                        Paths_cabal_helper
   autogen-modules:
