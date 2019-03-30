@@ -63,13 +63,14 @@ module Distribution.Helper (
   , qeDistDir
 
   -- * GADTs
-  , DistDir(..)
   , ProjType(..)
   , SProjType(..)
   , demoteSProjType
   , ProjLoc(..)
+  , DistDir(..)
   , Ex(..)
 
+  -- * Programs
   , Programs(..)
   , defaultPrograms
   , CompPrograms(..)
