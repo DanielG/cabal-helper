@@ -68,6 +68,7 @@ module Distribution.Helper (
   , SProjType(..)
   , demoteSProjType
   , ProjLoc(..)
+  , Ex(..)
 
   , Programs(..)
   , defaultPrograms

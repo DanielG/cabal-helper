@@ -15,7 +15,7 @@
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 {-# LANGUAGE DeriveGeneric, DeriveDataTypeable, DefaultSignatures,
-  StandaloneDeriving, GADTs, DataKinds, KindSignatures, RankNTypes #-}
+  StandaloneDeriving, GADTs, DataKinds, KindSignatures, RankNTypes, PolyKinds #-}
 
 {-|
 Module      : CabalHelper.Compiletime.Types
@@ -104,6 +104,34 @@ data DistDir (pt :: ProjType) where
     DistDirStack :: !(Maybe RelativePath) -> DistDir 'Stack
 
 deriving instance Show (DistDir pt)
+
+-- | General purpose existential wrapper. Useful for hiding a phantom type
+-- argument.
+--
+-- Say you have:
+--
+-- @
+-- {-# LANGUAGE DataKinds, GADTS #-}
+-- data K = A | B | ...
+-- data Q k where
+--   QA :: ... -> Q 'A
+--   QB :: ... -> Q 'B
+-- @
+--
+-- and you want a list of @Q@. You can use @Ex@ to hide the phantom type
+-- argument and recover it later by matching on the GADT constructors:
+--
+-- @
+-- qa :: Q A
+-- qa = QA
+--
+-- qb :: Q B
+-- qb = QB
+--
+-- mylist :: [Ex Q]
+-- mylist = [Ex qa, Ex qb]
+-- @
+data Ex a = forall x. Ex (a x)
 
 -- | Environment for running a 'Query'. The constructor is not exposed in the
 -- API to allow extending it with more fields without breaking user code.

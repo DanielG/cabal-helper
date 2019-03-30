@@ -159,8 +159,6 @@ testLocPath (TN test_name) = (projdir, ".", cabal_file)
 testLocPath (TF topdir projdir cabal_file) =
     (topdir, projdir, cabal_file)
 
-data Ex a = forall x. Ex (a x)
-
 -- | Check version bounds of tests against available versions, if successful run
 -- the test.
 checkAndRunTestConfig
