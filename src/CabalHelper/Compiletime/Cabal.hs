@@ -217,7 +217,9 @@ unpackCabalHEAD tmpdir = do
 -- | Replace the version declaration in a cabal file
 replaceVersionDecl :: (Version -> Maybe Version) -> String -> Maybe String
 replaceVersionDecl ver_fn cf = let
-  Just (before_ver,m) = find (\(_i,t) -> "version:" `isPrefixOf` t) $ splits cf
+  isVersionDecl ([],t) = "version:" `isPrefixOf` t
+  isVersionDecl (i,t) = "\n" `isSuffixOf` i && "version:" `isPrefixOf` t
+  Just (before_ver,m) = find isVersionDecl $ splits cf
   Just (ver_decl,after_ver)
     = find (\s -> case s of (_i,'\n':x:_) -> not $ isSpace x; _ -> False)
     $ filter (\(_i,t) -> "\n" `isPrefixOf` t)
