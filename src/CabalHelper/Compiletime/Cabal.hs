@@ -198,7 +198,8 @@ unpackCabalHEAD tmpdir = do
   let ut = posixSecondsToUTCTime $ fromInteger (read ts)
       (y,m,d) = toGregorian $ utctDay ut
       sec = round $ utctDayTime ut
-      datecode = read $ show y ++ show m ++ show d ++ printf "%5d\n" sec
+      datecode =
+        read $ show y ++ printf "%02d" m ++ printf "%02d" d ++ printf "%05d" sec
       sec :: Int; datecode :: Int
   let cabal_file = tmpdir </> "Cabal/Cabal.cabal"
   cf0 <- readFile cabal_file
