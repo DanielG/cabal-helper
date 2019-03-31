@@ -20,11 +20,12 @@ Description : Cabal library source unpacking
 License     : GPL-3
 -}
 
-{-# LANGUAGE DeriveFunctor, ViewPatterns, CPP #-}
+{-# LANGUAGE DeriveFunctor, ViewPatterns, OverloadedStrings, CPP #-}
 
 module CabalHelper.Compiletime.Cabal where
 
 import Data.Char
+import Control.Exception
 import Data.List
 import Data.Maybe
 import Data.Time.Calendar
@@ -34,13 +35,15 @@ import Data.Version
 import System.Directory
 import System.Exit
 import System.FilePath
+import System.IO
 import Text.Printf
 
-
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BS8
 
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Process
-import CabalHelper.Shared.Common (replace, parseVer, parseVerMay)
+import CabalHelper.Shared.Common (replace, parseVer, parseVerMay, parsePkgIdBS)
 
 type UnpackedCabalVersion = CabalVersion' (CommitId, CabalSourceDir)
 type ResolvedCabalVersion = CabalVersion' CommitId
@@ -259,3 +262,18 @@ findCabalFile pkgdir = do
 
 bultinCabalVersion :: Version
 bultinCabalVersion = parseVer VERSION_Cabal
+
+readSetupConfigHeader :: FilePath -> IO (Maybe UnitHeader)
+readSetupConfigHeader file = bracket (openFile file ReadMode) hClose $ \h -> do
+  parseSetupHeader <$> BS.hGetLine h
+
+parseSetupHeader :: BS.ByteString -> Maybe UnitHeader
+parseSetupHeader header = case BS8.words header of
+  ["Saved", "package", "config", "for", pkgId ,
+   "written", "by", setupId,
+   "using", compId]
+    -> UnitHeader
+       <$> parsePkgIdBS pkgId
+       <*> parsePkgIdBS setupId
+       <*> parsePkgIdBS compId
+  _ -> Nothing

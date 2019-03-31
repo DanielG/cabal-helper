@@ -27,6 +27,7 @@ module CabalHelper.Compiletime.Types where
 
 import Cabal.Plan
   ( PlanJson )
+import Data.ByteString (ByteString)
 import Data.IORef
 import Data.Version
 import Data.Typeable
@@ -229,6 +230,25 @@ uComponentName Unit { uImpl=UnitImplV2 { uiV2ComponentNames=[comp] } } =
 uComponentName _ =
     Nothing
 
+-- | The @setup-config@ header. Note that Cabal writes all the package names in
+-- the header using 'Data.ByteString.Char8' and hence all characters are
+-- truncated from Unicode codepoints to 8-bit Latin-1.
+--
+-- We can be fairly confident that 'uhSetupId' and 'uhCompilerId' won\'t have
+-- names that cause trouble here so it's ok to look at them but user packages
+-- are free to have any unicode name.
+data UnitHeader = UnitHeader
+    { uhBrokenPackageId  :: !(ByteString, Version)
+      -- ^ Name and version of the source package. Don't use this, it's broken
+      -- when the package name contains Unicode characters. See 'uiPackageId'
+      -- instead.
+    , uhSetupId    :: !(ByteString, Version)
+      -- ^ Name and version of the @Setup.hs@ implementation. We expect
+      -- @"Cabal"@ here, naturally.
+    , uhCompilerId :: !(ByteString, Version)
+      -- ^ Name and version of the compiler this Unit is configured to use.
+    } deriving (Eq, Ord, Read, Show)
+
 newtype UnitId = UnitId String
     deriving (Eq, Ord, Read, Show)
 
@@ -300,7 +320,9 @@ data ProjInfo pt = ProjInfo
   } deriving (Show)
 
 data ProjInfoImpl pt where
-  ProjInfoV1 :: ProjInfoImpl 'V1
+  ProjInfoV1 ::
+    { piV1SetupHeader :: !UnitHeader
+    } -> ProjInfoImpl 'V1
 
   ProjInfoV2 ::
     { piV2Plan        :: !PlanJson
@@ -313,7 +335,11 @@ data ProjInfoImpl pt where
     } -> ProjInfoImpl 'Stack
 
 instance Show (ProjInfoImpl pt) where
-    show ProjInfoV1 = "ProjInfoV1"
+    show ProjInfoV1 {..} = concat
+      [ "ProjInfoV1 {"
+      , "piV1SetupHeader = ", show piV1SetupHeader, ", "
+      , "}"
+      ]
     show ProjInfoV2 {..} = concat
       [ "ProjInfoV2 {"
       , "piV2Plan = ", show piV2Plan, ", "

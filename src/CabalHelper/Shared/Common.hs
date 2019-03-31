@@ -81,24 +81,18 @@ errMsg str = do
   prog <- getProgName
   hPutStrLn stderr $ prog ++ ": " ++ str
 
--- | @getCabalConfigHeader "dist/setup-config"@ returns the cabal version and
--- compiler version
-getCabalConfigHeader :: FilePath -> IO (Maybe (Version, (ByteString, Version)))
-getCabalConfigHeader file = bracket (openFile file ReadMode) hClose $ \h -> do
-  parseHeader <$> BS.hGetLine h
+parsePkgId :: String -> Maybe (String, Version)
+parsePkgId s =
+    case span (/='-') (reverse s) of
+      (vers, '-':pkg) -> Just (reverse pkg, parseVer (reverse vers))
+      _ -> Nothing
 
-parseHeader :: ByteString -> Maybe (Version, (ByteString, Version))
-parseHeader header = case BS8.words header of
-  ["Saved", "package", "config", "for", _pkgId ,
-   "written", "by", cabalId,
-   "using", compId]
-    -> liftM2 (,) (snd <$> parsePkgId cabalId) (parsePkgId compId)
-  _ -> Nothing
-
-parsePkgId :: ByteString -> Maybe (ByteString, Version)
-parsePkgId bs =
-    case BS8.split '-' bs of
-      [pkg, vers] -> Just (pkg, parseVer $ BS8.unpack vers)
+parsePkgIdBS :: ByteString -> Maybe (ByteString, Version)
+parsePkgIdBS bs =
+    case BS8.span (/='-') (BS.reverse bs) of
+      (vers, pkg') ->
+          Just ( BS.reverse $ BS.tail pkg'
+               , parseVer (BS8.unpack (BS.reverse vers)))
       _ -> Nothing
 
 parseVer :: String -> Version

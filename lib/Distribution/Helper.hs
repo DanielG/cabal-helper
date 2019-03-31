@@ -96,11 +96,13 @@ module Distribution.Helper (
   ) where
 
 import Cabal.Plan hiding (Unit, UnitId, uDistDir)
+import Control.Arrow (first)
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.Maybe
 import Control.Monad.IO.Class
 import Control.Exception as E
+import qualified Data.ByteString.Char8 as BS8
 import Data.IORef
 import Data.List hiding (filter)
 import Data.String
@@ -266,17 +268,21 @@ getUnitModTimes
 
 
 -- | The version of GHC the project is configured to use for compilation.
-compilerVersion       :: Query pt (String, Version)
+compilerVersion :: Query pt (String, Version)
 compilerVersion = Query $ \qe ->
   getProjInfo qe >>= \proj_info ->
     let someUnit = NonEmpty.head $ piUnits proj_info in
-    --  ^ TODO: ASSUMPTION: Here we assume the compiler version is uniform
-    --  across all units so we just pick any one. I'm not sure this is true for
-    --  Stack.
+    --  ^ ASSUMPTION: Here we assume the compiler version is uniform across all
+    --  units so we just pick any one.
     case piImpl proj_info of
-      ProjInfoV1 -> uiCompilerId <$> getUnitInfo qe someUnit
+      ProjInfoV1 { piV1SetupHeader=UnitHeader{..} } ->
+          return $ first BS8.unpack $ uhCompilerId
+      --  ^ The package name here is restricted to Latin-1 because of the way
+      --  Cabal writes the header. Shouldn't matter too much V1 is legacy
+      --  anyways and GHC and it's glorious ASCII name rule the Haskell world.
       ProjInfoV2 { piV2CompilerId } -> return piV2CompilerId
       ProjInfoStack {} -> uiCompilerId <$> getUnitInfo qe someUnit
+      --  ^ TODO: Any way to get this faster for stack?
 
 -- | All local units currently active in a project\'s build plan.
 projectUnits          :: Query pt (NonEmpty (Unit pt))
@@ -432,11 +438,9 @@ readProjInfo qe pc pcm = withVerbosity $ do
     (DistDirV1 distdir, ProjConfV1{pcV1CabalFile}) -> do
       let projdir = plV1Dir projloc
       setup_config_path <- canonicalizePath (distdir </> "setup-config")
-      mhdr <- getCabalConfigHeader setup_config_path
+      mhdr <- readSetupConfigHeader setup_config_path
       case mhdr of
-        Nothing ->
-          panicIO $ printf "Could not read '%s' header" setup_config_path
-        Just (hdrCabalVersion, _) ->
+        Just hdr@(UnitHeader _pkgId ("Cabal", hdrCabalVersion) _compId) ->
           return ProjInfo
             { piCabalVersion = hdrCabalVersion
             , piProjConfModTimes = pcm
@@ -448,7 +452,15 @@ readProjInfo qe pc pcm = withVerbosity $ do
               , uImpl = UnitImplV1
               }
             , piImpl = ProjInfoV1
+              { piV1SetupHeader = hdr
+              }
             }
+        Just UnitHeader {uhSetupId=(setup_name, _)} ->
+          panicIO $ printf "Unknown Setup package-id in setup-config header '%s': '%s'"
+                      (BS8.unpack setup_name) setup_config_path
+        Nothing ->
+          panicIO $ printf "Could not read '%s' header" setup_config_path
+
     (DistDirV2 distdirv2, _) -> do
       let plan_path = distdirv2 </> "cache" </> "plan.json"
       plan_mtime <- modificationTime <$> getFileStatus plan_path

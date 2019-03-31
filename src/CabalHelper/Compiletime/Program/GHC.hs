@@ -112,7 +112,7 @@ listCabalVersions mdb = do
     True -> MaybeT $ logIOError "listCabalVersions" $ Just <$> do
       let mdbopt = ("--package-conf="++) <$> mdb_path
           args = ["list", "--simple-output", "Cabal"] ++ maybeToList mdbopt
-      catMaybes . map (fmap snd . parsePkgId . fromString) . words
+      catMaybes . map (fmap snd . parsePkgId) . words
                <$> readProcess' (ghcPkgProgram ?cprogs) args ""
     _ -> mzero
 
