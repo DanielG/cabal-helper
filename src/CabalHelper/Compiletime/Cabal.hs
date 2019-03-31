@@ -210,9 +210,10 @@ unpackCabalHEAD tmpdir = do
     -- If the released version of cabal has 4 components but we use only three
     -- theirs will always be larger than this one here. That's not really
     -- critical though.
-    setVersion i (versionBranch -> mj:mi:_:_:[])
-        | odd mi = Just $ makeVersion $ mj:mi:[i]
-    setVersion _ _ = error "unpackCabalHEAD.setVersion: Wrong version format"
+    setVersion i (versionBranch -> mj:mi:_:_:[]) =
+        Just $ makeVersion $ mj:mi:[i]
+    setVersion _ v =
+        error $ "unpackCabalHEAD.setVersion: Wrong version format" ++ show v
 
 -- | Replace the version declaration in a cabal file
 replaceVersionDecl :: (Version -> Maybe Version) -> String -> Maybe String
