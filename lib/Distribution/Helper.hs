@@ -79,6 +79,7 @@ module Distribution.Helper (
   -- * Result types
   , ChComponentInfo(..)
   , ChComponentName(..)
+  , ChLibraryName(..)
   , ChModuleName(..)
   , ChPkgDb(..)
   , ChEntrypoint(..)
