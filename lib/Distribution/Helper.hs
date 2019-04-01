@@ -209,18 +209,20 @@ mkQueryEnv projloc distdir = do
     }
 
 -- | Construct paths to project configuration files given where the project is.
-projConf :: ProjLoc pt -> ProjConf pt
-projConf (ProjLocCabalFile cabal_file) =
-   ProjConfV1 cabal_file
+projConf :: ProjLoc pt -> IO (ProjConf pt)
+projConf (ProjLocV1Dir pkgdir) =
+  ProjConfV1 <$> findCabalFile pkgdir
+projConf (ProjLocV1CabalFile cabal_file) = return $
+  ProjConfV1 cabal_file
 projConf (ProjLocV2Dir projdir_path) =
   projConf $ ProjLocV2File $ projdir_path </> "cabal.project"
-projConf (ProjLocV2File proj_file) =
+projConf (ProjLocV2File proj_file) = return $
   ProjConfV2
     { pcV2CabalProjFile       = proj_file
     , pcV2CabalProjLocalFile  = proj_file <.> "local"
     , pcV2CabalProjFreezeFile = proj_file <.> "freeze"
     }
-projConf (ProjLocStackYaml stack_yaml) =
+projConf (ProjLocStackYaml stack_yaml) = return $
   ProjConfStack
     { pcStackYaml = stack_yaml }
 
@@ -313,7 +315,7 @@ checkUpdateProjInfo
     -> Maybe (ProjInfo pt)
     -> IO (ProjInfo pt)
 checkUpdateProjInfo qe mproj_info = do
-  let proj_conf = projConf (qeProjLoc qe)
+  proj_conf <- projConf (qeProjLoc qe)
   mtime <- getProjConfModTime proj_conf
   case mproj_info of
     Nothing -> reconf proj_conf mtime
@@ -374,7 +376,7 @@ discardInactiveUnitInfos active_units uis0 =
 -- system (@cabal@ or @stack@).
 shallowReconfigureProject :: QueryEnvI c pt -> IO ()
 shallowReconfigureProject QueryEnv
-  { qeProjLoc = ProjLocCabalFile _cabal_file
+  { qeProjLoc = _
   , qeDistDir = DistDirV1 _distdirv1 } =
     return ()
 shallowReconfigureProject QueryEnv

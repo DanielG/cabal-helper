@@ -66,7 +66,12 @@ data ProjLoc (pt :: ProjType) where
     -- ending in @.cabal@ existing in the directory. More than one such files
     -- existing is a user error. Note: For this project type the concepts of
     -- project and package coincide.
-    ProjLocCabalFile :: { plCabalFile :: !FilePath } -> ProjLoc 'V1
+    ProjLocV1CabalFile :: { plCabalFile :: !FilePath } -> ProjLoc 'V1
+
+    -- | A @cabal v1-build@ project directory. Same as 'ProjLocV1CabalFile' but
+    -- will search for the cabal file for you. If more than one @.cabal@ file
+    -- exists it will shamelessly throw an obscure exception.
+    ProjLocV1Dir :: { plPackageDir :: !FilePath } -> ProjLoc 'V1
 
     -- | A @cabal v2-build@ project\'s marker file is called
     -- @cabal.project@. This configuration file points to the packages that make
@@ -81,7 +86,8 @@ data ProjLoc (pt :: ProjType) where
 deriving instance Show (ProjLoc pt)
 
 plV1Dir :: ProjLoc 'V1 -> FilePath
-plV1Dir (ProjLocCabalFile cabal_file) = takeDirectory cabal_file
+plV1Dir (ProjLocV1CabalFile cabal_file) = takeDirectory cabal_file
+plV1Dir (ProjLocV1Dir pkgdir) = pkgdir
 
 data DistDir (pt :: ProjType) where
     -- | Build directory for cabal /old-build/ aka. /v1-build/ aka. just
