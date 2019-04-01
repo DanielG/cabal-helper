@@ -656,11 +656,8 @@ getHelper ProjInfo{piCabalVersion} QueryEnv{..}
         helper_main $ cabal_file : distdir : args
 getHelper proj_info qe@QueryEnv{..} = do
   withVerbosity $ withProgs (piImpl proj_info) qe $ do
-    let comp = mkCompHelperEnv qeProjLoc qeDistDir proj_info
-    let ?progs = qePrograms
-        ?cprogs = qeCompPrograms
     t0 <- Clock.getTime Monotonic
-    eexe <- compileHelper comp
+    eexe <- compileHelper $ mkCompHelperEnv qeProjLoc qeDistDir proj_info
     t1 <- Clock.getTime Monotonic
     let dt = (/10e9) $ fromInteger $ Clock.toNanoSecs $ Clock.diffTimeSpec t0 t1
         dt :: Float
