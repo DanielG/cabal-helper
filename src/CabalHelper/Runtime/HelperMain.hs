@@ -17,8 +17,8 @@
 {-# LANGUAGE CPP, BangPatterns, RecordWildCards, RankNTypes, ViewPatterns,
   TupleSections #-}
 
-{- # OPTIONS_GHC -Wno-missing-signatures #-}
-{- # OPTIONS_GHC -fno-warn-incomplete-patterns #-}
+{-  # OPTIONS_GHC -Wno-missing-signatures #-}
+{-  # OPTIONS_GHC -fno-warn-incomplete-patterns #-}
 
 #ifdef MIN_VERSION_Cabal
 #undef CH_MIN_VERSION_Cabal
