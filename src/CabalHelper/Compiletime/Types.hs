@@ -153,8 +153,7 @@ data Ex a = forall x. Ex (a x)
 --
 -- If you do not wish to use the built-in caching feel free to discard the
 -- 'QueryEnv' value though.
-type QueryEnv (pt :: ProjType)
-    = QueryEnvI QueryCache pt
+type QueryEnv = QueryEnvI QueryCache
 
 data QueryEnvI c (pt :: ProjType) = QueryEnv
     { qeReadProcess :: !ReadProcessWithCwd

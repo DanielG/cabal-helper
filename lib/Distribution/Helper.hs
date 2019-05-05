@@ -54,7 +54,8 @@ module Distribution.Helper (
   , allUnits
 
   -- * Query environment
-  , QueryEnv -- abstract
+  , QueryEnv
+  , QueryEnvI -- abstract
   , mkQueryEnv
   , qeReadProcess
   , qePrograms
