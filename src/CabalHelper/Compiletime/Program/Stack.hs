@@ -24,6 +24,7 @@ License     : GPL-3
 
 module CabalHelper.Compiletime.Program.Stack where
 
+import Control.Applicative
 import Control.Exception (handle, throwIO)
 import Control.Monad
 import Control.Monad.Trans.Maybe
@@ -41,6 +42,7 @@ import Text.Printf (printf)
 import Text.Show.Pretty
 import Prelude
 
+import CabalHelper.Compiletime.Cabal (findCabalFile)
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Types.RelativePath
 import CabalHelper.Shared.Common
@@ -80,16 +82,26 @@ paths qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml} cwd
     workdirArg qe ++ [ "path", "--stack-yaml="++stack_yaml ]
   return $ \k -> let Just x = lookup k $ map split $ lines out in x
   where
-    split l = let (key, ' ' : val) = span (not . isSpace) l in (key, val)
+    split l = let (key, ' ' : val) = break isSpace l in (key, val)
 
 listPackageCabalFiles :: QueryEnvI c 'Stack -> IO [CabalFile]
 listPackageCabalFiles qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml}
-  = handle ioerror $ do
-  let projdir = takeDirectory stack_yaml
-  out <- readStackCmd qe (Just projdir)
-    [ "ide", "packages", "--cabal-files", "--stdout" ]
-  return $ map CabalFile $ lines out
+  = handle ioerror $ idePackages <|> workaround
   where
+    idePackages = do
+      let projdir = takeDirectory stack_yaml
+      out <- readStackCmd qe (Just projdir)
+        [ "ide", "packages", "--cabal-files", "--stdout" ]
+      return $ map CabalFile $ lines out
+    -- | Workaround for stack before 1.9.4
+    workaround :: IO [CabalFile]
+    workaround = do
+      let projdir = takeDirectory stack_yaml
+      out <- readStackCmd qe (Just projdir)
+        [ "query", "locals" ]
+      let packageDirs = mapMaybe getPath $ lines out
+      cabalFiles <- mapM findCabalFile $ filter (/= "") packageDirs
+      return $ map CabalFile cabalFiles
     ioerror :: IOError -> IO a
     ioerror ioe = (=<<) (fromMaybe (throwIO ioe)) $ runMaybeT $ do
       stack_exe <- MaybeT $ findExecutable $ stackProgram $ qePrograms qe
@@ -112,6 +124,13 @@ listPackageCabalFiles qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml}
         \Additional debugging info: QueryEnv qePrograms =\n\
         \  %s\n" stack_ver_str stack_exe prog_cfg
       mzero
+    getPath :: String -> Maybe String
+    getPath str = r
+      where
+        str' = dropWhile (==' ') str
+        r = if "path: " `isPrefixOf` str'
+        then Just (drop (length "path: ") str')
+        else Nothing
 
 workdirArg :: QueryEnvI c 'Stack -> [String]
 workdirArg QueryEnv{qeDistDir=DistDirStack mworkdir} =
@@ -126,7 +145,7 @@ doStackCmd procfn qe mcwd args =
 readStackCmd :: QueryEnvI c 'Stack -> Maybe FilePath -> [String] -> IO String
 callStackCmd :: QueryEnvI c 'Stack -> Maybe FilePath -> [String] -> IO ()
 
-readStackCmd = doStackCmd (\qe -> qeReadProcess qe "")
+readStackCmd = doStackCmd (`qeReadProcess` "")
 callStackCmd = doStackCmd qeCallProcess
 
 patchCompPrograms :: StackProjPaths -> CompPrograms -> CompPrograms
