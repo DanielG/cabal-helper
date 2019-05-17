@@ -113,7 +113,7 @@ library
   if !os(windows)
     build-depends:     unix             < 2.8  && >= 2.5.1.1
   build-depends:       unix-compat      < 0.6  && >= 0.4.3.1
-                     , semigroupoids    < 5.3  && >= 5.2
+                     , semigroupoids    < 5.4  && >= 5.2
 
 
 
