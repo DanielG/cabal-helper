@@ -18,7 +18,5 @@ ghc_ver=$(ghc --numeric-version)
 if verlte "$stack_ver" 1.9.3 &&
    verlte 8.2.2 "$ghc_ver"
 then
-        "$CI_SCRIPTS_DIR"/install-stack.sh "$build_dir/bin"
-	PATH="$build_dir/bin:$PATH"
-	export PATH
+        echo WARNING -- the tests need stack >= 1.9.4 please install it >&2
 fi
