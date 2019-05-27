@@ -246,12 +246,14 @@ data UnitHeader = UnitHeader
     { uhBrokenPackageId  :: !(ByteString, Version)
       -- ^ Name and version of the source package. Don't use this, it's broken
       -- when the package name contains Unicode characters. See 'uiPackageId'
-      -- instead.
+      -- instead. Note: This was fixed by hvr in Cabal HEAD actually.
     , uhSetupId    :: !(ByteString, Version)
       -- ^ Name and version of the @Setup.hs@ implementation. We expect
       -- @"Cabal"@ here, naturally.
     , uhCompilerId :: !(ByteString, Version)
-      -- ^ Name and version of the compiler this Unit is configured to use.
+      -- ^ Name and version of the compiler that was used to build
+      -- Setup.hs. WARNING: This does not identify the GHC version the project
+      -- is configured to use!
     } deriving (Eq, Ord, Read, Show)
 
 newtype UnitId = UnitId String

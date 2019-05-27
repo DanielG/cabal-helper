@@ -279,14 +279,9 @@ compilerVersion = Query $ \qe ->
     --  ^ ASSUMPTION: Here we assume the compiler version is uniform across all
     --  units so we just pick any one.
     case piImpl proj_info of
-      ProjInfoV1 { piV1SetupHeader=UnitHeader{..} } ->
-          return $ first BS8.unpack $ uhCompilerId
-      --  ^ The package name here is restricted to Latin-1 because of the way
-      --  Cabal writes the header. Shouldn't matter too much V1 is legacy
-      --  anyways and GHC and it's glorious ASCII name rule the Haskell world.
+      ProjInfoV1 {} -> uiCompilerId <$> getUnitInfo qe someUnit
       ProjInfoV2 { piV2CompilerId } -> return piV2CompilerId
       ProjInfoStack {} -> uiCompilerId <$> getUnitInfo qe someUnit
-      --  ^ TODO: Any way to get this faster for stack?
 
 -- | All local units currently active in a project\'s build plan.
 projectUnits          :: Query pt (NonEmpty (Unit pt))
