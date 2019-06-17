@@ -32,9 +32,8 @@ job-ghc7.10:
   script: "$CI_PROJECT_DIR/scripts/ci/build.sh"
 
 job-check-upd:
-  image: registry.gitlab.com/dxld/ghc-mod:ghc7.10.3-cabal-install2.4.1.0-stack2.1.1
+  image: registry.gitlab.com/dxld/ghc-mod:ghc7.10.3-cabal-install2.4.1.0-stack2.1.0.1
   stage: build
   script:
-    - cd "$CI_PROJECT_DIR"/scripts/ci
-    - ./update-stack-resolvers.sh | tee stack-resolvers.new
-    - git diff --exit-code -- stack-resolvers stack-resolvers.new
+    - "$CI_PROJECT_DIR"/scripts/ci/update-stack-resolvers.sh | tee tests/stack-resolvers.new
+    - git diff --exit-code -- tests/stack-resolvers tests/stack-resolvers.new

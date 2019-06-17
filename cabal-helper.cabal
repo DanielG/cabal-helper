@@ -35,6 +35,7 @@ extra-source-files:  README.md
                      src/CabalHelper/Runtime/*.hs
 
                      tests/*.hs
+                     tests/stack-resolvers
 
                      tests/exelib/*.hs
                      tests/exelib/*.cabal
