@@ -17,6 +17,7 @@ import qualified Control.Exception as E
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.List
+import Data.Maybe
 import Data.Version
 import Data.Bifunctor
 import qualified Data.Map as Map
@@ -28,7 +29,7 @@ import System.IO
 import System.IO.Unsafe (unsafePerformIO)
 import System.IO.Temp
 import Text.Printf (printf)
--- import Text.Show.Pretty (pPrint)
+import Text.Show.Pretty (pPrint)
 
 import Distribution.Helper
 
@@ -57,6 +58,7 @@ main = do
   s_ver <- stackVersion
     `E.catch` \(_ :: IOError) -> return (makeVersion [0])
 
+  -- Cabal lib version
   f_c_ver :: ProjType -> Either SkipReason Version <- do
     ci_c_ver <- Right <$> cabalInstallBuiltinCabalVersion
     s_c_ver :: Either SkipReason Version
@@ -104,24 +106,24 @@ main = do
       --            min Cabal lib ver -^    min GHC ver -^
       ]
 
-  -- pPrint tests
-  -- mapM_ (\(TC loc _ _ _) -> pPrint $ testLocPath loc) tests
+  pPrint tests
+  mapM_ (\(TC loc _ _ _) -> pPrint $ testLocPath loc) tests
 
-  res :: [[Bool]] <- sequence $ do
+  res :: [[TestResult]] <- sequence $ do
     tc@TC {..} <- tests
     (pt, ps0 :: ProjSetup0) <- proj_impls
     guard (null projTypes || pt `elem` projTypes)
 
     let skip (SkipReason reason) = do
-          hPutStrLn stderr $ intercalate " "
-            [ "Skipping test"
+          putStrLn $ intercalate " "
+            [ "\n\n\nSkipping test"
             , psdHeading ps0
-            , "'" ++ projdir_rel ++ "'"
+            , "'" ++ topdir </> projdir_rel ++ "'"
             , "because"
             , reason
             ]
           where
-            (_, projdir_rel, _) = testLocPath location
+            (topdir, projdir_rel, _) = testLocPath location
 
     case psdImpl ps0 of
       Left reason -> return $ skip reason >> return []
@@ -129,9 +131,12 @@ main = do
         let ps1 = ps0 { psdImpl = eximpl }
         case checkAndRunTestConfig VerEnv{..} ps1 tc of
           Left reason -> return $ skip reason >> return []
-          Right (Message msg, act) -> return $ hPutStrLn stderr msg >> act
+          Right (Message msg, act) -> return $ putStrLn msg >> act
 
-  if any (==False) $ concat res
+  putStr "\n\n\n\nRan Tests\n=========\n"
+  pPrint res
+
+  if any (==False) $ map trSuccess $ concat res
     then exitFailure
     else exitSuccess
 
@@ -148,6 +153,14 @@ data VerEnv = VerEnv
 
 data Message = Message String
 data SkipReason = SkipReason String
+data TestResult
+    = TestResult
+      { trSuccess :: Bool
+      , trComp    :: ChComponentName
+      , trHeading :: String -- ^ project type
+      , trDir     :: FilePath
+      }
+ deriving (Show)
 
 testLocPath :: TestLocation -> (FilePath, FilePath, FilePath)
 testLocPath (TN test_name) = (projdir, ".", cabal_file)
@@ -165,7 +178,7 @@ checkAndRunTestConfig
     :: VerEnv
     -> ProjSetup1
     -> TestConfig
-    -> Either SkipReason (Message, IO [Bool])
+    -> Either SkipReason (Message, IO [TestResult])
 checkAndRunTestConfig
   VerEnv { ci_ver, f_c_ver, g_ver, s_ver }
   ps1@(psdImpl -> Ex psdImpl2)
@@ -188,7 +201,6 @@ checkAndRunTestConfig
              ++ " < " ++ showVersion min_ghc_ver
     | otherwise ->
       Right ()
-
   return $ (,)
     (Message $ intercalate " "
       [ "\n\n\nRunning test"
@@ -202,12 +214,13 @@ checkAndRunTestConfig
     pt_disp Stack = "Stack"
 
 
-runTest :: ProjSetup2 pt -> FilePath -> FilePath -> FilePath -> IO [Bool]
+runTest :: ProjSetup2 pt -> FilePath -> FilePath -> FilePath -> IO [TestResult]
 runTest ps2@(psdImpl -> ProjSetupImpl{..}) topdir projdir cabal_file = do
   withSystemTempDirectory' "cabal-helper.ghc-session.test" $ \tmpdir -> do
     psiSdist topdir tmpdir
     psiConfigure (tmpdir </> projdir)
-    test ps2 (tmpdir </> projdir) (tmpdir </> cabal_file)
+    trs <- test ps2 (tmpdir </> projdir) (tmpdir </> cabal_file)
+    return $ map ($ (topdir </> projdir)) $ map ($ (psdHeading ps2)) trs
 
 runWithCwd :: FilePath -> String -> [String] -> IO ()
 runWithCwd cwd x xs = do
@@ -219,7 +232,8 @@ run x xs = do
   let ?verbose = (==1)
   callProcessStderr Nothing x xs
 
-test :: ProjSetup2 pt -> FilePath -> FilePath -> IO [Bool]
+test :: ProjSetup2 pt -> FilePath -> FilePath
+     -> IO [(String -> FilePath -> TestResult)]
 test (psdImpl -> ProjSetupImpl{..}) projdir cabal_file = do
     qe <- psiQEmod <$> mkQueryEnv
             (psiProjLoc (CabalFile cabal_file) projdir)
@@ -231,18 +245,26 @@ test (psdImpl -> ProjSetupImpl{..}) projdir cabal_file = do
       psiBuild projdir
 
     let pkgdir = takeDirectory cabal_file
-    forM cs $ \ChComponentInfo{..} -> do
-        putStrLn $ "\n" ++ show ciComponentName
-                        ++ ":::: " ++ show ciNeedsBuildOutput
+    homedir <- getHomeDirectory
+    let var_table =
+          [ (pkgdir,  "${pkgdir}")
+          , (homedir, "${HOME}")
+          ]
 
+    forM cs $ \ChComponentInfo{..} -> do
         let opts' = "-Werror" : ciGhcOptions
-        let sopts = intercalate " " $ map formatArg $ "ghc" : opts'
-        putStrLn $ "\n" ++ show ciComponentName ++ ":\n" ++ "cd " ++ pkgdir ++ "\n" ++ sopts
+        let sopts = intercalate " " $ map formatArg $ "ghc" : map (normalizeOutputWithVars var_table) opts'
+
+        putStrLn $ "\n" ++ show ciComponentName ++ ":\n"
+        hPutStrLn stderr $ "cd " ++ pkgdir -- messes up normalized output
+        putStrLn sopts
+
         hFlush stdout
-        compileModule pkgdir ciNeedsBuildOutput ciEntrypoints ciSourceDirs opts'
+        tr <- compileModule pkgdir ciNeedsBuildOutput ciEntrypoints ciSourceDirs opts'
+        return $ tr ciComponentName
   where
     formatArg x
-        | "-" `isPrefixOf` x = "\n  "++x
+        | "-" `isPrefixOf` x = "\\\n  "++x
         | otherwise          = x
 
 addCabalProject :: FilePath -> IO ()
@@ -250,7 +272,8 @@ addCabalProject dir = do
   writeFile (dir </> "cabal.project") "packages: .\n"
 
 compileModule
-    :: FilePath -> NeedsBuildOutput -> ChEntrypoint -> [FilePath] -> [String] -> IO Bool
+    :: FilePath -> NeedsBuildOutput -> ChEntrypoint -> [FilePath] -> [String]
+    -> IO (ChComponentName -> FilePath -> String -> TestResult)
 compileModule pkgdir nb ep srcdirs opts = do
     cwd_before <- getCurrentDirectory
     setCurrentDirectory pkgdir
@@ -258,13 +281,12 @@ compileModule pkgdir nb ep srcdirs opts = do
 
     putStrLn $ "compiling: " ++ show ep ++ " (" ++ show nb ++ ")"
 
-    E.handle (\(ec :: ExitCode) -> print ec >> return False) $ do
+    E.handle (\(ec :: ExitCode) -> print ec >> return (TestResult False)) $ do
 
     defaultErrorHandler defaultFatalMessager defaultFlushOut $ do
-
     runGhc (Just libdir) $ do
-
-    handleSourceError (\e -> GHC.printException e >> return False) $ do
+    let printGhcEx e = GHC.printException e >> return (TestResult False)
+    handleSourceError printGhcEx $ do
 
     let target = case nb of
           ProduceBuildOutput -> HscNothing -- AZ: what should this be?
@@ -316,8 +338,7 @@ compileModule pkgdir nb ep srcdirs opts = do
         ChSetupEntrypoint      ->
             map (IIModule . mkModuleName) ["Main"]
 
-    liftIO $ print ExitSuccess
-    return True
+    return $ TestResult True
 
 
 data CabalFile = CabalFile FilePath
@@ -474,6 +495,17 @@ cabalInstallBuiltinCabalVersion =
     parseVer . trim <$> readProcess "cabal"
         ["act-as-setup", "--", "--numeric-version"] ""
 
+normalizeOutputWithVars :: [(String, String)] -> String -> String
+normalizeOutputWithVars ts str =
+  case filter (isJust . fst) $ map (first (flip stripPrefix str)) ts of
+    (Just rest, replacemnet) : _ ->
+        replacemnet ++ normalizeOutputWithVars ts rest
+    _ -> cont
+  where
+    cont =
+      case str of
+        s:ss -> s : normalizeOutputWithVars ts ss
+        [] -> []
 -- ---------------------------------------------------------------------
 -- | Create and use a temporary directory in the system standard temporary directory.
 --
