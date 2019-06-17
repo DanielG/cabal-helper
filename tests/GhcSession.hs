@@ -171,22 +171,17 @@ checkAndRunTestConfig
   ps1@(psdImpl -> Ex psdImpl2)
   (TC test_loc min_cabal_ver min_ghc_ver _proj_types)
   = let
-  pt = psiProjType psdImpl2
+  pt = demoteSProjType $ psiProjType psdImpl2
   (topdir, projdir_rel, cabal_file) = testLocPath test_loc in do
-  ci_c_ver <- f_c_ver V1
-  s_c_ver  <- f_c_ver Stack
+  c_ver <- f_c_ver pt
   first SkipReason $ do
-  if| SStack <- pt, Left (SkipReason msg) <- stackCheckCompat s_ver g_ver ->
-      Left msg
+  if| Stack <- pt, Left (SkipReason msg) <- stackCheckCompat s_ver g_ver ->
+      Left $ msg
     | ci_ver < parseVer "1.24" ->
       Left $ "cabal-install-" ++ showVersion ci_ver ++ " is too old"
-    | ci_c_ver < min_cabal_ver ->
-      Left $ "cabal-install's builtin Cabal version is too old:\n"
-             ++ "Cabal-" ++ showVersion ci_c_ver
-             ++ " < " ++ showVersion min_cabal_ver
-    | s_c_ver < min_cabal_ver ->
-      Left $ "Stack's builtin Cabal version is too old:\n"
-             ++ "Cabal-" ++ showVersion s_c_ver
+    | c_ver < min_cabal_ver ->
+      Left $ pt_disp pt ++ "'s builtin Cabal version is too old:\n"
+             ++ "Cabal-" ++ showVersion c_ver
              ++ " < " ++ showVersion min_cabal_ver
     | g_ver < min_ghc_ver ->
       Left $ "ghc-" ++ showVersion g_ver
@@ -201,6 +196,11 @@ checkAndRunTestConfig
       , "'" ++ topdir ++ "'"
       ])
     (runTest ps1{ psdImpl = psdImpl2 } topdir projdir_rel cabal_file)
+  where
+    pt_disp V1 = "cabal-install"
+    pt_disp V2 = "cabal-install"
+    pt_disp Stack = "Stack"
+
 
 runTest :: ProjSetup2 pt -> FilePath -> FilePath -> FilePath -> IO [Bool]
 runTest ps2@(psdImpl -> ProjSetupImpl{..}) topdir projdir cabal_file = do
