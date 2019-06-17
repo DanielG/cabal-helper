@@ -7,26 +7,34 @@ before_script:
   - ln -s /cache/store ~/.cabal/store
 
 job-ghc8.6:
-  image: registry.gitlab.com/dxld/ghc-mod:ghc8.6.5-cabal-install2.4.1.0-stack2.1.0.1
+  image: registry.gitlab.com/dxld/ghc-mod:ghc8.6.5-cabal-install2.4.1.0-stack2.1.1
   stage: build
   script: "$CI_PROJECT_DIR/scripts/ci/build.sh"
 
 job-ghc8.4:
-  image: registry.gitlab.com/dxld/ghc-mod:ghc8.4.4-cabal-install2.4.1.0-stack2.1.0.1
+  image: registry.gitlab.com/dxld/ghc-mod:ghc8.4.4-cabal-install2.4.1.0-stack2.1.1
   stage: build
   script: "$CI_PROJECT_DIR/scripts/ci/build.sh"
 
 job-ghc8.2:
-  image: registry.gitlab.com/dxld/ghc-mod:ghc8.2.2-cabal-install2.4.1.0-stack2.1.0.1
+  image: registry.gitlab.com/dxld/ghc-mod:ghc8.2.2-cabal-install2.4.1.0-stack2.1.1
   stage: build
   script: "$CI_PROJECT_DIR/scripts/ci/build.sh"
 
 job-ghc8.0:
-  image: registry.gitlab.com/dxld/ghc-mod:ghc8.0.2-cabal-install2.4.1.0-stack2.1.0.1
+  image: registry.gitlab.com/dxld/ghc-mod:ghc8.0.2-cabal-install2.4.1.0-stack2.1.1
   stage: build
   script: "$CI_PROJECT_DIR/scripts/ci/build.sh"
 
 job-ghc7.10:
-  image: registry.gitlab.com/dxld/ghc-mod:ghc7.10.3-cabal-install2.4.1.0-stack2.1.0.1
+  image: registry.gitlab.com/dxld/ghc-mod:ghc7.10.3-cabal-install2.4.1.0-stack2.1.1
   stage: build
   script: "$CI_PROJECT_DIR/scripts/ci/build.sh"
+
+job-check-upd:
+  image: registry.gitlab.com/dxld/ghc-mod:ghc7.10.3-cabal-install2.4.1.0-stack2.1.1
+  stage: build
+  script:
+    - cd "$CI_PROJECT_DIR"/scripts/ci
+    - ./update-stack-resolvers.sh | tee stack-resolvers.new
+    - git diff --exit-code -- stack-resolvers stack-resolvers.new
