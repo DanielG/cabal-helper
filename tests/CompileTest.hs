@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, GADTs, ImplicitParams #-}
+{-# LANGUAGE ScopedTypeVariables, GADTs, ImplicitParams, OverloadedStrings #-}
 
 {-| This test tries to compile the Helper against every supported version of the
   Cabal library. Since we compile the Helper at runtime, on the user's machine,
@@ -69,16 +69,16 @@ main = do
   args <- getArgs
   case args of
     "list-versions":[] -> do
-        mapM_ print =<< (allCabalVersions <$> ghcVersion)
+        mapM_ print =<< relevantCabalVersions =<< ghcVersion
     "list-versions":ghc_ver_str:[] ->
-        mapM_ print $ allCabalVersions (GhcVersion (parseVer ghc_ver_str))
+        mapM_ print =<< relevantCabalVersions (GhcVersion (parseVer ghc_ver_str))
     _ ->
         test args
 
 test :: Env => [String] -> IO ()
 test args = do
   let action
-       | null args = testAllCabalVersions
+       | null args = testRelevantCabalVersions
        | otherwise = testCabalVersions $ map parseVer' args
 
   setupHOME
@@ -89,47 +89,14 @@ parseVer' :: String -> CabalVersion
 parseVer' "HEAD" = CabalHEAD ()
 parseVer' v      = CabalVersion $ parseVer v
 
-allCabalVersions :: GhcVersion -> [Version]
-allCabalVersions (GhcVersion ghc_ver) = let
-    cabal_versions :: [Version]
-    cabal_versions = map parseVer
-         -- , "1.18.0"
-         -- , "1.18.1"
-         -- , "1.18.1.1"
-         -- , "1.18.1.2"
-         -- , "1.18.1.3"
-         -- , "1.18.1.4"
-         -- , "1.18.1.5"
-         -- , "1.18.1.6"
-         -- , "1.18.1.7"
-         -- , "1.20.0.0"
-         -- , "1.20.0.1"
-         -- , "1.20.0.2"
-         -- , "1.20.0.3"
-         -- , "1.20.0.4"
-         -- , "1.22.0.0"
-         -- , "1.22.1.0"
-         -- , "1.22.1.1"
-         [ "1.22.2.0"
-         , "1.22.3.0"
-         , "1.22.4.0"
-         , "1.22.5.0"
-         , "1.22.6.0"
-         , "1.22.7.0"
-         , "1.22.8.0"
-         , "1.24.0.0"
-         -- , "1.24.1.0" -- deprecated
-         , "1.24.2.0"
-         , "2.0.0.2"
-         , "2.0.1.0"
-         , "2.0.1.1"
-         , "2.2.0.0"
-         , "2.2.0.1"
-         , "2.4.0.0"
-         , "2.4.0.1"
-         , "2.4.1.0"
-         ]
+relevantCabalVersions :: GhcVersion -> IO [Version]
+relevantCabalVersions g = map snd . filter fst <$> allCabalVersions g
 
+allCabalVersions :: GhcVersion -> IO [(Bool,Version)]
+allCabalVersions (GhcVersion ghc_ver) = do
+  cabal_versions
+      <- map parseVer . lines <$> readFile "tests/cabal-versions"
+  let
     constraint :: VersionRange
     Just constraint =
         fmap snd $
@@ -147,14 +114,13 @@ allCabalVersions (GhcVersion ghc_ver) = let
             , ("8.4",   ">= 2.0.0.2       ")
             , ("8.6",   ">= 2.0.0.2       ")
             ]
-  in
-    reverse $ filter (flip withinRange'CH constraint) cabal_versions
+  return $ reverse $ map (flip withinRange'CH constraint &&& id) cabal_versions
 
 
-testAllCabalVersions :: Env => IO ()
-testAllCabalVersions = do
+testRelevantCabalVersions :: Env => IO ()
+testRelevantCabalVersions = do
   ghc_ver <- ghcVersion
-  let relevant_cabal_versions = allCabalVersions ghc_ver
+  relevant_cabal_versions <- relevantCabalVersions ghc_ver
   testCabalVersions $ map CabalVersion relevant_cabal_versions ++ [CabalHEAD ()]
 
 testCabalVersions :: Env => [CabalVersion] -> IO ()
