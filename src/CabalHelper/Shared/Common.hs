@@ -93,7 +93,6 @@ parsePkgIdBS bs =
       (vers, pkg') ->
           Just ( BS.reverse $ BS.tail pkg'
                , parseVer (BS8.unpack (BS.reverse vers)))
-      _ -> Nothing
 
 parseVer :: String -> Version
 parseVer vers = runReadP parseVersion vers
