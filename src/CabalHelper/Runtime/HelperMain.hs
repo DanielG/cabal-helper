@@ -31,7 +31,6 @@ import Distribution.Simple.Utils (cabalVersion)
 import Distribution.Simple.Configure
 import Distribution.Package
   ( PackageIdentifier
-  , InstalledPackageId
   , PackageId
   , packageName
   , packageVersion
@@ -70,7 +69,6 @@ import Distribution.Simple.LocalBuildInfo
   , ComponentName(..)
   , ComponentLocalBuildInfo(..)
   , componentBuildInfo
-  , externalPackageDeps
   , withAllComponentsInBuildOrder
   , withLibLBI
   , withExeLBI
@@ -91,8 +89,7 @@ import Distribution.Simple.Build
   ( initialBuildSteps
   )
 import Distribution.Simple.BuildPaths
-  ( autogenModuleName
-  , cppHeaderName
+  ( cppHeaderName
   )
 import Distribution.Simple.Compiler
   ( PackageDB(..)
