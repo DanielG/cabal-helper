@@ -14,6 +14,8 @@
 -- You should have received a copy of the GNU General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+{-# LANGUAGE GADTs #-}
+
 {-|
 Module      : Distribution.Helper.Discover
 Description : Finding project contexts
@@ -32,10 +34,40 @@ module Distribution.Helper.Discover
 
 import CabalHelper.Compiletime.Types
 
+import System.Directory
+import System.FilePath
+import Control.Monad.Writer
+
 findProjects :: FilePath -> IO [Ex ProjLoc]
 findDistDirs :: ProjLoc pt -> [DistDir pt]
 findDistDirsWithHints :: ProjLoc pt -> [FilePath] -> [DistDir pt]
 
-findProjects = undefined
-findDistDirs = undefined
+findProjects dir = execWriterT $ do
+  let cabalProject = dir </> "cabal.project"
+  whenM (liftIO $ doesFileExist cabalProject) $
+    tell [Ex $ ProjLocV2File cabalProject]
+  let stackYaml = dir </> "stack.yaml"
+  whenM (liftIO $ doesFileExist stackYaml) $
+    tell [Ex $ ProjLocStackYaml stackYaml]
+  join $ traverse (tell . pure . Ex . ProjLocV1CabalFile) <$>
+    liftIO (findCabalFiles dir)
+
+findDistDirs (ProjLocV1CabalFile cabal) =
+  [DistDirV1 $ replaceFileName cabal "dist/"]
+findDistDirs (ProjLocV1Dir dir) = [DistDirV1 $ dir </> "dist/"]
+findDistDirs (ProjLocV2File cabal) =
+  [DistDirV2 $ replaceFileName cabal "dist-newstyle/"]
+findDistDirs (ProjLocV2Dir dir) = [DistDirV2 $ dir </> "dist-newstyle/"]
+findDistDirs (ProjLocStackYaml _) = [DistDirStack Nothing]
+
 findDistDirsWithHints = undefined
+
+findCabalFiles :: FilePath -> IO [FilePath]
+findCabalFiles dir = do
+  fs <- listDirectory dir
+  let cs = filter (".cabal" `isExtensionOf`) fs
+  filterM doesFileExist cs
+
+whenM :: Monad m => m Bool -> m () -> m ()
+whenM p x = p >>= (`when` x)
+
