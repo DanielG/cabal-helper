@@ -131,6 +131,7 @@ library c-h-internal
   import:             build-deps, extensions
   exposed-modules:
                        CabalHelper.Compiletime.Cabal
+                       CabalHelper.Compiletime.Compat.Directory
                        CabalHelper.Compiletime.Compat.Environment
                        CabalHelper.Compiletime.Compat.ProgramDb
                        CabalHelper.Compiletime.Compat.Version
