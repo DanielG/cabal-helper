@@ -27,14 +27,30 @@ module CabalHelper.Compiletime.Types.RelativePath
 
 import System.FilePath
 
--- | A path guaranteed to be relative. The constructor is not exposed, use the
--- 'mkRelativePath' smart constructor.
+-- | A path guaranteed to be relative and not escape the base path. The
+-- constructor is not exposed, use the 'mkRelativePath' smart constructor.
 newtype RelativePath = RelativePath { unRelativePath :: FilePath }
     deriving (Show)
 
--- | Smart constructor for 'RelativePath'. Checks if the given path is absolute
--- and throws 'UserError' if not.
+-- | Smart constructor for 'RelativePath'. Checks if the given path
+-- satisfies the constraints and throws 'UserError' if not.
 mkRelativePath :: FilePath -> RelativePath
 mkRelativePath dir
-    | isAbsolute dir = RelativePath dir
-    | otherwise = error "mkRelativePath: the path given was absolute!"
+  | isAbsolute dir =
+    error $ "mkRelativePath: the path given was absolute! got: " ++ dir
+  | doesRelativePathEscapeCWD dir =
+    error $ "mkRelativePath: the path given escapes the base dir! got: " ++ dir
+  | otherwise =
+    RelativePath dir
+
+doesRelativePathEscapeCWD :: FilePath -> Bool
+doesRelativePathEscapeCWD path =
+    go [] $ splitDirectories $ normalise path
+       -- normalise collapses '.' in path, this is very important or this
+       -- check would be traivial to defeat. For example './../' would be
+       -- able to escape.
+  where
+    go (_:xs) ("..":ys) = go xs ys
+    go    []  ("..":__) = True
+    go    xs  (y   :ys) = go (y:xs) ys
+    go    _         []  = False
