@@ -109,6 +109,9 @@ main = do
 
   let showEsrVer = either (\(SkipReason msg) -> "dunno, "++msg) showVersion
 
+  putStrLn "Environment Info"
+  putStrLn "================"
+  putStrLn ""
   putStrLn $ "cabal-install version: " ++ showVersion ci_ver
   putStrLn $ "cabal-install builtin Cabal version: "
              ++ showEsrVer (f_c_ver V1)
@@ -116,16 +119,20 @@ main = do
   putStrLn $ "GHC library version: " ++ cProjectVersion
   putStrLn $ "Stack version: " ++ showVersion s_ver
   putStrLn $ "Stack Cabal version: " ++ showEsrVer (f_c_ver Stack)
+  putStrLn ""
 
   when (cProjectVersion /= showVersion g_ver) $
     error "GHC version mismatch! See above."
 
   let proj_impls :: [(ProjType, ProjSetup0)]
       proj_impls =
+        -- V2 is sorted before the others here so helper compilation always
+        -- uses v2-build caching!
         [ (V2,    newBuildProjSetup)
         , (V1,    oldBuildProjSetup)
         , (Stack, stackProjSetup g_ver)
         ]
+      all_proj_types = map fst proj_impls
 
   tests <- return $ case args of
     xs@(_:_) -> flip map xs $ \loc ->
@@ -149,8 +156,15 @@ main = do
       --            min Cabal lib ver -^    min GHC ver -^
       ]
 
+  putStrLn "Going to Run These Tests"
+  putStrLn "========================"
+  forM_ tests $ \(TC loc _ _ pts) -> do
+    let (topdir, projdir, cabal_file) = testLocPath loc
+    forM_ (if pts == [] then all_proj_types else pts)  $ \pt -> putStrLn $
+      "- " ++ intercalate ":" [topdir, projdir, cabal_file, show pt]
+
   pPrint tests
-  mapM_ (\(TC loc _ _ _) -> pPrint $ testLocPath loc) tests
+  putStrLn ""
 
   res :: [[TestResult]] <- sequence $ do
     tc@TC {..} <- tests
@@ -176,7 +190,9 @@ main = do
           Left reason -> return $ skip reason >> return []
           Right (Message msg, act) -> return $ putStrLn msg >> act
 
-  putStr "\n\n\n\nRan Tests\n=========\n"
+  putStr "\n\n\n\n"
+  putStrLn "Test Results"
+  putStrLn "============"
   pPrint res
 
   if any (==False) $ map trSuccess $ concat res
