@@ -21,6 +21,7 @@ import Data.Maybe
 import Data.Version
 import Data.Bifunctor
 import qualified Data.Map as Map
+import System.Console.GetOpt as GetOpt
 import System.Environment (getArgs)
 import System.Exit
 import System.FilePath ((</>), (<.>), makeRelative, takeDirectory)
@@ -34,7 +35,12 @@ import Text.Show.Pretty (pPrint)
 import Distribution.Helper
 
 import CabalHelper.Shared.Common
+import CabalHelper.Compiletime.Types (Env)
 import CabalHelper.Compiletime.Process (readProcess, callProcessStderr)
+import CabalHelper.Compiletime.Program.GHC
+  (GhcVersion(..), ghcVersion)
+import CabalHelper.Compiletime.Program.CabalInstall
+  (CabalInstallVersion(..), cabalInstallVersion)
 
 data TestConfig = TC
   { location        :: TestLocation
@@ -48,21 +54,53 @@ data TestLocation
   | TF FilePath FilePath FilePath
     deriving (Show)
 
+type ModProgs = (Programs -> Programs, CompPrograms -> CompPrograms)
+
+options :: [OptDescr ModProgs]
+options =
+    [ GetOpt.Option [] ["with-cabal"]
+        (ReqArg (\arg -> (\p -> p { cabalProgram = arg }, id)) "PROG")
+        "name or path of 'cabal' executable"
+    , GetOpt.Option [] ["with-stack"]
+        (ReqArg (\arg -> (\p -> p { stackProgram = arg }, id)) "PROG")
+        "name or path of 'stack' executable"
+    , GetOpt.Option [] ["with-ghc"]
+        (ReqArg (\arg -> (id, \cp -> cp { ghcProgram = arg })) "PROG")
+        "name or path of 'ghc' executable"
+    , GetOpt.Option [] ["with-ghc-pkg"]
+        (ReqArg (\arg -> (id, \cp -> cp { ghcPkgProgram = arg })) "PROG")
+        "name or path of 'ghc-pkg' executable"
+    ]
+
+testOpts :: [String] -> IO (ModProgs, [String])
+testOpts args =
+   case getOpt Permute options args of
+      (o,n,[]  ) -> return (foldl (\(b, d) (a, c) -> (a . b, c . d)) (id, id) o, n)
+      (_,_,errs) -> ioError (userError (concat errs ++ usageInfo header options))
+  where header = "Usage: ghc-session [OPTION..] [TEST_SPEC..]"
+
 main :: IO ()
 main = do
-  args <- getArgs
+  (modProgs, args) <- testOpts =<< getArgs
 --  topdir <- getCurrentDirectory
 
-  g_ver <- ghcVersion
-  ci_ver <- cabalInstallVersion
-  s_ver <- stackVersion
+  let withEnv :: (Env => a) -> a
+      withEnv action =
+        let ?verbose = const False
+            ?progs = (fst modProgs) defaultPrograms
+            ?cprogs = (snd modProgs) defaultCompPrograms
+        in action
+
+  GhcVersion g_ver <- withEnv ghcVersion
+  CabalInstallVersion ci_ver <- withEnv cabalInstallVersion
+  s_ver <- withEnv stackVersion
     `E.catch` \(_ :: IOError) -> return (makeVersion [0])
 
   -- Cabal lib version
   f_c_ver :: ProjType -> Either SkipReason Version <- do
-    ci_c_ver <- Right <$> cabalInstallBuiltinCabalVersion
+    ci_c_ver <- Right <$> withEnv cabalInstallBuiltinCabalVersion
     s_c_ver :: Either SkipReason Version
-      <- sequence $ stackBuiltinCabalVersion s_ver g_ver
+      <- sequence $ withEnv stackBuiltinCabalVersion s_ver g_ver
     return $ \pt -> case pt of
       V1 -> ci_c_ver
       V2 -> ci_c_ver
@@ -129,7 +167,7 @@ main = do
       Left reason -> return $ skip reason >> return []
       Right eximpl -> do
         let ps1 = ps0 { psdImpl = eximpl }
-        case checkAndRunTestConfig VerEnv{..} ps1 tc of
+        case checkAndRunTestConfig modProgs VerEnv{..} ps1 tc of
           Left reason -> return $ skip reason >> return []
           Right (Message msg, act) -> return $ putStrLn msg >> act
 
@@ -175,11 +213,13 @@ testLocPath (TF topdir projdir cabal_file) =
 -- | Check version bounds of tests against available versions, if successful run
 -- the test.
 checkAndRunTestConfig
-    :: VerEnv
+    :: ModProgs
+    -> VerEnv
     -> ProjSetup1
     -> TestConfig
     -> Either SkipReason (Message, IO [TestResult])
 checkAndRunTestConfig
+  modProgs
   VerEnv { ci_ver, f_c_ver, g_ver, s_ver }
   ps1@(psdImpl -> Ex psdImpl2)
   (TC test_loc min_cabal_ver min_ghc_ver _proj_types)
@@ -207,19 +247,21 @@ checkAndRunTestConfig
       , psdHeading ps1
       , "'" ++ topdir ++ "'"
       ])
-    (runTest ps1{ psdImpl = psdImpl2 } topdir projdir_rel cabal_file)
+    (runTest modProgs ps1{ psdImpl = psdImpl2 } topdir projdir_rel cabal_file)
   where
     pt_disp V1 = "cabal-install"
     pt_disp V2 = "cabal-install"
     pt_disp Stack = "Stack"
 
 
-runTest :: ProjSetup2 pt -> FilePath -> FilePath -> FilePath -> IO [TestResult]
-runTest ps2@(psdImpl -> ProjSetupImpl{..}) topdir projdir cabal_file = do
+runTest
+    :: ModProgs -> ProjSetup2 pt
+    -> FilePath -> FilePath -> FilePath
+    -> IO [TestResult]
+runTest modProgs ps2@(psdImpl -> ProjSetupImpl{..}) topdir projdir cabal_file
+  = do
   withSystemTempDirectory' "cabal-helper.ghc-session.test" $ \tmpdir -> do
-    psiSdist topdir tmpdir
-    psiConfigure (tmpdir </> projdir)
-    trs <- test ps2 (tmpdir </> projdir) (tmpdir </> cabal_file)
+    trs <- test modProgs ps2 topdir tmpdir (tmpdir </> projdir) (tmpdir </> cabal_file)
     return $ map ($ (topdir </> projdir)) $ map ($ (psdHeading ps2)) trs
 
 runWithCwd :: FilePath -> String -> [String] -> IO ()
@@ -232,17 +274,28 @@ run x xs = do
   let ?verbose = (==1)
   callProcessStderr Nothing x xs
 
-test :: ProjSetup2 pt -> FilePath -> FilePath
-     -> IO [(String -> FilePath -> TestResult)]
-test (psdImpl -> ProjSetupImpl{..}) projdir cabal_file = do
-    qe <- psiQEmod <$> mkQueryEnv
+test
+    :: ModProgs -> ProjSetup2 pt
+    -> FilePath -> FilePath -> FilePath -> FilePath
+    -> IO [(String -> FilePath -> TestResult)]
+test modProgs (psdImpl -> ProjSetupImpl{..}) topdir tmpdir projdir cabal_file
+  = do
+    qe' <- psiQEmod <$> mkQueryEnv
             (psiProjLoc (CabalFile cabal_file) projdir)
             (psiDistDir projdir)
+
+    let qe = qe' { qePrograms = (fst modProgs) (qePrograms qe')
+                 , qeCompPrograms = (snd modProgs) (qeCompPrograms qe')
+                 }
+        progs = qePrograms qe
+
+    psiSdist progs topdir tmpdir
+    psiConfigure progs projdir
 
     cs <- concat <$> runQuery (allUnits (Map.elems . uiComponents)) qe
 
     when (any ((==ProduceBuildOutput) . ciNeedsBuildOutput) cs) $
-      psiBuild projdir
+      psiBuild progs projdir
 
     let pkgdir = takeDirectory cabal_file
     homedir <- getHomeDirectory
@@ -358,9 +411,9 @@ data ProjSetupImpl pt =
     { psiProjType  :: !(SProjType pt)
     , psiDistDir   :: !(FilePath -> DistDir pt)
     , psiProjLoc   :: !(CabalFile -> FilePath -> ProjLoc pt)
-    , psiConfigure :: !(FilePath -> IO ())
-    , psiBuild     :: !(FilePath -> IO ())
-    , psiSdist     :: !(FilePath -> FilePath -> IO ())
+    , psiConfigure :: !(Programs -> FilePath -> IO ())
+    , psiBuild     :: !(Programs -> FilePath -> IO ())
+    , psiSdist     :: !(Programs -> FilePath -> FilePath -> IO ())
     , psiQEmod     :: !(QueryEnv pt -> QueryEnv pt)
     }
 
@@ -369,12 +422,12 @@ oldBuildProjSetup = ProjSetupDescr "cabal-v1" $ Right $ Ex $ ProjSetupImpl
     { psiProjType  = SV1
     , psiDistDir   = \dir -> DistDirV1 (dir </> "dist")
     , psiProjLoc   = \(CabalFile cf) _projdir -> ProjLocV1CabalFile cf
-    , psiConfigure = \dir ->
-        runWithCwd dir "cabal" [ "configure" ]
-    , psiBuild     = \dir ->
-        runWithCwd dir "cabal" [ "build" ]
-    , psiSdist     = \srcdir destdir ->
-        copyMuliPackageProject srcdir destdir (\_ _ -> return ())
+    , psiConfigure = \progs dir ->
+        runWithCwd dir (cabalProgram progs) [ "configure" ]
+    , psiBuild     = \progs dir ->
+        runWithCwd dir (cabalProgram progs) [ "build" ]
+    , psiSdist     = \progs srcdir destdir ->
+        copyMuliPackageProject progs srcdir destdir (\_ _ -> return ())
     , psiQEmod     = id
     }
 
@@ -386,12 +439,12 @@ newBuildProjSetup = ProjSetupDescr "cabal-v2" $ Right $ Ex $ ProjSetupImpl
                      -- TODO: check if cabal.project is there and only use
                      -- V2File then, also remove addCabalProject below so we
                      -- cover both cases.
-    , psiConfigure = \dir ->
-        runWithCwd dir "cabal" [ "new-configure" ]
-    , psiBuild     = \dir ->
-        runWithCwd dir "cabal" [ "new-build" ]
-    , psiSdist     = \srcdir destdir -> do
-        copyMuliPackageProject srcdir destdir $ \pkgsrc pkgdest -> do
+    , psiConfigure = \progs dir ->
+        runWithCwd dir (cabalProgram progs) [ "new-configure" ]
+    , psiBuild     = \progs dir ->
+        runWithCwd dir (cabalProgram progs) [ "new-build" ]
+    , psiSdist     = \progs srcdir destdir -> do
+        copyMuliPackageProject progs srcdir destdir $ \pkgsrc pkgdest -> do
           exists <- doesFileExist (pkgsrc </> "cabal.project")
           if exists then
             copyFile (pkgsrc </> "cabal.project") (pkgdest </> "cabal.project")
@@ -410,12 +463,12 @@ stackProjSetup ghcVer =
       , psiDistDir   = \_dir  -> DistDirStack Nothing
       , psiProjLoc   = \_cabal_file projdir ->
           ProjLocStackYaml $ projdir </> "stack.yaml"
-      , psiConfigure = \dir ->
-          runWithCwd dir "stack" $ argsBefore ++ [ "build", "--dry-run" ]
-      , psiBuild     = \dir ->
-          runWithCwd dir "stack" $ argsBefore ++ [ "build" ]
-      , psiSdist     = \srcdir destdir -> do
-          copyMuliPackageProject srcdir destdir copyStackYamls
+      , psiConfigure = \progs dir ->
+          runWithCwd dir (stackProgram progs) $ argsBefore ++ [ "build", "--dry-run" ]
+      , psiBuild     = \progs dir ->
+          runWithCwd dir (stackProgram progs) $ argsBefore ++ [ "build" ]
+      , psiSdist     = \progs srcdir destdir -> do
+          copyMuliPackageProject progs srcdir destdir copyStackYamls
       , psiQEmod     = \qe ->
           qe { qePrograms = (qePrograms qe)
                { stackArgsBefore = argsBefore
@@ -446,33 +499,27 @@ copyStackYamls srcdir destdir = do
 -- to another directory while only including source files referenced in the
 -- cabal file.
 copyMuliPackageProject
-    :: FilePath -> FilePath -> (FilePath -> FilePath -> IO ()) -> IO ()
-copyMuliPackageProject srcdir destdir copyPkgExtra = do
+    :: Programs -> FilePath -> FilePath -> (FilePath -> FilePath -> IO ()) -> IO ()
+copyMuliPackageProject progs srcdir destdir copyPkgExtra = do
   let packages_file = srcdir </> "packages.list"
   pkgdirs <- lines <$> readFile packages_file
   forM_ pkgdirs $ \pkgdir -> do
-    runWithCwd (srcdir </> pkgdir) "cabal"
+    runWithCwd (srcdir </> pkgdir) (cabalProgram progs)
       [ "act-as-setup", "--", "sdist"
       , "--output-directory="++destdir </> pkgdir ]
     copyPkgExtra (srcdir </> pkgdir) (destdir </> pkgdir)
 
-cabalInstallVersion :: IO Version
-cabalInstallVersion =
-    parseVer . trim <$> readProcess "cabal" ["--numeric-version"] ""
-
-ghcVersion :: IO Version
-ghcVersion =
-    parseVer . trim <$> readProcess "ghc" ["--numeric-version"] ""
-
-stackVersion :: IO Version
+stackVersion :: (?progs :: Programs) => IO Version
 stackVersion =
-    parseVer . trim <$> readProcess "stack" [ "--numeric-version" ] ""
+  parseVer . trim <$> readProcess (stackProgram ?progs) [ "--numeric-version" ] ""
 
-stackBuiltinCabalVersion :: Version -> Version -> Either SkipReason (IO Version)
+stackBuiltinCabalVersion
+    :: (?progs :: Programs)
+    => Version -> Version -> Either SkipReason (IO Version)
 stackBuiltinCabalVersion s_ver g_ver = do
     _ <- stackCheckCompat s_ver g_ver
     res <- lookupStackResolver g_ver
-    return $ parseVer . trim <$> readProcess "stack"
+    return $ parseVer . trim <$> readProcess (stackProgram ?progs)
         [ "--resolver="++res, "--system-ghc", "exec", "--"
         , "ghc-pkg", "--simple-output", "field", "Cabal", "version"
         ] ""
@@ -490,9 +537,9 @@ stackCheckCompat s_ver g_ver =
     | otherwise ->
         Right ()
 
-cabalInstallBuiltinCabalVersion :: IO Version
+cabalInstallBuiltinCabalVersion :: (?progs :: Programs) => IO Version
 cabalInstallBuiltinCabalVersion =
-    parseVer . trim <$> readProcess "cabal"
+    parseVer . trim <$> readProcess (cabalProgram ?progs)
         ["act-as-setup", "--", "--numeric-version"] ""
 
 normalizeOutputWithVars :: [(String, String)] -> String -> String
