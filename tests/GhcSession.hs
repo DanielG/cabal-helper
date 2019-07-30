@@ -9,6 +9,7 @@
 module Main where
 
 import GHC
+import Config
 import GHC.Paths (libdir)
 import Outputable
 import DynFlags
@@ -111,9 +112,13 @@ main = do
   putStrLn $ "cabal-install version: " ++ showVersion ci_ver
   putStrLn $ "cabal-install builtin Cabal version: "
              ++ showEsrVer (f_c_ver V1)
-  putStrLn $ "GHC version: " ++ showVersion g_ver
+  putStrLn $ "GHC executable version: " ++ showVersion g_ver
+  putStrLn $ "GHC library version: " ++ cProjectVersion
   putStrLn $ "Stack version: " ++ showVersion s_ver
   putStrLn $ "Stack Cabal version: " ++ showEsrVer (f_c_ver Stack)
+
+  when (cProjectVersion /= showVersion g_ver) $
+    error "GHC version mismatch! See above."
 
   let proj_impls :: [(ProjType, ProjSetup0)]
       proj_impls =
