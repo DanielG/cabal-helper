@@ -421,7 +421,7 @@ oldBuildProjSetup :: ProjSetup0
 oldBuildProjSetup = ProjSetupDescr "cabal-v1" $ Right $ Ex $ ProjSetupImpl
     { psiProjType  = SV1
     , psiDistDir   = \dir -> DistDirV1 (dir </> "dist")
-    , psiProjLoc   = \(CabalFile cf) _projdir -> ProjLocV1CabalFile cf
+    , psiProjLoc   = \(CabalFile cf) projdir -> ProjLocV1CabalFile cf projdir
     , psiConfigure = \progs dir ->
         runWithCwd dir (cabalProgram progs) [ "configure" ]
     , psiBuild     = \progs dir ->

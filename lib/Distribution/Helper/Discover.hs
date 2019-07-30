@@ -52,10 +52,10 @@ findProjects dir = execWriterT $ do
   let stackYaml = dir </> "stack.yaml"
   whenM (liftIO $ doesFileExist stackYaml) $
     tell [Ex $ ProjLocStackYaml stackYaml]
-  join $ traverse (tell . pure . Ex . ProjLocV1CabalFile) <$>
+  join $ traverse (tell . pure . Ex . ProjLocV1Dir . takeDirectory) <$>
     liftIO (findCabalFiles dir)
 
-findDistDirs (ProjLocV1CabalFile cabal) =
+findDistDirs (ProjLocV1CabalFile cabal _) =
   [DistDirV1 $ replaceFileName cabal "dist/"]
 findDistDirs (ProjLocV1Dir dir) = [DistDirV1 $ dir </> "dist/"]
 findDistDirs (ProjLocV2File cabal) =
