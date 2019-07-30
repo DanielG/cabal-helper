@@ -213,7 +213,7 @@ mkQueryEnv projloc distdir = do
 projConf :: ProjLoc pt -> IO (ProjConf pt)
 projConf (ProjLocV1Dir pkgdir) =
   ProjConfV1 <$> findCabalFile pkgdir
-projConf (ProjLocV1CabalFile cabal_file) = return $
+projConf (ProjLocV1CabalFile cabal_file _) = return $
   ProjConfV1 cabal_file
 projConf (ProjLocV2Dir projdir_path) =
   projConf $ ProjLocV2File $ projdir_path </> "cabal.project"
@@ -435,7 +435,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
   let projloc = qeProjLoc qe
   case (qeDistDir qe, pc) of
     (DistDirV1 distdir, ProjConfV1{pcV1CabalFile}) -> do
-      let projdir = plV1Dir projloc
+      let pkgdir = plV1Dir projloc
       setup_config_path <- canonicalizePath (distdir </> "setup-config")
       mhdr <- readSetupConfigHeader setup_config_path
       case mhdr of
@@ -445,7 +445,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
             , piProjConfModTimes = pcm
             , piUnits = (:|[]) $ Unit
               { uUnitId = UnitId ""
-              , uPackageDir = projdir
+              , uPackageDir = pkgdir
               , uCabalFile = CabalFile pcV1CabalFile
               , uDistDir = DistDirLib distdir
               , uImpl = UnitImplV1
