@@ -49,7 +49,7 @@ parseOpts argv =
 doCabalV2 :: IO ()
 doCabalV2 = do
   _ <- systemV "cabal new-build --builddir=dist-newstyle"
-  qe <- mkQueryEnv (ProjLocV2Dir ".") (DistDirV2 "dist-newstyle/")
+  qe <- mkQueryEnv (ProjLocV2Dir ".") (DistDirCabal SCV2 "dist-newstyle/")
   printUnitInfos qe
 
 doCabalV1 :: IO ()

@@ -56,11 +56,11 @@ findProjects dir = execWriterT $ do
     liftIO (findCabalFiles dir)
 
 findDistDirs (ProjLocV1CabalFile cabal _) =
-  [DistDirV1 $ replaceFileName cabal "dist/"]
-findDistDirs (ProjLocV1Dir dir) = [DistDirV1 $ dir </> "dist/"]
+  [DistDirCabal SCV1 $ replaceFileName cabal "dist/"]
+findDistDirs (ProjLocV1Dir dir) = [DistDirCabal SCV1 $ dir </> "dist/"]
 findDistDirs (ProjLocV2File cabal) =
-  [DistDirV2 $ replaceFileName cabal "dist-newstyle/"]
-findDistDirs (ProjLocV2Dir dir) = [DistDirV2 $ dir </> "dist-newstyle/"]
+  [DistDirCabal SCV2 $ replaceFileName cabal "dist-newstyle/"]
+findDistDirs (ProjLocV2Dir dir) = [DistDirCabal SCV2 $ dir </> "dist-newstyle/"]
 findDistDirs (ProjLocStackYaml _) = [DistDirStack Nothing]
 
 findDistDirsWithHints = undefined

@@ -65,10 +65,13 @@ module Distribution.Helper (
 
   -- * GADTs
   , ProjType(..)
-  , SProjType(..)
-  , demoteSProjType
   , ProjLoc(..)
   , DistDir(..)
+  , SProjType(..)
+  , demoteSProjType
+  , projTypeOfDistDir
+  , projTypeOfProjLoc
+  , SCabalProjType(..)
   , Ex(..)
 
   -- * Programs
@@ -373,18 +376,18 @@ discardInactiveUnitInfos active_units uis0 =
 shallowReconfigureProject :: QueryEnvI c pt -> IO ()
 shallowReconfigureProject QueryEnv
   { qeProjLoc = _
-  , qeDistDir = DistDirV1 _distdirv1 } =
+  , qeDistDir = DistDirCabal SCV1 _distdirv1 } =
     return ()
 shallowReconfigureProject QueryEnv
   { qeProjLoc = ProjLocV2File projfile
-  , qeDistDir = DistDirV2 _distdirv2, .. } = do
+  , qeDistDir = DistDirCabal SCV2 _distdirv2, .. } = do
     let projdir = takeDirectory projfile
     _ <- qeCallProcess (Just projdir) (cabalProgram qePrograms)
            ["new-build", "--dry-run", "--project-file="++projfile, "all"]
     return ()
 shallowReconfigureProject QueryEnv
   { qeProjLoc = ProjLocV2Dir projdir
-  , qeDistDir = DistDirV2 _distdirv2, .. } = do
+  , qeDistDir = DistDirCabal SCV2 _distdirv2, .. } = do
     _ <- qeCallProcess (Just projdir) (cabalProgram qePrograms)
            ["new-build", "--dry-run", "all"]
     return ()
@@ -398,7 +401,7 @@ shallowReconfigureProject QueryEnv
     return ()
 
 reconfigureUnit :: QueryEnvI c pt -> Unit pt -> IO ()
-reconfigureUnit QueryEnv{qeDistDir=DistDirV1{}, ..} Unit{uPackageDir=_} = do
+reconfigureUnit QueryEnv{qeDistDir=(DistDirCabal SCV1 _), ..} Unit{uPackageDir=_} = do
   return ()
 reconfigureUnit
   QueryEnv{qeProjLoc=ProjLocV2File projfile, ..}
@@ -434,8 +437,7 @@ readProjInfo
 readProjInfo qe pc pcm = withVerbosity $ do
   let projloc = qeProjLoc qe
   case (qeDistDir qe, pc) of
-    (DistDirV1 distdir, ProjConfV1{pcV1CabalFile}) -> do
-      let pkgdir = plV1Dir projloc
+    (DistDirCabal SCV1 distdir, ProjConfV1{pcV1CabalFile}) -> do
       setup_config_path <- canonicalizePath (distdir </> "setup-config")
       mhdr <- readSetupConfigHeader setup_config_path
       case mhdr of
@@ -445,7 +447,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
             , piProjConfModTimes = pcm
             , piUnits = (:|[]) $ Unit
               { uUnitId = UnitId ""
-              , uPackageDir = pkgdir
+              , uPackageDir = plV1Dir projloc
               , uCabalFile = CabalFile pcV1CabalFile
               , uDistDir = DistDirLib distdir
               , uImpl = UnitImplV1
@@ -460,7 +462,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
         Nothing ->
           panicIO $ printf "Could not read '%s' header" setup_config_path
 
-    (DistDirV2 distdirv2, _) -> do
+    (DistDirCabal SCV2 distdirv2, _) -> do
       let plan_path = distdirv2 </> "cache" </> "plan.json"
       plan_mtime <- modificationTime <$> getFileStatus plan_path
       plan@PlanJson { pjCabalLibVersion=Ver pjCabalLibVersion
@@ -673,7 +675,7 @@ mkCompHelperEnv
     -> CompHelperEnv
 mkCompHelperEnv
   projloc
-  (DistDirV1 distdir)
+  (DistDirCabal SCV1 distdir)
   ProjInfo{piCabalVersion}
   = CompHelperEnv
     { cheCabalVer = CabalVersion piCabalVersion
@@ -685,7 +687,7 @@ mkCompHelperEnv
     }
 mkCompHelperEnv
   projloc
-  (DistDirV2 distdir)
+  (DistDirCabal SCV2 distdir)
   ProjInfo{piImpl=ProjInfoV2{piV2Plan=plan}}
   = case projloc of
       ProjLocV2Dir projdir ->

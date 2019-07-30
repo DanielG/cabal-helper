@@ -419,8 +419,8 @@ data ProjSetupImpl pt =
 
 oldBuildProjSetup :: ProjSetup0
 oldBuildProjSetup = ProjSetupDescr "cabal-v1" $ Right $ Ex $ ProjSetupImpl
-    { psiProjType  = SV1
-    , psiDistDir   = \dir -> DistDirV1 (dir </> "dist")
+    { psiProjType  = SCabal SCV1
+    , psiDistDir   = \dir -> DistDirCabal SCV1 (dir </> "dist")
     , psiProjLoc   = \(CabalFile cf) projdir -> ProjLocV1CabalFile cf projdir
     , psiConfigure = \progs dir ->
         runWithCwd dir (cabalProgram progs) [ "configure" ]
@@ -433,8 +433,8 @@ oldBuildProjSetup = ProjSetupDescr "cabal-v1" $ Right $ Ex $ ProjSetupImpl
 
 newBuildProjSetup :: ProjSetup0
 newBuildProjSetup = ProjSetupDescr "cabal-v2" $ Right $ Ex $ ProjSetupImpl
-    { psiProjType  = SV2
-    , psiDistDir   = \dir  -> DistDirV2 (dir </> "dist-newstyle")
+    { psiProjType  = SCabal SCV2
+    , psiDistDir   = \dir  -> DistDirCabal SCV2 (dir </> "dist-newstyle")
     , psiProjLoc   = \_cabal_file projdir -> ProjLocV2File $ projdir </> "cabal.project"
                      -- TODO: check if cabal.project is there and only use
                      -- V2File then, also remove addCabalProject below so we
