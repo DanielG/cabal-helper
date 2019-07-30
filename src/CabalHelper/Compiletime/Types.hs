@@ -50,13 +50,23 @@ data ProjType
       deriving (Eq, Ord, Show, Read)
 
 data SProjType pt where
-    SV1 :: SProjType 'V1
-    SV2 :: SProjType 'V2
+    SCabal :: !(SCabalProjType pt) -> SProjType pt
     SStack :: SProjType 'Stack
 
+deriving instance Show (SProjType pt)
+
+-- | This is a singleton, like 'SProjType', but restricted to just the
+-- Cabal project types. We use this to restrict some functions which don't
+-- make sense for Stack to just the Cabal project types.
+data SCabalProjType pt where
+    SCV1 :: SCabalProjType 'V1
+    SCV2 :: SCabalProjType 'V2
+
+deriving instance Show (SCabalProjType pt)
+
 demoteSProjType :: SProjType pt -> ProjType
-demoteSProjType SV1 = V1
-demoteSProjType SV2 = V2
+demoteSProjType (SCabal SCV1) = V1
+demoteSProjType (SCabal SCV2) = V2
 demoteSProjType SStack = Stack
 
 -- | Location of project sources. The project type of a given directory can be
@@ -89,28 +99,33 @@ plV1Dir :: ProjLoc 'V1 -> FilePath
 plV1Dir ProjLocV1CabalFile {plPackageDir} = plPackageDir
 plV1Dir ProjLocV1Dir {plPackageDir} = plPackageDir
 
+projTypeOfProjLoc :: ProjLoc pt -> SProjType pt
+projTypeOfProjLoc ProjLocV1CabalFile{} = SCabal SCV1
+projTypeOfProjLoc ProjLocV1Dir{}       = SCabal SCV1
+projTypeOfProjLoc ProjLocV2File{}      = SCabal SCV2
+projTypeOfProjLoc ProjLocV2Dir{}       = SCabal SCV2
+projTypeOfProjLoc ProjLocStackYaml{}   = SStack
+
+-- | A build directory for a certain project type. The @pt@ type variable
+-- must match the value of 'ProjLoc'. This is enforced by the type system
+-- so you can't get this wrong :)
 data DistDir (pt :: ProjType) where
-    -- | Build directory for cabal /old-build/ aka. /v1-build/ aka. just
-    -- /build/. Planned to be superceeded by /v2-build/, see 'DistDirV2' for
-    -- that.
-    --
-    -- You can tell a builddir is a /v1/ builddir by looking for a file
-    -- called @setup-config@ directly underneath it.
-    DistDirV1 :: !FilePath -> DistDir 'V1
+    -- | A build-directory for cabal, aka. dist-dir in Cabal
+    -- terminology. 'SCabalProjType' specifies whether we should use
+    -- /v2-build/ or /v1-build/. This choice must correspond to
+    -- 'ProjLoc'\'s project type.
+    DistDirCabal :: !(SCabalProjType pt) -> !FilePath -> DistDir pt
 
-    -- | Build directory for cabal /new-build/ aka. /v2-build/, as of the time
-    -- of this writing it is usually called @dist-newstyle/@ but this will
-    -- presumably change once it becomes the default /build/ command.
-    --
-    -- You can tell a builddir is a /v2/ builddir by trying to access the path
-    -- @cache/plan.json@ directly underneath it.
-    DistDirV2 :: !FilePath -> DistDir 'V2
-
-    -- | Build directory for stack, aka. /work-dir/. Optionally override Stack's
-    -- /work-dir/. If you just want to use Stack's default set to @Nothing@
+    -- | A build-directory for stack, aka. /work-dir/. Optionally override
+    -- Stack's /work-dir/. If you just want to use Stack's default set to
+    -- @Nothing@
     DistDirStack :: !(Maybe RelativePath) -> DistDir 'Stack
 
 deriving instance Show (DistDir pt)
+
+projTypeOfDistDir :: DistDir pt -> SProjType pt
+projTypeOfDistDir (DistDirCabal pt _) = SCabal pt
+projTypeOfDistDir DistDirStack{} = SStack
 
 -- | General purpose existential wrapper. Useful for hiding a phantom type
 -- argument.
