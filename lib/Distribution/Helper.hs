@@ -46,6 +46,7 @@ module Distribution.Helper (
   -- ** Unit queries
   , Unit -- abstract
   , uComponentName
+  , uPackageDir
   , UnitId -- abstract
   , UnitInfo(..)
   , unitInfo
@@ -80,7 +81,7 @@ module Distribution.Helper (
   , CompPrograms(..)
   , defaultCompPrograms
 
-  -- * Result types
+  -- * Query result types
   , ChComponentInfo(..)
   , ChComponentName(..)
   , ChLibraryName(..)
@@ -92,16 +93,15 @@ module Distribution.Helper (
   -- * General information
   , Distribution.Helper.buildPlatform
 
-  -- * Stuff that cabal-install really should export
+  -- * Legacy v1-build helpers
   , Distribution.Helper.getSandboxPkgDb
 
-  -- * Managing @dist/@
+  -- * Stateful helper actions
   , prepare
   , writeAutogenFiles
   ) where
 
 import Cabal.Plan hiding (Unit, UnitId, uDistDir)
-import Control.Arrow (first)
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.Maybe
@@ -168,8 +168,8 @@ import Distribution.Simple.GHC as GHC (configure)
 --   accessor of 'QueryEnv' for details.
 
 
--- | A lazy, cached, query against a package's Cabal configuration. Use
--- 'runQuery' to execute it.
+-- | A query against a package's Cabal configuration. Use 'runQuery' to
+-- execute it.
 newtype Query pt a = Query
     { runQuery :: QueryEnv pt -> IO a
     -- ^ @runQuery env query@. Run a 'Query' under a given 'QueryEnv.
@@ -560,13 +560,21 @@ invokeHelper
 
 -- | Make sure the appropriate helper executable for the given project is
 -- installed and ready to run queries.
+--
+-- The idea is you can run this at a convinient time instead of having the
+-- helper compilation happen during a time-sensitive user
+-- interaction. @caba-helper@ will however do this automatically as needed
+-- if you don't.
 prepare :: QueryEnv pt -> IO ()
 prepare qe = do
   proj_info <- getProjInfo qe
   void $ getHelper proj_info qe
 
--- | Create @cabal_macros.h@ and @Paths_\<pkg\>@ possibly other generated files
+-- | Create @cabal_macros.h@, @Paths_\<pkg\>.hs@ and other generated files
 -- in the usual place. See 'Distribution.Simple.Build.initialBuildSteps'.
+--
+-- This is usually only needed on the first load of a unit or after the
+-- cabal file changes.
 writeAutogenFiles :: Unit pt -> Query pt ()
 writeAutogenFiles unit = Query $ \qe -> do
   proj_info <- getProjInfo qe

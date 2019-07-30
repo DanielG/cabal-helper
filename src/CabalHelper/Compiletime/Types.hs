@@ -42,13 +42,21 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.Map.Strict (Map)
 --import qualified Data.Map.Strict as Strict
 
--- | The kind of project being managed by a 'QueryEnv' (pun intended).
+-- | The kind of project being managed by a 'QueryEnv' (pun intended). Used
+-- as a phantom-type variable throughout to make the project type being
+-- passed into various functions correspond to the correct implementation.
 data ProjType
-    = V1    -- ^ @cabal v1-build@ project, see 'DistDirV1'
-    | V2    -- ^ @cabal v2-build@ project, see 'DistDirV2'
+    = V1    -- ^ @cabal v1-build@ project.
+    | V2    -- ^ @cabal v2-build@ project.
     | Stack -- ^ @stack@ project.
       deriving (Eq, Ord, Show, Read)
 
+-- | A "singleton" datatype for 'ProjType' which allows us to establish a
+-- correspondence between a runtime representation of 'ProjType' to the
+-- compile-time value at the type level.
+--
+-- If you just want to know the runtime 'ProjType' use 'demoteSProjType' to
+-- convert to that.
 data SProjType pt where
     SCabal :: !(SCabalProjType pt) -> SProjType pt
     SStack :: SProjType 'Stack
@@ -69,28 +77,81 @@ demoteSProjType (SCabal SCV1) = V1
 demoteSProjType (SCabal SCV2) = V2
 demoteSProjType SStack = Stack
 
--- | Location of project sources. The project type of a given directory can be
--- determined by trying to access a set of marker files. See below.
+-- | Location of a project context. Usually a project's top-level source
+-- code directory or a project type specific config file.
+--
+-- To find any recognized default project contexts in a given directory
+-- use 'Distribution.Helper.Discover.findProjects'.
+--
+-- Build tools usually allow the user to specify the location of their
+-- project config files manually, so we also support passing this path here
+-- with the @*File@ constructors.
+--
+-- === Correspondence with Project Source Directory
+--
+-- Note that the project's source directory does not necessarily correspond
+-- to the directory containing the project config file, though in some
+-- cases it does.
+--
+-- For example cabal-V2 allows the @cabal.project@ file to be positively
+-- anywhere in the filesystem when specified via the @--cabal-project@
+-- command-line flag, corresponding to the 'ProjLocV2File' constructor
+-- here. This config file can then refer to package directories with
+-- absolute paths in the @packages:@ declaration.
+--
+-- Hence it isn't actually possible to find the whole project's toplevel
+-- source directory given just a 'ProjLoc'. However the packages within a
+-- project have a well defined source directory.
+--
+-- Unfortunately we do not expose the concept of a "package" in the API to
+-- abstract the differences between the project types. Instead each 'Unit'
+-- (which is conceptually part of a "package") carries the corresponding
+-- package source directory in 'uPackageDir'. Together with a 'Unit' query
+-- such as 'projectUnits' you can thus get the source directory for each
+-- unit.
+--
+-- If you need to present this in a per-package view rather than a per-unit
+-- view you should be able to use the source directory as a key to
+-- determine which units to group into a package.
 data ProjLoc (pt :: ProjType) where
-    -- | A @cabal v1-build@ project directory can be identified by one file
-    -- ending in @.cabal@ existing in the directory. More than one such files
-    -- existing is a user error. Note: For this project type the concepts of
-    -- project and package coincide.
+    -- | A fully specified @cabal v1-build@ project context. Here you can
+    -- specify both the path to the @.cabal@ file and the source directory
+    -- of the package. The cabal file path corresponds to the
+    -- @--cabal-file=PATH@ flag on the @cabal@ command line.
+    --
+    -- Note that More than one such files existing in a package directory
+    -- is a user error and cabal might still complain about that but we
+    -- won't.
+    --
+    -- Also note that for this project type the concepts of project and
+    -- package coincide.
     ProjLocV1CabalFile :: { plCabalFile :: !FilePath, plPackageDir :: !FilePath } -> ProjLoc 'V1
 
-    -- | A @cabal v1-build@ project directory. Same as 'ProjLocV1CabalFile' but
-    -- will search for the cabal file for you. If more than one @.cabal@ file
-    -- exists it will shamelessly throw an obscure exception.
+    -- | A @cabal v1-build@ project context. Essentially the same as
+    -- 'ProjLocV1CabalFile' but this will dynamically search for the cabal
+    -- file for you as cabal-install does by default.
+    --
+    -- If more than one @.cabal@ file exists in the given directory we will
+    -- shamelessly throw a obscure exception when using this in the API so
+    -- prefer 'ProjLocV1CabalFile' if you don't want that to happen. This
+    -- mainly exists for easy upgrading from the @cabal-helper-0.8@ series.
     ProjLocV1Dir :: { plPackageDir :: !FilePath } -> ProjLoc 'V1
 
-    -- | A @cabal v2-build@ project\'s marker file is called
-    -- @cabal.project@. This configuration file points to the packages that make
-    -- up this project.
+    -- | A @cabal v2-build@ project context. The path to the
+    -- @cabal.project@ file, though you can call it whatever you like. This
+    -- configuration file then points to the packages that make up this
+    -- project. This corresponds to the @--cabal-project=PATH@ flag on the
+    -- @cabal@ command line.
     ProjLocV2File    :: { plCabalProjectFile :: !FilePath } -> ProjLoc 'V2
+
+    -- | This is equivalent to 'ProjLocV2File' but using the default
+    -- @cabal.project@ file name.
     ProjLocV2Dir     :: { plV2Dir :: !FilePath } -> ProjLoc 'V2
 
-    -- | A @stack@ project\'s marker file is called @stack.yaml@. This
-    -- configuration file points to the packages that make up this project.
+    -- | A @stack@ project context. Specify the path to the @stack.yaml@
+    -- file here. This configuration file then points to the packages that
+    -- make up this project. Corresponds to @stack@'s @--stack-yaml=PATH@
+    -- command line flag if different from the default name, @stack.yaml@.
     ProjLocStackYaml :: { plStackYaml :: !FilePath } -> ProjLoc 'Stack
 
 deriving instance Show (ProjLoc pt)
@@ -107,13 +168,13 @@ projTypeOfProjLoc ProjLocV2Dir{}       = SCabal SCV2
 projTypeOfProjLoc ProjLocStackYaml{}   = SStack
 
 -- | A build directory for a certain project type. The @pt@ type variable
--- must match the value of 'ProjLoc'. This is enforced by the type system
--- so you can't get this wrong :)
+-- must be compatible with the 'ProjLoc' used. This is enforced by the type
+-- system so you can't get this wrong.
 data DistDir (pt :: ProjType) where
     -- | A build-directory for cabal, aka. dist-dir in Cabal
     -- terminology. 'SCabalProjType' specifies whether we should use
     -- /v2-build/ or /v1-build/. This choice must correspond to
-    -- 'ProjLoc'\'s project type.
+    -- 'ProjLoc' \'s project type.
     DistDirCabal :: !(SCabalProjType pt) -> !FilePath -> DistDir pt
 
     -- | A build-directory for stack, aka. /work-dir/. Optionally override
@@ -133,7 +194,7 @@ projTypeOfDistDir DistDirStack{} = SStack
 -- Say you have:
 --
 -- @
--- {-# LANGUAGE DataKinds, GADTS #-}
+-- {-\# LANGUAGE DataKinds, GADTS \#-}
 -- data K = A | B | ...
 -- data Q k where
 --   QA :: ... -> Q 'A
@@ -209,13 +270,18 @@ data QueryCache pt = QueryCache
 newtype DistDirLib = DistDirLib FilePath
     deriving (Eq, Ord, Read, Show)
 
--- | A 'Unit' is used as reference to a set of components (exes, libs, tests
--- etc.) which are managed by an certain instance of the Cabal build system. We
--- may get information on the components in a unit by retriving the
--- corresponding 'UnitInfo'.
+-- | A 'Unit' is essentially a "build target". It is used to refer to a set
+-- of components (exes, libs, tests etc.) which are managed by a certain
+-- instance of the Cabal build-system[1]. We may get information on the
+-- components in a unit by retriving the corresponding 'UnitInfo'.
 --
--- Note that a 'Unit' value is only valid within the 'QueryEnv' context it was
--- created in. However this is not enforced in the API.
+-- \[1]: No I'm not talking about the cabal-install /build-tool/, I'm
+-- talking about the Cabal /build-system/. Note the distinction. Both
+-- cabal-install and Stack use the Cabal build-system (aka @lib:Cabal@)
+-- underneath.
+--
+-- Note that a 'Unit' value is only valid within the 'QueryEnv' context it
+-- was created in. However this is not enforced by the API.
 data Unit pt = Unit
     { uUnitId      :: !UnitId
     , uPackageDir  :: !FilePath
