@@ -180,7 +180,7 @@ compileSetupHs (GhcVersion ghcVer) db srcdir = do
 
       file = srcdir </> "Setup"
 
-  callProcessStderr (Just srcdir) (ghcProgram ?cprogs) $ concat
+  callProcessStderr (Just srcdir) (ghcProgram ?progs) $ concat
     [ [ "--make"
       , "-package-conf", db
       ]
@@ -193,11 +193,11 @@ compileSetupHs (GhcVersion ghcVer) db srcdir = do
 
 cabalWithGHCProgOpts :: Progs => [String]
 cabalWithGHCProgOpts = concat
-  [ [ "--with-ghc=" ++ ghcProgram ?cprogs ]
+  [ [ "--with-ghc=" ++ ghcProgram ?progs ]
   -- Only pass ghc-pkg if it was actually set otherwise we
   -- might break cabal's guessing logic
-  , if ghcPkgProgram ?cprogs /= ghcPkgProgram defaultCompPrograms
-      then [ "--with-ghc-pkg=" ++ ghcPkgProgram ?cprogs ]
+  , if ghcPkgProgram ?progs /= ghcPkgProgram defaultPrograms
+      then [ "--with-ghc-pkg=" ++ ghcPkgProgram ?progs ]
       else []
   ]
 
@@ -238,9 +238,9 @@ installCabalLibV2 _ghcVer cv (PackageEnvFile env_file) = do
 
 cabalV2WithGHCProgOpts :: Progs => [String]
 cabalV2WithGHCProgOpts = concat
-  [ [ "--with-compiler=" ++ ghcProgram ?cprogs ]
-  , if ghcPkgProgram ?cprogs /= ghcPkgProgram defaultCompPrograms
-      then [ "--with-hc-pkg=" ++ ghcPkgProgram ?cprogs ]
+  [ [ "--with-compiler=" ++ ghcProgram ?progs ]
+  , if ghcPkgProgram ?progs /= ghcPkgProgram defaultPrograms
+      then [ "--with-hc-pkg=" ++ ghcPkgProgram ?progs ]
       else []
   ]
 

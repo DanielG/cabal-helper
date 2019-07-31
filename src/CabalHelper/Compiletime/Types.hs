@@ -241,9 +241,6 @@ data QueryEnvI c (pt :: ProjType) = QueryEnv
     , qePrograms     :: !Programs
     -- ^ Field accessor for 'QueryEnv'.
 
-    , qeCompPrograms :: !CompPrograms
-    -- ^ Field accessor for 'QueryEnv'.
-
     , qeProjLoc      :: !(ProjLoc pt)
     -- ^ Field accessor for 'QueryEnv'. Defines path to the project directory,
     -- i.e. a directory containing a @cabal.project@ file
@@ -460,11 +457,9 @@ data StackProjPaths = StackProjPaths
 -- Beware: GHC 8.0.2 doesn't like these being recursively defined for some
 -- reason so just keep them unrolled.
 type Verbose = (?verbose :: Word -> Bool)
-type Env     = ( ?cprogs :: CompPrograms
-               , ?progs :: Programs
+type Env     = ( ?progs :: Programs
                , ?verbose :: Word -> Bool)
-type Progs   = (?cprogs :: CompPrograms, ?progs :: Programs)
-type CProgs  = (?cprogs :: CompPrograms)
+type Progs   = (?progs :: Programs)
 
 -- | Configurable paths to various programs we use.
 data Programs = Programs
@@ -477,11 +472,8 @@ data Programs = Programs
       -- ^ The path to the @stack@ program.
     , stackArgsBefore :: ![String]
     , stackArgsAfter  :: ![String]
-    } deriving (Eq, Ord, Show, Read, Generic, Typeable)
 
--- | Configurable paths to programs only used during helper compilation.
-data CompPrograms = CompPrograms
-    { ghcProgram    :: !FilePath
+    , ghcProgram    :: !FilePath
     -- ^ The path to the @ghc@ program.
 
     , ghcPkgProgram :: !FilePath
@@ -492,10 +484,7 @@ data CompPrograms = CompPrograms
 -- | By default all programs use their unqualified names, i.e. they will be
 -- searched for on @PATH@.
 defaultPrograms :: Programs
-defaultPrograms = Programs "cabal" [] []  "stack" [] []
-
-defaultCompPrograms :: CompPrograms
-defaultCompPrograms = CompPrograms "ghc" "ghc-pkg"
+defaultPrograms = Programs "cabal" [] []  "stack" [] [] "ghc" "ghc-pkg"
 
 data CompileOptions = CompileOptions
     { oVerbose       :: Bool

@@ -60,28 +60,28 @@ testConfigToTestSpec (TC loc _ _ _) pt =
   let (topdir, projdir, cabal_file) = testLocPath loc in
   "- " ++ intercalate ":" [topdir, projdir, cabal_file, show pt]
 
-type ModProgs = (Programs -> Programs, CompPrograms -> CompPrograms)
+type ModProgs = (Programs -> Programs)
 
 options :: [OptDescr ModProgs]
 options =
     [ GetOpt.Option [] ["with-cabal"]
-        (ReqArg (\arg -> (\p -> p { cabalProgram = arg }, id)) "PROG")
+        (ReqArg (\arg -> \p -> p { cabalProgram = arg }) "PROG")
         "name or path of 'cabal' executable"
     , GetOpt.Option [] ["with-stack"]
-        (ReqArg (\arg -> (\p -> p { stackProgram = arg }, id)) "PROG")
+        (ReqArg (\arg -> \p -> p { stackProgram = arg }) "PROG")
         "name or path of 'stack' executable"
     , GetOpt.Option [] ["with-ghc"]
-        (ReqArg (\arg -> (id, \cp -> cp { ghcProgram = arg })) "PROG")
+        (ReqArg (\arg -> \cp -> cp { ghcProgram = arg }) "PROG")
         "name or path of 'ghc' executable"
     , GetOpt.Option [] ["with-ghc-pkg"]
-        (ReqArg (\arg -> (id, \cp -> cp { ghcPkgProgram = arg })) "PROG")
+        (ReqArg (\arg -> \cp -> cp { ghcPkgProgram = arg }) "PROG")
         "name or path of 'ghc-pkg' executable"
     ]
 
 testOpts :: [String] -> IO (ModProgs, [String])
 testOpts args =
    case getOpt Permute options args of
-      (o,n,[]  ) -> return (foldl (\(b, d) (a, c) -> (a . b, c . d)) (id, id) o, n)
+      (o,n,[]  ) -> return (foldl (flip (.)) id o, n)
       (_,_,errs) -> ioError (userError (concat errs ++ usageInfo header options))
   where header = "Usage: ghc-session [OPTION..] [TEST_SPEC..]"
 
@@ -93,8 +93,7 @@ main = do
   let withEnv :: (Env => a) -> a
       withEnv action =
         let ?verbose = const False
-            ?progs = (fst modProgs) defaultPrograms
-            ?cprogs = (snd modProgs) defaultCompPrograms
+            ?progs = modProgs defaultPrograms
         in action
 
   GhcVersion g_ver <- withEnv ghcVersion
@@ -317,10 +316,8 @@ test modProgs (psdImpl -> ProjSetupImpl{..}) topdir tmpdir projdir cabal_file
             (psiProjLoc (CabalFile cabal_file) projdir)
             (psiDistDir projdir)
 
-    let qe = qe' { qePrograms = (fst modProgs) (qePrograms qe')
-                 , qeCompPrograms = (snd modProgs) (qeCompPrograms qe')
-                 }
-        progs = qePrograms qe
+    let progs = modProgs (qePrograms qe')
+        qe = qe' { qePrograms = progs }
 
     psiSdist progs topdir tmpdir
     psiConfigure progs projdir

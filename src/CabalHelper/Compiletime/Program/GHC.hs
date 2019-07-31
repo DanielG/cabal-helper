@@ -66,25 +66,25 @@ newtype GhcVersion = GhcVersion { unGhcVersion :: Version }
 showGhcVersion :: GhcVersion -> String
 showGhcVersion (GhcVersion v) = showVersion v
 
-ghcVersion :: (Verbose, CProgs) => IO GhcVersion
+ghcVersion :: (Verbose, Progs) => IO GhcVersion
 ghcVersion = GhcVersion .
-  parseVer . trim <$> readProcess' (ghcProgram ?cprogs) ["--numeric-version"] ""
+  parseVer . trim <$> readProcess' (ghcProgram ?progs) ["--numeric-version"] ""
 
-ghcPkgVersion :: (Verbose, CProgs) => IO Version
+ghcPkgVersion :: (Verbose, Progs) => IO Version
 ghcPkgVersion =
   parseVer . trim . dropWhile (not . isDigit)
-    <$> readProcess' (ghcPkgProgram ?cprogs) ["--version"] ""
+    <$> readProcess' (ghcPkgProgram ?progs) ["--version"] ""
 
-createPkgDb :: (Verbose, CProgs) => UnpackedCabalVersion -> IO PackageDbDir
+createPkgDb :: (Verbose, Progs) => UnpackedCabalVersion -> IO PackageDbDir
 createPkgDb cabalVer = do
   db@(PackageDbDir db_path)
     <- getPrivateCabalPkgDb $ unpackedToResolvedCabalVersion cabalVer
   exists <- doesDirectoryExist db_path
   when (not exists) $
-       callProcessStderr Nothing (ghcPkgProgram ?cprogs) ["init", db_path]
+       callProcessStderr Nothing (ghcPkgProgram ?progs) ["init", db_path]
   return db
 
-getPrivateCabalPkgDb :: (Verbose, CProgs) => ResolvedCabalVersion -> IO PackageDbDir
+getPrivateCabalPkgDb :: (Verbose, Progs) => ResolvedCabalVersion -> IO PackageDbDir
 getPrivateCabalPkgDb cabalVer = do
   appdir <- appCacheDir
   ghcVer <- ghcVersion
@@ -113,7 +113,7 @@ listCabalVersions mdb = do
       let mdbopt = ("--package-conf="++) <$> mdb_path
           args = ["list", "--simple-output", "Cabal"] ++ maybeToList mdbopt
       catMaybes . map (fmap snd . parsePkgId) . words
-               <$> readProcess' (ghcPkgProgram ?cprogs) args ""
+               <$> readProcess' (ghcPkgProgram ?progs) args ""
     _ -> mzero
 
 cabalVersionExistsInPkgDb
@@ -136,7 +136,7 @@ cabalVersionExistsInPkgDb cabalVer db@(PackageDbDir db_path) = do
 
 invokeGhc :: Env => GhcInvocation -> IO (Either ExitCode FilePath)
 invokeGhc GhcInvocation {..} = do
-    rv <- callProcessStderr' Nothing (ghcProgram ?cprogs) $ concat
+    rv <- callProcessStderr' Nothing (ghcProgram ?progs) $ concat
       [ [ "-outputdir", giOutDir
         , "-o", giOutput
         ]

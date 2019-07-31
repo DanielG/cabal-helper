@@ -127,6 +127,6 @@ callStackCmd :: QueryEnvI c 'Stack -> Maybe FilePath -> [String] -> IO ()
 readStackCmd = doStackCmd (\qe -> qeReadProcess qe "")
 callStackCmd = doStackCmd qeCallProcess
 
-patchCompPrograms :: StackProjPaths -> CompPrograms -> CompPrograms
-patchCompPrograms StackProjPaths{sppCompExe} cprogs =
-  cprogs { ghcProgram = sppCompExe }
+patchCompPrograms :: StackProjPaths -> Programs -> Programs
+patchCompPrograms StackProjPaths{sppCompExe} progs =
+  progs { ghcProgram = sppCompExe }
