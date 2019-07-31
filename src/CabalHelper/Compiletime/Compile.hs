@@ -214,6 +214,11 @@ compileHelper' CompHelperEnv {..} = do
    compileWithCabalV2GhcEnv ghcVer cabalVer =
      compileWithCabalV2GhcEnv' ghcVer (CabalVersion cabalVer)
 
+   -- TODO: Support using existing ghc-environments too! That's mostly
+   -- relevant for when you want to use a development version of
+   -- cabal-install since that will depend on an unreleased version of
+   -- Cabal we cannot new-install just like that.
+
    -- | If this is a v2-build project it makes sense to use @v2-install@ for
    -- installing Cabal as this will use the @~/.cabal/store@. We use
    -- @--package-env@ to instruct cabal to not meddle with the user's package
