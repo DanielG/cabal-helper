@@ -43,7 +43,7 @@ import qualified Data.ByteString.Char8 as BS8
 
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Process
-import CabalHelper.Shared.Common (replace, parseVer, parseVerMay, parsePkgIdBS)
+import CabalHelper.Shared.Common (replace, parseVer, parseVerMay, parsePkgIdBS, panicIO)
 
 type UnpackedCabalVersion = CabalVersion' (CommitId, CabalSourceDir)
 type ResolvedCabalVersion = CabalVersion' CommitId
@@ -246,10 +246,14 @@ resolveCabalVersion (CabalHEAD ()) = do
   let commit = takeWhile isHexDigit out
   return $ CabalHEAD $ CommitId commit
 
-findCabalFile :: FilePath -> IO FilePath
+findCabalFile :: FilePath -> IO (Maybe FilePath)
 findCabalFile pkgdir = do
-    [cfile] <- filter isCabalFile <$> getDirectoryContents pkgdir
-    return $ pkgdir </> cfile
+    cfiles <- filter isCabalFile <$> getDirectoryContents pkgdir
+    case cfiles of
+      [] -> return Nothing
+      [cfile] -> return $ Just $ pkgdir </> cfile
+      _ -> panicIO $ "Multiple cabal-files found in directory '"
+             ++pkgdir++"': " ++ show cfiles
   where
     isCabalFile :: FilePath -> Bool
     isCabalFile f = takeExtension' f == ".cabal"
@@ -259,6 +263,11 @@ findCabalFile pkgdir = do
         if takeFileName p == takeExtension p
           then "" -- just ".cabal" is not a valid cabal file
           else takeExtension p
+
+complainIfNoCabalFile :: FilePath -> Maybe FilePath -> IO FilePath
+complainIfNoCabalFile _ (Just cabal_file) = return cabal_file
+complainIfNoCabalFile pkgdir Nothing =
+  panicIO $ "No cabal file found in package-dir: '"++pkgdir++"'"
 
 bultinCabalVersion :: Version
 bultinCabalVersion = parseVer VERSION_Cabal

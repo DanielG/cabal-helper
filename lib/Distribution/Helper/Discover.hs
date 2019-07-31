@@ -14,7 +14,7 @@
 -- You should have received a copy of the GNU General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs, TypeFamilies, DataKinds #-}
 
 {-|
 Module      : Distribution.Helper.Discover
@@ -28,23 +28,30 @@ Portability : portable
 
 module Distribution.Helper.Discover
   ( findProjects
-  , findDistDirs
-  , findDistDirsWithHints
+  , getDefaultDistDir
+  , isValidDistDir
   ) where
 
 import Control.Monad.Writer
-import Data.List
 import System.Directory
 import System.FilePath
 
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Cabal
-import CabalHelper.Compiletime.Compat.Directory
 
+-- | @findProjects dir@. Find available project instances in @dir@.
+--
+-- For example, if the given directory contains both a @cabal.project@ and
+-- a @stack.yaml@ file:
+--
+-- >>> findProjects "."
+-- [ Ex (ProjLocStackYaml "./stack.yaml"), Ex (ProjLocCabalV2File "./cabal.project") ]
+--
+-- Note that this function only looks for "default" project markers. If you
+-- want to for example support the common pattern of having multiple
+-- @stack-<GHC_VER>.yaml@ files simply fill out a 'ProjLoc' yourself. In
+-- this case 'ProjLocStackYaml'.
 findProjects :: FilePath -> IO [Ex ProjLoc]
-findDistDirs :: ProjLoc pt -> [DistDir pt]
-findDistDirsWithHints :: ProjLoc pt -> [FilePath] -> [DistDir pt]
-
 findProjects dir = execWriterT $ do
   let cabalProject = dir </> "cabal.project"
   whenM (liftIO $ doesFileExist cabalProject) $
@@ -53,23 +60,42 @@ findProjects dir = execWriterT $ do
   whenM (liftIO $ doesFileExist stackYaml) $
     tell [Ex $ ProjLocStackYaml stackYaml]
   join $ traverse (tell . pure . Ex . ProjLocV1Dir . takeDirectory) <$>
-    liftIO (findCabalFiles dir)
+    liftIO (findCabalFile dir)
 
-findDistDirs (ProjLocV1CabalFile cabal _) =
-  [DistDirCabal SCV1 $ replaceFileName cabal "dist/"]
-findDistDirs (ProjLocV1Dir dir) = [DistDirCabal SCV1 $ dir </> "dist/"]
-findDistDirs (ProjLocV2File cabal) =
-  [DistDirCabal SCV2 $ replaceFileName cabal "dist-newstyle/"]
-findDistDirs (ProjLocV2Dir dir) = [DistDirCabal SCV2 $ dir </> "dist-newstyle/"]
-findDistDirs (ProjLocStackYaml _) = [DistDirStack Nothing]
 
-findDistDirsWithHints = undefined
+-- | @getDefaultDistDir pl@. Get the default dist-dir for the given project.
+--
+-- Note that the path in the returned dist-dir might not exist yet if the
+-- build-tool has never been run for this project before. This is fine as
+-- far as @cabal-helper@ is concerned. It will simply invoke the build-tool
+-- as needed to answer the requested queries.
+getDefaultDistDir :: ProjLoc pt -> DistDir pt
+getDefaultDistDir (ProjLocV1CabalFile _cabal_file pkgdir) =
+  DistDirCabal SCV1 $ pkgdir </> "dist"
+getDefaultDistDir (ProjLocV1Dir pkgdir) =
+  DistDirCabal SCV1 $ pkgdir </> "dist"
+getDefaultDistDir (ProjLocV2File cabal_project) =
+  DistDirCabal SCV2 $ replaceFileName cabal_project "dist-newstyle"
+getDefaultDistDir (ProjLocV2Dir projdir) =
+  DistDirCabal SCV2 $ projdir </> "dist-newstyle"
+getDefaultDistDir (ProjLocStackYaml _) =
+  DistDirStack Nothing
 
-findCabalFiles :: FilePath -> IO [FilePath]
-findCabalFiles dir = do
-  fs <- listDirectory dir
-  let cs = filter (".cabal" `isSuffixOf`) fs
-  filterM doesFileExist cs
+-- | @isValidDistDir distdir@. Check if @distdir@ looks like a valid
+-- build-dir for it's project type. We just check if characteristic marker
+-- files for the associated project type exist.
+--
+-- If the project type does not have a way to do this (for example
+-- 'DistDirStack') check we return 'Nothing'.
+isValidDistDir :: DistDir pt -> IO (Maybe Bool)
+isValidDistDir (DistDirCabal cpt dir) = do
+  fmap Just $ doesFileExist $ dir </> cabalProjTypeMarkerFile cpt
+isValidDistDir DistDirStack{} =
+  return Nothing
+
+cabalProjTypeMarkerFile :: SCabalProjType pt -> FilePath
+cabalProjTypeMarkerFile SCV1 = "setup-config"
+cabalProjTypeMarkerFile SCV2 = "cache" </> "plan.json"
 
 whenM :: Monad m => m Bool -> m () -> m ()
 whenM p x = p >>= (`when` x)

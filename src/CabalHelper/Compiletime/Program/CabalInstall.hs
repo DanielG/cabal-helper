@@ -261,7 +261,7 @@ planUnits plan = do
       , uComps=comps
       , uPId=CP.PkgId pkg_name _
       } = do
-        cabal_file <- Cabal.findCabalFile pkgdir
+        cabal_file <- Cabal.complainIfNoCabalFile pkgdir =<< Cabal.findCabalFile pkgdir
         let comp_names = Map.keys comps
         let uiV2Components =
               map (Text.unpack . CP.dispCompNameTarget pkg_name) $ Map.keys comps
