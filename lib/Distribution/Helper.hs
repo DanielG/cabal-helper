@@ -60,7 +60,6 @@ module Distribution.Helper (
   , mkQueryEnv
   , qeReadProcess
   , qePrograms
-  , qeCompPrograms
   , qeProjLoc
   , qeDistDir
 
@@ -78,8 +77,6 @@ module Distribution.Helper (
   -- * Programs
   , Programs(..)
   , defaultPrograms
-  , CompPrograms(..)
-  , defaultCompPrograms
 
   -- * Query result types
   , ChComponentInfo(..)
@@ -206,7 +203,6 @@ mkQueryEnv projloc distdir = do
                                    -- something
         callProcessStderr mcwd exe args
     , qePrograms     = defaultPrograms
-    , qeCompPrograms = defaultCompPrograms
     , qeProjLoc      = projloc
     , qeDistDir      = distdir
     , qeCacheRef     = cr
@@ -613,15 +609,14 @@ withVerbosity act = do
 withProgs
     :: Verbose => ProjInfoImpl pt -> QueryEnvI c pt -> (Env => IO a) -> IO a
 withProgs impl QueryEnv{..} f = do
-  cprogs <- guessCompProgramPaths $ case impl of
+  progs <- guessCompProgramPaths $ case impl of
     ProjInfoStack projPaths ->
-      Stack.patchCompPrograms projPaths qeCompPrograms
-    _ -> qeCompPrograms
-  let ?cprogs = cprogs in
-    let ?progs = qePrograms in f
+      Stack.patchCompPrograms projPaths qePrograms
+    _ -> qePrograms
+  let ?progs = progs in f
   where
     -- | Determine ghc-pkg path from ghc path
-    guessCompProgramPaths :: Verbose => CompPrograms -> IO CompPrograms
+    guessCompProgramPaths :: Verbose => Programs -> IO Programs
     guessCompProgramPaths progs
       | same ghcProgram progs dprogs = return progs
     guessCompProgramPaths progs = do
@@ -648,7 +643,7 @@ withProgs impl QueryEnv{..} f = do
           }
 
     same f o o'  = f o == f o'
-    dprogs = defaultCompPrograms
+    dprogs = defaultPrograms
 
 newtype Helper pt
   = Helper { runHelper :: Unit pt -> [String] -> IO [Maybe ChResponse] }
