@@ -215,7 +215,7 @@ mkQueryEnv projloc distdir = do
 -- | Construct paths to project configuration files given where the project is.
 projConf :: ProjLoc pt -> IO (ProjConf pt)
 projConf (ProjLocV1Dir pkgdir) =
-  ProjConfV1 <$> findCabalFile pkgdir
+  ProjConfV1 <$> (complainIfNoCabalFile pkgdir =<< findCabalFile pkgdir)
 projConf (ProjLocV1CabalFile cabal_file _) = return $
   ProjConfV1 cabal_file
 projConf (ProjLocV2Dir projdir_path) =
