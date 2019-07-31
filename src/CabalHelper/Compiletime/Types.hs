@@ -32,7 +32,6 @@ import Data.IORef
 import Data.Version
 import Data.Typeable
 import GHC.Generics
-import System.FilePath
 import System.Posix.Types
 import CabalHelper.Compiletime.Types.RelativePath
 import CabalHelper.Shared.InterfaceTypes

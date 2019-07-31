@@ -16,6 +16,7 @@
 
 {-# LANGUAGE CPP, BangPatterns, RecordWildCards, RankNTypes, ViewPatterns,
   TupleSections #-}
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
 #ifdef MIN_VERSION_Cabal
 #undef CH_MIN_VERSION_Cabal

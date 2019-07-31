@@ -16,7 +16,7 @@
 
 {-# LANGUAGE CPP, BangPatterns, RecordWildCards, RankNTypes, ViewPatterns,
   TupleSections #-}
-
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
 {-  # OPTIONS_GHC -Wno-missing-signatures #-}
 {-  # OPTIONS_GHC -fno-warn-incomplete-patterns #-}
 
@@ -512,6 +512,7 @@ componentOptions' (lbi, v, distdir) inplaceFlag flags rf f = do
 #else
                                [] -> removeInplaceDeps v lbi pd clbi
 #endif
+                               _ -> error $ "invalid flags: " ++ show flags
            opts = componentGhcOptions normal lbi bi clbi' outdir
            opts' = f opts
 
@@ -686,6 +687,7 @@ combineEp (Just ChSetupEntrypoint) e = e
 combineEp (Just (ChLibEntrypoint es1 os1 ss1))   (ChLibEntrypoint es2 os2 ss2) = (ChLibEntrypoint (nub $ es2++es1) (nub $ os2++os1) (nub $ ss2++ss1))
 combineEp _                                    e@(ChExeEntrypoint  _mi _os2)     = error $ "combineEP: cannot have a sub exe:" ++ show e
 combineEp (Just (ChExeEntrypoint  mi os1))       (ChLibEntrypoint es2 os2 ss2) = (ChExeEntrypoint mi  (nub $ os1++es2++os2++ss2))
+combineEp me e = error $ "combineEp: undhandled case: " ++ show (me, e)
 
 -- no, you unconditionally always wrap the result in Just, so instead of `f x = Just y; f x = Just z` do `f x = y; f x = z` and use f as `Just . f`
 

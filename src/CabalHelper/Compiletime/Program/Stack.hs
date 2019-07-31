@@ -46,11 +46,7 @@ import CabalHelper.Compiletime.Types.RelativePath
 import CabalHelper.Shared.Common
 
 getUnit :: QueryEnvI c 'Stack -> CabalFile -> IO (Unit 'Stack)
-getUnit
-  qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml}
-  cabal_file@(CabalFile cabal_file_path)
-  = do
-  let projdir = takeDirectory stack_yaml
+getUnit qe cabal_file@(CabalFile cabal_file_path) = do
   let pkgdir = takeDirectory cabal_file_path
   let pkg_name = dropExtension $ takeFileName cabal_file_path
   look <- paths qe pkgdir
@@ -91,7 +87,7 @@ listPackageCabalFiles qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml}
   return $ map CabalFile $ lines out
   where
     ioerror :: IOError -> IO a
-    ioerror ioe = (=<<) (fromMaybe (throwIO ioe)) $ runMaybeT $ do
+    ioerror ioe = (fromMaybe (throwIO ioe) =<<) $ runMaybeT $ do
       stack_exe <- MaybeT $ findExecutable $ stackProgram $ qePrograms qe
       stack_ver_str
         <- liftIO $ trim <$> readStackCmd qe Nothing ["--numeric-version"]
@@ -116,6 +112,8 @@ listPackageCabalFiles qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml}
 workdirArg :: QueryEnvI c 'Stack -> [String]
 workdirArg QueryEnv{qeDistDir=DistDirStack mworkdir} =
   maybeToList $ ("--work-dir="++) . unRelativePath <$> mworkdir
+workdirArg QueryEnv{qeDistDir=DistDirCabal{}} =
+  error "workdirArg: TODO: this case is impossible and should not produce an exhaustiveness warning anymore starting with GHC 8.8"
 
 doStackCmd :: (QueryEnvI c 'Stack -> CallProcessWithCwd a)
            -> QueryEnvI c 'Stack -> Maybe FilePath -> [String] -> IO a
