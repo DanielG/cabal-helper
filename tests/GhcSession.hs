@@ -55,6 +55,11 @@ data TestLocation
   | TF FilePath FilePath FilePath
     deriving (Show)
 
+testConfigToTestSpec :: TestConfig -> ProjType -> String
+testConfigToTestSpec (TC loc _ _ _) pt =
+  let (topdir, projdir, cabal_file) = testLocPath loc in
+  "- " ++ intercalate ":" [topdir, projdir, cabal_file, show pt]
+
 type ModProgs = (Programs -> Programs, CompPrograms -> CompPrograms)
 
 options :: [OptDescr ModProgs]
@@ -158,10 +163,9 @@ main = do
 
   putStrLn "Going to Run These Tests"
   putStrLn "========================"
-  forM_ tests $ \(TC loc _ _ pts) -> do
-    let (topdir, projdir, cabal_file) = testLocPath loc
-    forM_ (if pts == [] then all_proj_types else pts)  $ \pt -> putStrLn $
-      "- " ++ intercalate ":" [topdir, projdir, cabal_file, show pt]
+  forM_ tests $ \tc@(TC _ _ _ pts) -> do
+    forM_ (if pts == [] then all_proj_types else pts)  $ \pt ->
+      putStrLn $ testConfigToTestSpec tc pt
 
   pPrint tests
   putStrLn ""
@@ -218,6 +222,7 @@ data TestResult
       , trComp    :: ChComponentName
       , trHeading :: String -- ^ project type
       , trDir     :: FilePath
+      , trSpec    :: String
       }
  deriving (Show)
 
@@ -243,7 +248,7 @@ checkAndRunTestConfig
   modProgs
   VerEnv { ci_ver, f_c_ver, g_ver, s_ver }
   ps1@(psdImpl -> Ex psdImpl2)
-  (TC test_loc min_cabal_ver min_ghc_ver _proj_types)
+  tc@(TC test_loc min_cabal_ver min_ghc_ver _proj_types)
   = let
   pt = demoteSProjType $ psiProjType psdImpl2
   (topdir, projdir_rel, cabal_file) = testLocPath test_loc in do
@@ -268,7 +273,11 @@ checkAndRunTestConfig
       , psdHeading ps1
       , "'" ++ topdir ++ "'"
       ])
-    (runTest modProgs ps1{ psdImpl = psdImpl2 } topdir projdir_rel cabal_file)
+    $ do
+      trs <- runTest
+        modProgs ps1{ psdImpl = psdImpl2 } topdir projdir_rel cabal_file
+      return $ map ($ testConfigToTestSpec tc pt) trs
+
   where
     pt_disp V1 = "cabal-install"
     pt_disp V2 = "cabal-install"
@@ -278,12 +287,15 @@ checkAndRunTestConfig
 runTest
     :: ModProgs -> ProjSetup2 pt
     -> FilePath -> FilePath -> FilePath
-    -> IO [TestResult]
+    -> IO [String -> TestResult]
 runTest modProgs ps2@(psdImpl -> ProjSetupImpl{..}) topdir projdir cabal_file
   = do
   withSystemTempDirectory' "cabal-helper.ghc-session.test" $ \tmpdir -> do
     trs <- test modProgs ps2 topdir tmpdir (tmpdir </> projdir) (tmpdir </> cabal_file)
-    return $ map ($ (topdir </> projdir)) $ map ($ (psdHeading ps2)) trs
+    return $
+      map ($ (topdir </> projdir)) $
+      map ($ (psdHeading ps2)) $
+      trs
 
 runWithCwd :: FilePath -> String -> [String] -> IO ()
 runWithCwd cwd x xs = do
@@ -298,7 +310,7 @@ run x xs = do
 test
     :: ModProgs -> ProjSetup2 pt
     -> FilePath -> FilePath -> FilePath -> FilePath
-    -> IO [(String -> FilePath -> TestResult)]
+    -> IO [(String -> String -> FilePath -> TestResult)]
 test modProgs (psdImpl -> ProjSetupImpl{..}) topdir tmpdir projdir cabal_file
   = do
     qe' <- psiQEmod <$> mkQueryEnv
@@ -347,7 +359,7 @@ addCabalProject dir = do
 
 compileModule
     :: FilePath -> NeedsBuildOutput -> ChEntrypoint -> [FilePath] -> [String]
-    -> IO (ChComponentName -> FilePath -> String -> TestResult)
+    -> IO (ChComponentName -> FilePath -> String -> String -> TestResult)
 compileModule pkgdir nb ep srcdirs opts = do
     cwd_before <- getCurrentDirectory
     setCurrentDirectory pkgdir
