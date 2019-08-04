@@ -44,19 +44,28 @@ readProcess' exe args inp = do
   return outp
 
 
+-- | Essentially 'System.Process.callProcess' but returns exit code, has
+-- additional options and logging to stderr when verbosity is enabled.
 callProcessStderr'
-    :: Verbose => Maybe FilePath -> FilePath -> [String] -> IO ExitCode
-callProcessStderr' mwd exe args = do
+    :: Verbose => Maybe FilePath -> [(String, String)]
+    -> FilePath -> [String] -> IO ExitCode
+callProcessStderr' mwd env exe args = do
   let cd = case mwd of
              Nothing -> []; Just wd -> [ "cd", formatProcessArg wd++";" ]
   vLog $ intercalate " " $ cd ++ map formatProcessArg (exe:args)
-  (_, _, _, h) <- createProcess (proc exe args) { std_out = UseHandle stderr
-                                                , cwd = mwd }
+  (_, _, _, h) <- createProcess (proc exe args)
+    { std_out = UseHandle stderr
+    , env = if env == [] then Nothing else Just env
+    , cwd = mwd
+    }
   waitForProcess h
 
-callProcessStderr :: Verbose => Maybe FilePath -> FilePath -> [String] -> IO ()
-callProcessStderr mwd exe args = do
-  rv <- callProcessStderr' mwd exe args
+-- | Essentially 'System.Process.callProcess' but with additional options
+-- and logging to stderr when verbosity is enabled.
+callProcessStderr :: Verbose => Maybe FilePath -> [(String, String)]
+                  -> FilePath -> [String] -> IO ()
+callProcessStderr mwd env exe args = do
+  rv <- callProcessStderr' mwd env exe args
   case rv of
     ExitSuccess -> return ()
     ExitFailure v -> processFailedException "callProcessStderr" exe args v

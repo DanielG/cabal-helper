@@ -182,15 +182,15 @@ unpackCabalHackage cabalVer tmpdir variant = do
       dir = tmpdir </> cabal
       variant_opts = case variant of Pristine -> [ "--pristine" ]; _ -> []
       args = [ "get", cabal ] ++ variant_opts
-  callProcessStderr (Just tmpdir) (cabalProgram ?progs) args
+  callProcessStderr (Just tmpdir) [] (cabalProgram ?progs) args
   return $ CabalSourceDir dir
 
 unpackCabalHEAD :: Env => FilePath -> IO (CommitId, CabalSourceDir)
 unpackCabalHEAD tmpdir = do
   let dir = tmpdir </> "cabal-head.git"
       url = "https://github.com/haskell/cabal.git"
-  callProcessStderr (Just "/") "git" [ "clone", "--depth=1", url, dir]
-  callProcessStderr (Just (dir </> "Cabal")) "cabal"
+  callProcessStderr (Just "/") [] "git" [ "clone", "--depth=1", url, dir]
+  callProcessStderr (Just (dir </> "Cabal")) [] "cabal"
     [ "act-as-setup", "--", "sdist"
     , "--output-directory=" ++ tmpdir </> "Cabal" ]
   commit <- takeWhile isHexDigit <$>

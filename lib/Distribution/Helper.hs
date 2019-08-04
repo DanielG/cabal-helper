@@ -196,12 +196,16 @@ mkQueryEnv
 mkQueryEnv projloc distdir = do
   cr <- newIORef $ QueryCache Nothing Map.empty
   return $ QueryEnv
-    { qeReadProcess = \stdin mcwd exe args ->
-        readCreateProcess (proc exe args){ cwd = mcwd } stdin
-    , qeCallProcess  = \mcwd exe args -> do
+    { qeReadProcess = \stdin mcwd env exe args ->
+        let cp = (proc exe args)
+                   { cwd = mcwd
+                   , env = if env == [] then Nothing else Just env
+                   }
+        in readCreateProcess cp stdin
+    , qeCallProcess  = \mcwd env exe args -> do
         let ?verbose = \_ -> False -- TODO: we should get this from env or
                                    -- something
-        callProcessStderr mcwd exe args
+        callProcessStderr mcwd env exe args
     , qePrograms     = defaultPrograms
     , qeProjLoc      = projloc
     , qeDistDir      = distdir
@@ -378,13 +382,13 @@ shallowReconfigureProject QueryEnv
   { qeProjLoc = ProjLocV2File projfile
   , qeDistDir = DistDirCabal SCV2 _distdirv2, .. } = do
     let projdir = takeDirectory projfile
-    _ <- qeCallProcess (Just projdir) (cabalProgram qePrograms)
+    _ <- qeCallProcess (Just projdir) [] (cabalProgram qePrograms)
            ["new-build", "--dry-run", "--project-file="++projfile, "all"]
     return ()
 shallowReconfigureProject QueryEnv
   { qeProjLoc = ProjLocV2Dir projdir
   , qeDistDir = DistDirCabal SCV2 _distdirv2, .. } = do
-    _ <- qeCallProcess (Just projdir) (cabalProgram qePrograms)
+    _ <- qeCallProcess (Just projdir) [] (cabalProgram qePrograms)
            ["new-build", "--dry-run", "all"]
     return ()
 shallowReconfigureProject QueryEnv
@@ -403,7 +407,7 @@ reconfigureUnit
   QueryEnv{qeProjLoc=ProjLocV2File projfile, ..}
   Unit{uPackageDir, uImpl}
   = do
-  _ <- qeCallProcess (Just uPackageDir) (cabalProgram qePrograms)
+  _ <- qeCallProcess (Just uPackageDir) [] (cabalProgram qePrograms)
         (["new-build", "--project-file="++projfile]
          ++ uiV2Components uImpl)
   return ()
@@ -411,7 +415,7 @@ reconfigureUnit
   QueryEnv{qeProjLoc=ProjLocV2Dir{}, ..}
   Unit{uPackageDir, uImpl}
   = do
-  _ <- qeCallProcess (Just uPackageDir) (cabalProgram qePrograms)
+  _ <- qeCallProcess (Just uPackageDir) [] (cabalProgram qePrograms)
         (["new-build"] ++ uiV2Components uImpl)
         -- TODO: version check for --only-configure
   return ()
@@ -546,7 +550,7 @@ invokeHelper
   args0
   = do
     let args1 = cabal_file_path : distdir : args0
-    evaluate =<< qeReadProcess "" Nothing exe args1 `E.catch`
+    evaluate =<< qeReadProcess "" Nothing [] exe args1 `E.catch`
       \(_ :: E.IOException) ->
         panicIO $ concat
           ["invokeHelper", ": ", exe, " "

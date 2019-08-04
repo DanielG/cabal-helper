@@ -112,14 +112,14 @@ listPackageCabalFiles qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml}
 workdirArg :: QueryEnvI c 'Stack -> [String]
 workdirArg QueryEnv{qeDistDir=DistDirStack mworkdir} =
   maybeToList $ ("--work-dir="++) . unRelativePath <$> mworkdir
-workdirArg QueryEnv{qeDistDir=DistDirCabal{}} =
-  error "workdirArg: TODO: this case is impossible and should not produce an exhaustiveness warning anymore starting with GHC 8.8"
 
-doStackCmd :: (QueryEnvI c 'Stack -> CallProcessWithCwd a)
-           -> QueryEnvI c 'Stack -> Maybe FilePath -> [String] -> IO a
+doStackCmd :: (QueryEnvI c 'Stack -> CallProcessWithCwdAndEnv a)
+           -> QueryEnvI c 'Stack
+           -> Maybe FilePath -> [String] -> IO a
 doStackCmd procfn qe mcwd args =
   let Programs{..} = qePrograms qe in
-  procfn qe mcwd stackProgram $ stackArgsBefore ++ args ++ stackArgsAfter
+  procfn qe mcwd stackEnv stackProgram $
+    stackArgsBefore ++ args ++ stackArgsAfter
 
 readStackCmd :: QueryEnvI c 'Stack -> Maybe FilePath -> [String] -> IO String
 callStackCmd :: QueryEnvI c 'Stack -> Maybe FilePath -> [String] -> IO ()

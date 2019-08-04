@@ -130,7 +130,7 @@ callCabalInstall
         , [ "--only-dependencies" ]
       ]
 
-  callProcessStderr (Just "/") (cabalProgram ?progs) cabal_opts
+  callProcessStderr (Just "/") [] (cabalProgram ?progs) cabal_opts
 
   runSetupHs ghcVer db srcdir unpackedCabalVer civ
 
@@ -146,11 +146,11 @@ runSetupHs
     -> IO ()
 runSetupHs ghcVer db srcdir cabalVer CabalInstallVersion {..}
     | cabalInstallVer >= parseVer "1.24" = do
-      go $ \args -> callProcessStderr (Just srcdir) (cabalProgram ?progs) $
+      go $ \args -> callProcessStderr (Just srcdir) [] (cabalProgram ?progs) $
         [ "act-as-setup", "--" ] ++ args
     | otherwise = do
       SetupProgram {..} <- compileSetupHs ghcVer db srcdir
-      go $ callProcessStderr (Just srcdir) setupProgram
+      go $ callProcessStderr (Just srcdir) [] setupProgram
   where
     parmake_opt :: Maybe Int -> [String]
     parmake_opt nproc'
@@ -180,7 +180,7 @@ compileSetupHs (GhcVersion ghcVer) db srcdir = do
 
       file = srcdir </> "Setup"
 
-  callProcessStderr (Just srcdir) (ghcProgram ?progs) $ concat
+  callProcessStderr (Just srcdir) [] (ghcProgram ?progs) $ concat
     [ [ "--make"
       , "-package-conf", db
       ]
@@ -232,7 +232,7 @@ installCabalLibV2 _ghcVer cv (PackageEnvFile env_file) = do
              | ?verbose 4 -> ["-v3"]
              | otherwise -> []
         ]
-    callProcessStderr (Just cwd) (cabalProgram ?progs) cabal_opts
+    callProcessStderr (Just cwd) [] (cabalProgram ?progs) cabal_opts
     hPutStrLn stderr "done"
 
 
