@@ -231,12 +231,12 @@ data Ex a = forall x. Ex (a x)
 type QueryEnv = QueryEnvI QueryCache
 
 data QueryEnvI c (pt :: ProjType) = QueryEnv
-    { qeReadProcess :: !ReadProcessWithCwd
+    { qeReadProcess :: !ReadProcessWithCwdAndEnv
     -- ^ Field accessor for 'QueryEnv'. Function used to to start
     -- processes. Useful if you need to, for example, redirect standard error
     -- output of programs started by cabal-helper.
 
-    , qeCallProcess :: !(CallProcessWithCwd ())
+    , qeCallProcess :: !(CallProcessWithCwdAndEnv ())
 
     , qePrograms     :: !Programs
     -- ^ Field accessor for 'QueryEnv'.
@@ -255,8 +255,11 @@ data QueryEnvI c (pt :: ProjType) = QueryEnv
     -- 'QueryEnv' is used.
     }
 
-type ReadProcessWithCwd   = String -> CallProcessWithCwd String
-type CallProcessWithCwd a = Maybe FilePath -> FilePath -> [String] -> IO a
+type ReadProcessWithCwdAndEnv   =
+  String -> CallProcessWithCwdAndEnv String
+
+type CallProcessWithCwdAndEnv a =
+  Maybe FilePath -> [(String, String)] -> FilePath -> [String] -> IO a
 
 data QueryCache pt = QueryCache
     { qcProjInfo  :: !(Maybe (ProjInfo pt))
@@ -472,6 +475,10 @@ data Programs = Programs
       -- ^ The path to the @stack@ program.
     , stackArgsBefore :: ![String]
     , stackArgsAfter  :: ![String]
+    , stackEnv        :: ![(String, String)]
+      --  ^ TODO: Stack doesn't support passing the compiler as a
+      --  commandline option so we meddle with PATH instead. We should
+      --  patch that upstream.
 
     , ghcProgram    :: !FilePath
     -- ^ The path to the @ghc@ program.
@@ -484,7 +491,7 @@ data Programs = Programs
 -- | By default all programs use their unqualified names, i.e. they will be
 -- searched for on @PATH@.
 defaultPrograms :: Programs
-defaultPrograms = Programs "cabal" [] []  "stack" [] [] "ghc" "ghc-pkg"
+defaultPrograms = Programs "cabal" [] []  "stack" [] [] [] "ghc" "ghc-pkg"
 
 data CompileOptions = CompileOptions
     { oVerbose       :: Bool

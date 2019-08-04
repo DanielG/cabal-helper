@@ -299,12 +299,12 @@ runTest modProgs ps2@(psdImpl -> ProjSetupImpl{..}) topdir projdir cabal_file
 runWithCwd :: FilePath -> String -> [String] -> IO ()
 runWithCwd cwd x xs = do
   let ?verbose = (==1)
-  callProcessStderr (Just cwd) x xs
+  callProcessStderr (Just cwd) [] x xs
 
 run :: String -> [String] -> IO ()
 run x xs = do
   let ?verbose = (==1)
-  callProcessStderr Nothing x xs
+  callProcessStderr Nothing [] x xs
 
 test
     :: ModProgs -> ProjSetup2 pt

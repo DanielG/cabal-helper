@@ -81,7 +81,7 @@ createPkgDb cabalVer = do
     <- getPrivateCabalPkgDb $ unpackedToResolvedCabalVersion cabalVer
   exists <- doesDirectoryExist db_path
   when (not exists) $
-       callProcessStderr Nothing (ghcPkgProgram ?progs) ["init", db_path]
+       callProcessStderr Nothing [] (ghcPkgProgram ?progs) ["init", db_path]
   return db
 
 getPrivateCabalPkgDb :: (Verbose, Progs) => ResolvedCabalVersion -> IO PackageDbDir
@@ -136,7 +136,7 @@ cabalVersionExistsInPkgDb cabalVer db@(PackageDbDir db_path) = do
 
 invokeGhc :: Env => GhcInvocation -> IO (Either ExitCode FilePath)
 invokeGhc GhcInvocation {..} = do
-    rv <- callProcessStderr' Nothing (ghcProgram ?progs) $ concat
+    rv <- callProcessStderr' (Just "/") [] (ghcProgram ?progs) $ concat
       [ [ "-outputdir", giOutDir
         , "-o", giOutput
         ]
