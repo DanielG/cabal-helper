@@ -244,7 +244,7 @@ cabalV2WithGHCProgOpts = concat
       else []
   ]
 
-planUnits :: CP.PlanJson -> IO [Unit 'V2]
+planUnits :: CP.PlanJson -> IO [Unit ('Cabal 'CV2)]
 planUnits plan = do
     units <- fmap catMaybes $ mapM takeunit $ Map.elems $ CP.pjUnits plan
     case lefts units of

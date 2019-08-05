@@ -65,6 +65,7 @@ module Distribution.Helper (
 
   -- * GADTs
   , ProjType(..)
+  , CabalProjType(..)
   , ProjLoc(..)
   , DistDir(..)
   , SProjType(..)

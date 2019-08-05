@@ -45,9 +45,14 @@ import Data.Map.Strict (Map)
 -- as a phantom-type variable throughout to make the project type being
 -- passed into various functions correspond to the correct implementation.
 data ProjType
-    = V1    -- ^ @cabal v1-build@ project.
-    | V2    -- ^ @cabal v2-build@ project.
+    = Cabal CabalProjType -- ^ @cabal@ project.
     | Stack -- ^ @stack@ project.
+      deriving (Eq, Ord, Show, Read)
+
+-- | The kind of a @cabal@ project.
+data CabalProjType
+    = CV1 -- ^ @cabal v1-build@ project.
+    | CV2 -- ^ @cabal v2-build@ project.
       deriving (Eq, Ord, Show, Read)
 
 -- | A "singleton" datatype for 'ProjType' which allows us to establish a
@@ -57,7 +62,7 @@ data ProjType
 -- If you just want to know the runtime 'ProjType' use 'demoteSProjType' to
 -- convert to that.
 data SProjType pt where
-    SCabal :: !(SCabalProjType pt) -> SProjType pt
+    SCabal :: !(SCabalProjType pt) -> SProjType ('Cabal pt)
     SStack :: SProjType 'Stack
 
 deriving instance Show (SProjType pt)
@@ -66,14 +71,14 @@ deriving instance Show (SProjType pt)
 -- Cabal project types. We use this to restrict some functions which don't
 -- make sense for Stack to just the Cabal project types.
 data SCabalProjType pt where
-    SCV1 :: SCabalProjType 'V1
-    SCV2 :: SCabalProjType 'V2
+    SCV1 :: SCabalProjType 'CV1
+    SCV2 :: SCabalProjType 'CV2
 
 deriving instance Show (SCabalProjType pt)
 
 demoteSProjType :: SProjType pt -> ProjType
-demoteSProjType (SCabal SCV1) = V1
-demoteSProjType (SCabal SCV2) = V2
+demoteSProjType (SCabal SCV1) = Cabal CV1
+demoteSProjType (SCabal SCV2) = Cabal CV2
 demoteSProjType SStack = Stack
 
 -- | Location of a project context. Usually a project's top-level source
@@ -124,7 +129,7 @@ data ProjLoc (pt :: ProjType) where
     --
     -- Also note that for this project type the concepts of project and
     -- package coincide.
-    ProjLocV1CabalFile :: { plCabalFile :: !FilePath, plPackageDir :: !FilePath } -> ProjLoc 'V1
+    ProjLocV1CabalFile :: { plCabalFile :: !FilePath, plProjectDirV1 :: !FilePath } -> ProjLoc ('Cabal 'CV1)
 
     -- | A @cabal v1-build@ project context. Essentially the same as
     -- 'ProjLocV1CabalFile' but this will dynamically search for the cabal
@@ -134,18 +139,18 @@ data ProjLoc (pt :: ProjType) where
     -- shamelessly throw a obscure exception when using this in the API so
     -- prefer 'ProjLocV1CabalFile' if you don't want that to happen. This
     -- mainly exists for easy upgrading from the @cabal-helper-0.8@ series.
-    ProjLocV1Dir :: { plPackageDir :: !FilePath } -> ProjLoc 'V1
+    ProjLocV1Dir :: { plProjectDirV1 :: !FilePath } -> ProjLoc ('Cabal 'CV1)
 
     -- | A @cabal v2-build@ project context. The path to the
     -- @cabal.project@ file, though you can call it whatever you like. This
     -- configuration file then points to the packages that make up this
     -- project. This corresponds to the @--cabal-project=PATH@ flag on the
     -- @cabal@ command line.
-    ProjLocV2File    :: { plCabalProjectFile :: !FilePath } -> ProjLoc 'V2
+    ProjLocV2File    :: { plCabalProjectFile :: !FilePath } -> ProjLoc ('Cabal 'CV2)
 
     -- | This is equivalent to 'ProjLocV2File' but using the default
     -- @cabal.project@ file name.
-    ProjLocV2Dir     :: { plV2Dir :: !FilePath } -> ProjLoc 'V2
+    ProjLocV2Dir     :: { plProjectDirV2 :: !FilePath } -> ProjLoc ('Cabal 'CV2)
 
     -- | A @stack@ project context. Specify the path to the @stack.yaml@
     -- file here. This configuration file then points to the packages that
@@ -155,9 +160,9 @@ data ProjLoc (pt :: ProjType) where
 
 deriving instance Show (ProjLoc pt)
 
-plV1Dir :: ProjLoc 'V1 -> FilePath
-plV1Dir ProjLocV1CabalFile {plPackageDir} = plPackageDir
-plV1Dir ProjLocV1Dir {plPackageDir} = plPackageDir
+plV1Dir :: ProjLoc ('Cabal 'CV1) -> FilePath
+plV1Dir ProjLocV1CabalFile {plProjectDirV1} = plProjectDirV1
+plV1Dir ProjLocV1Dir {plProjectDirV1} = plProjectDirV1
 
 projTypeOfProjLoc :: ProjLoc pt -> SProjType pt
 projTypeOfProjLoc ProjLocV1CabalFile{} = SCabal SCV1
@@ -174,7 +179,7 @@ data DistDir (pt :: ProjType) where
     -- terminology. 'SCabalProjType' specifies whether we should use
     -- /v2-build/ or /v1-build/. This choice must correspond to
     -- 'ProjLoc' \'s project type.
-    DistDirCabal :: !(SCabalProjType pt) -> !FilePath -> DistDir pt
+    DistDirCabal :: !(SCabalProjType pt) -> !FilePath -> DistDir ('Cabal pt)
 
     -- | A build-directory for stack, aka. /work-dir/. Optionally override
     -- Stack's /work-dir/. If you just want to use Stack's default set to
@@ -255,6 +260,9 @@ data QueryEnvI c (pt :: ProjType) = QueryEnv
     -- 'QueryEnv' is used.
     }
 
+projTypeOfQueryEnv :: QueryEnvI c pt -> SProjType pt
+projTypeOfQueryEnv = projTypeOfProjLoc . qeProjLoc
+
 type ReadProcessWithCwdAndEnv   =
   String -> CallProcessWithCwdAndEnv String
 
@@ -290,12 +298,12 @@ data Unit pt = Unit
     } deriving (Show)
 
 data UnitImpl pt where
-  UnitImplV1 :: UnitImpl 'V1
+  UnitImplV1 :: UnitImpl ('Cabal 'CV1)
 
   UnitImplV2 ::
     { uiV2ComponentNames :: ![ChComponentName]
     , uiV2Components     :: ![String]
-    } -> UnitImpl 'V2
+    } -> UnitImpl ('Cabal 'CV2)
 
   UnitImplStack :: UnitImpl 'Stack
 
@@ -379,13 +387,13 @@ data UnitInfo = UnitInfo
 data ProjConf pt where
   ProjConfV1 ::
     { pcV1CabalFile :: !FilePath
-    } -> ProjConf 'V1
+    } -> ProjConf ('Cabal 'CV1)
 
   ProjConfV2 ::
     { pcV2CabalProjFile       :: !FilePath
     , pcV2CabalProjLocalFile  :: !FilePath
     , pcV2CabalProjFreezeFile :: !FilePath
-    } -> ProjConf 'V2
+    } -> ProjConf ('Cabal 'CV2)
 
   ProjConfStack ::
     { pcStackYaml :: !FilePath
@@ -409,13 +417,13 @@ data ProjInfo pt = ProjInfo
 data ProjInfoImpl pt where
   ProjInfoV1 ::
     { piV1SetupHeader :: !UnitHeader
-    } -> ProjInfoImpl 'V1
+    } -> ProjInfoImpl ('Cabal 'CV1)
 
   ProjInfoV2 ::
     { piV2Plan        :: !PlanJson
     , piV2PlanModTime :: !EpochTime
     , piV2CompilerId  :: !(String, Version)
-    } -> ProjInfoImpl 'V2
+    } -> ProjInfoImpl ('Cabal 'CV2)
 
   ProjInfoStack ::
     { piStackProjPaths :: !StackProjPaths
