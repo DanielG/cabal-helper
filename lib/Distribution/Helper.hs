@@ -220,8 +220,8 @@ projConf (ProjLocV1Dir pkgdir) =
 projConf (ProjLocV1CabalFile cabal_file _) = return $
   ProjConfV1 cabal_file
 projConf (ProjLocV2Dir projdir_path) =
-  projConf $ ProjLocV2File $ projdir_path </> "cabal.project"
-projConf (ProjLocV2File proj_file) = return $
+  projConf $ ProjLocV2File (projdir_path </> "cabal.project") projdir_path
+projConf (ProjLocV2File proj_file _) = return $
   ProjConfV2
     { pcV2CabalProjFile       = proj_file
     , pcV2CabalProjLocalFile  = proj_file <.> "local"
@@ -380,9 +380,8 @@ shallowReconfigureProject QueryEnv
   , qeDistDir = DistDirCabal SCV1 _distdirv1 } =
     return ()
 shallowReconfigureProject QueryEnv
-  { qeProjLoc = ProjLocV2File projfile
+  { qeProjLoc = ProjLocV2File projfile projdir
   , qeDistDir = DistDirCabal SCV2 _distdirv2, .. } = do
-    let projdir = takeDirectory projfile
     _ <- qeCallProcess (Just projdir) [] (cabalProgram qePrograms)
            ["new-build", "--dry-run", "--project-file="++projfile, "all"]
     return ()
@@ -405,7 +404,7 @@ reconfigureUnit :: QueryEnvI c pt -> Unit pt -> IO ()
 reconfigureUnit QueryEnv{qeDistDir=(DistDirCabal SCV1 _), ..} Unit{uPackageDir=_} = do
   return ()
 reconfigureUnit
-  QueryEnv{qeProjLoc=ProjLocV2File projfile, ..}
+  QueryEnv{qeProjLoc=ProjLocV2File projfile _projdir, ..}
   Unit{uPackageDir, uImpl}
   = do
   _ <- qeCallProcess (Just uPackageDir) [] (cabalProgram qePrograms)
@@ -687,7 +686,7 @@ mkCompHelperEnv
   ProjInfo{piCabalVersion}
   = CompHelperEnv
     { cheCabalVer = CabalVersion piCabalVersion
-    , cheProjDir  = plV1Dir projloc
+    , cheProjDir  = plCabalProjectDir projloc
     , cheProjLocalCacheDir = distdir
     , chePkgDb    = Nothing
     , chePlanJson = Nothing
@@ -697,14 +696,9 @@ mkCompHelperEnv
   projloc
   (DistDirCabal SCV2 distdir)
   ProjInfo{piImpl=ProjInfoV2{piV2Plan=plan}}
-  = case projloc of
-      ProjLocV2Dir projdir ->
-        let cheProjDir  = projdir in
-        CompHelperEnv {..}
-      ProjLocV2File proj_file ->
-        let cheProjDir = takeDirectory proj_file in
-        CompHelperEnv {..}
+  = CompHelperEnv {..}
   where
+    cheProjDir  = plCabalProjectDir projloc
     cheCabalVer = CabalVersion $ makeDataVersion pjCabalLibVersion
     cheProjLocalCacheDir = distdir </> "cache"
     chePkgDb    = Nothing

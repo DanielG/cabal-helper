@@ -465,7 +465,7 @@ newBuildProjSetup :: ProjSetup0
 newBuildProjSetup = ProjSetupDescr "cabal-v2" $ Right $ Ex $ ProjSetupImpl
     { psiProjType  = SCabal SCV2
     , psiDistDir   = \dir  -> DistDirCabal SCV2 (dir </> "dist-newstyle")
-    , psiProjLoc   = \_cabal_file projdir -> ProjLocV2File $ projdir </> "cabal.project"
+    , psiProjLoc   = \_cabal_file projdir -> ProjLocV2File (projdir </> "cabal.project") projdir
                      -- TODO: check if cabal.project is there and only use
                      -- V2File then, also remove addCabalProject below so we
                      -- cover both cases.

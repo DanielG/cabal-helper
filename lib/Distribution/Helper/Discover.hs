@@ -55,7 +55,7 @@ findProjects :: FilePath -> IO [Ex ProjLoc]
 findProjects dir = execWriterT $ do
   let cabalProject = dir </> "cabal.project"
   whenM (liftIO $ doesFileExist cabalProject) $
-    tell [Ex $ ProjLocV2File cabalProject]
+    tell [Ex $ ProjLocV2File cabalProject dir]
   let stackYaml = dir </> "stack.yaml"
   whenM (liftIO $ doesFileExist stackYaml) $
     tell [Ex $ ProjLocStackYaml stackYaml]
@@ -74,8 +74,8 @@ getDefaultDistDir (ProjLocV1CabalFile _cabal_file pkgdir) =
   DistDirCabal SCV1 $ pkgdir </> "dist"
 getDefaultDistDir (ProjLocV1Dir pkgdir) =
   DistDirCabal SCV1 $ pkgdir </> "dist"
-getDefaultDistDir (ProjLocV2File cabal_project) =
-  DistDirCabal SCV2 $ replaceFileName cabal_project "dist-newstyle"
+getDefaultDistDir (ProjLocV2File cabal_project projdir) =
+  DistDirCabal SCV2 $ projdir </> "dist-newstyle"
 getDefaultDistDir (ProjLocV2Dir projdir) =
   DistDirCabal SCV2 $ projdir </> "dist-newstyle"
 getDefaultDistDir (ProjLocStackYaml _) =
