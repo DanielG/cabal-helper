@@ -107,8 +107,8 @@ main = do
     s_c_ver :: Either SkipReason Version
       <- sequence $ withEnv stackBuiltinCabalVersion s_ver g_ver
     return $ \pt -> case pt of
-      V1 -> ci_c_ver
-      V2 -> ci_c_ver
+      Cabal CV1 -> ci_c_ver
+      Cabal CV2 -> ci_c_ver
       Stack -> s_c_ver
 
   let showEsrVer = either (\(SkipReason msg) -> "dunno, "++msg) showVersion
@@ -118,7 +118,7 @@ main = do
   putStrLn ""
   putStrLn $ "cabal-install version: " ++ showVersion ci_ver
   putStrLn $ "cabal-install builtin Cabal version: "
-             ++ showEsrVer (f_c_ver V1)
+             ++ showEsrVer (f_c_ver (Cabal CV1))
   putStrLn $ "GHC executable version: " ++ showVersion g_ver
   putStrLn $ "GHC library version: " ++ cProjectVersion
   putStrLn $ "Stack version: " ++ showVersion s_ver
@@ -132,8 +132,8 @@ main = do
       proj_impls =
         -- V2 is sorted before the others here so helper compilation always
         -- uses v2-build caching!
-        [ (V2,    newBuildProjSetup)
-        , (V1,    oldBuildProjSetup)
+        [ (Cabal CV2, newBuildProjSetup)
+        , (Cabal CV1, oldBuildProjSetup)
         , (Stack, stackProjSetup g_ver)
         ]
       all_proj_types = map fst proj_impls
@@ -154,9 +154,9 @@ main = do
       [ TC (TN "exelib")    (parseVer "1.10") (parseVer "0")   []
       , TC (TN "exeintlib") (parseVer "2.0")  (parseVer "0")   []
       , TC (TN "fliblib")   (parseVer "2.0")  (parseVer "0")   []
-      , TC (TN "bkpregex")  (parseVer "2.0")  (parseVer "8.1") [V2, V1]
+      , TC (TN "bkpregex")  (parseVer "2.0")  (parseVer "8.1") [Cabal CV2, Cabal CV1]
       , let multipkg_loc = TF "tests/multipkg/" "proj/" "proj/proj.cabal" in
-        TC  multipkg_loc    (parseVer "1.10") (parseVer "0")   [V2, Stack]
+        TC  multipkg_loc    (parseVer "1.10") (parseVer "0")   [Cabal CV2, Stack]
       --            min Cabal lib ver -^    min GHC ver -^
       ]
 
@@ -278,8 +278,8 @@ checkAndRunTestConfig
       return $ map ($ testConfigToTestSpec tc pt) trs
 
   where
-    pt_disp V1 = "cabal-install"
-    pt_disp V2 = "cabal-install"
+    pt_disp (Cabal CV1) = "cabal-install"
+    pt_disp (Cabal CV2) = "cabal-install"
     pt_disp Stack = "Stack"
 
 
