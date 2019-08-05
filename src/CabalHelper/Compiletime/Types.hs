@@ -32,6 +32,7 @@ import Data.IORef
 import Data.Version
 import Data.Typeable
 import GHC.Generics
+import System.FilePath (takeDirectory)
 import System.Posix.Types
 import CabalHelper.Compiletime.Types.RelativePath
 import CabalHelper.Shared.InterfaceTypes
@@ -146,7 +147,7 @@ data ProjLoc (pt :: ProjType) where
     -- configuration file then points to the packages that make up this
     -- project. This corresponds to the @--cabal-project=PATH@ flag on the
     -- @cabal@ command line.
-    ProjLocV2File    :: { plCabalProjectFile :: !FilePath } -> ProjLoc ('Cabal 'CV2)
+    ProjLocV2File    :: { plCabalProjectFile :: !FilePath, plProjectDirV2 :: !FilePath } -> ProjLoc ('Cabal 'CV2)
 
     -- | This is equivalent to 'ProjLocV2File' but using the default
     -- @cabal.project@ file name.
@@ -163,6 +164,15 @@ deriving instance Show (ProjLoc pt)
 plV1Dir :: ProjLoc ('Cabal 'CV1) -> FilePath
 plV1Dir ProjLocV1CabalFile {plProjectDirV1} = plProjectDirV1
 plV1Dir ProjLocV1Dir {plProjectDirV1} = plProjectDirV1
+
+plCabalProjectDir :: ProjLoc ('Cabal cpt) -> FilePath
+plCabalProjectDir ProjLocV1CabalFile {plProjectDirV1} = plProjectDirV1
+plCabalProjectDir ProjLocV1Dir  {plProjectDirV1} = plProjectDirV1
+plCabalProjectDir ProjLocV2File {plProjectDirV2} = plProjectDirV2
+plCabalProjectDir ProjLocV2Dir  {plProjectDirV2} = plProjectDirV2
+
+plStackProjectDir :: ProjLoc 'Stack -> FilePath
+plStackProjectDir ProjLocStackYaml {plStackYaml} = takeDirectory plStackYaml
 
 projTypeOfProjLoc :: ProjLoc pt -> SProjType pt
 projTypeOfProjLoc ProjLocV1CabalFile{} = SCabal SCV1
