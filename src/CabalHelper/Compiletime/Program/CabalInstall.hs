@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, MultiWayIf, TupleSections #-}
+{-# LANGUAGE DataKinds, MultiWayIf, TupleSections, GADTs #-}
 
 -- cabal-helper: Simple interface to Cabal's configuration state
 -- Copyright (C) 2018  Daniel Gröber <cabal-helper@dxld.at>
@@ -312,3 +312,34 @@ cpCompNameToChComponentName cn =
       (CP.CompNameExe name)    -> ChExeName   $ Text.unpack name
       (CP.CompNameTest name)   -> ChTestName  $ Text.unpack name
       (CP.CompNameBench name)  -> ChBenchName $ Text.unpack name
+
+data CabalInstallCommand
+    = CIConfigure
+    | CIBuild
+
+doCabalInstallCmd
+    :: (QueryEnvI c ('Cabal cpt) -> CallProcessWithCwdAndEnv a)
+    -> QueryEnvI c ('Cabal cpt)
+    -> Maybe FilePath -> CabalInstallCommand -> [String] -> IO a
+doCabalInstallCmd procfn qe mcwd cmd args = do
+  case (cmd, projTypeOfQueryEnv qe) of
+    (CIConfigure, SCabal SCV1) ->
+      run "v1-configure" cabalProjArgs cabalUnitArgs []
+    (CIBuild, SCabal SCV1) ->
+      run "v1-build" cabalProjArgs [] []
+    (_, SCabal SCV2) ->
+      run "v2-build" cabalProjArgs cabalUnitArgs []
+  where
+    Programs{..} = qePrograms qe
+    run cmdarg before aftercmd after  = procfn qe mcwd [] cabalProgram $
+      before ++ [cmdarg] ++ aftercmd ++ args ++ after
+
+readCabalInstallCmd
+    :: QueryEnvI c ('Cabal cpt)
+    -> Maybe FilePath -> CabalInstallCommand -> [String] -> IO String
+callCabalInstallCmd
+    :: QueryEnvI c ('Cabal cpt)
+    -> Maybe FilePath -> CabalInstallCommand -> [String] -> IO ()
+
+readCabalInstallCmd = doCabalInstallCmd (\qe -> qeReadProcess qe "")
+callCabalInstallCmd = doCabalInstallCmd qeCallProcess

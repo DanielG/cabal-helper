@@ -126,7 +126,7 @@ doStackCmd :: (QueryEnvI c 'Stack -> CallProcessWithCwdAndEnv a)
 doStackCmd procfn qe mcwd args =
   let Programs{..} = qePrograms qe in
   procfn qe mcwd stackEnv stackProgram $
-    stackArgsBefore ++ args ++ stackArgsAfter
+    stackProjArgs ++ args ++ stackUnitArgs
 
 readStackCmd :: QueryEnvI c 'Stack -> Maybe FilePath -> [String] -> IO String
 callStackCmd :: QueryEnvI c 'Stack -> Maybe FilePath -> [String] -> IO ()
