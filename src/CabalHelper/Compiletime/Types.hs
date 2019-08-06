@@ -82,8 +82,9 @@ demoteSProjType (SCabal SCV1) = Cabal CV1
 demoteSProjType (SCabal SCV2) = Cabal CV2
 demoteSProjType SStack = Stack
 
--- | Location of a project context. Usually a project's top-level source
--- code directory or a project type specific config file.
+-- | Location of a project context. This is usually just the path project's
+-- top-level source code directory together with an optional project-type
+-- specific config file path.
 --
 -- To find any recognized default project contexts in a given directory
 -- use 'Distribution.Helper.Discover.findProjects'.
@@ -92,29 +93,29 @@ demoteSProjType SStack = Stack
 -- project config files manually, so we also support passing this path here
 -- with the @*File@ constructors.
 --
--- === Correspondence with Project Source Directory
+-- === Correspondence between Project and Package Source Directories
 --
 -- Note that the project's source directory does not necessarily correspond
 -- to the directory containing the project config file, though in some
 -- cases it does.
 --
--- For example cabal-V2 allows the @cabal.project@ file to be positively
--- anywhere in the filesystem when specified via the @--cabal-project@
--- command-line flag, corresponding to the 'ProjLocV2File' constructor
--- here. This config file can then refer to package directories with
--- absolute paths in the @packages:@ declaration.
+-- For example @cabal v2-build@ allows the @cabal.project@ file to be
+-- positively anywhere in the filesystem when specified via the
+-- @--cabal-project@ command-line flag, corresponding to the
+-- 'ProjLocV2File' constructor here. This config file can then refer to
+-- package directories with absolute paths in the @packages:@ declaration.
 --
--- Hence it isn't actually possible to find the whole project's toplevel
--- source directory given just a 'ProjLoc'. However the packages within a
--- project have a well defined source directory, see 'Package.pSourceDir'
+-- Hence it isn't actually possible to find /one/ directory which contains
+-- the whole project's source code but rather we have to consider each
+-- package's source directory individually, see 'Package.pSourceDir'
 data ProjLoc (pt :: ProjType) where
     -- | A fully specified @cabal v1-build@ project context. Here you can
     -- specify both the path to the @.cabal@ file and the source directory
     -- of the package. The cabal file path corresponds to the
     -- @--cabal-file=PATH@ flag on the @cabal@ command line.
     --
-    -- Note that More than one such files existing in a package directory
-    -- is a user error and cabal might still complain about that but we
+    -- Note that more than one such files existing in a package directory
+    -- is a user error and while cabal will still complain about that we
     -- won't.
     --
     -- Also note that for this project type the concepts of project and
@@ -125,10 +126,10 @@ data ProjLoc (pt :: ProjType) where
     -- 'ProjLocV1CabalFile' but this will dynamically search for the cabal
     -- file for you as cabal-install does by default.
     --
-    -- If more than one @.cabal@ file exists in the given directory we will
-    -- shamelessly throw a obscure exception when using this in the API so
-    -- prefer 'ProjLocV1CabalFile' if you don't want that to happen. This
-    -- mainly exists for easy upgrading from the @cabal-helper-0.8@ series.
+    -- If more than one @.cabal@ file is found in the given directory we
+    -- will shamelessly throw a obscure exception so prefer
+    -- 'ProjLocV1CabalFile' if you don't want that to happen. This mainly
+    -- exists for easy upgrading from the @cabal-helper-0.8@ series.
     ProjLocV1Dir :: { plProjectDirV1 :: !FilePath } -> ProjLoc ('Cabal 'CV1)
 
     -- | A @cabal v2-build@ project context. The path to the
@@ -139,13 +140,15 @@ data ProjLoc (pt :: ProjType) where
     ProjLocV2File    :: { plCabalProjectFile :: !FilePath, plProjectDirV2 :: !FilePath } -> ProjLoc ('Cabal 'CV2)
 
     -- | This is equivalent to 'ProjLocV2File' but using the default
-    -- @cabal.project@ file name.
+    -- @cabal.project@ file name in the given directory.
     ProjLocV2Dir     :: { plProjectDirV2 :: !FilePath } -> ProjLoc ('Cabal 'CV2)
 
     -- | A @stack@ project context. Specify the path to the @stack.yaml@
     -- file here. This configuration file then points to the packages that
     -- make up this project. Corresponds to @stack@'s @--stack-yaml=PATH@
     -- command line flag if different from the default name, @stack.yaml@.
+    --
+    -- Note: with Stack the invariant @takeDirectory plStackYaml == projdir@ holds.
     ProjLocStackYaml :: { plStackYaml :: !FilePath } -> ProjLoc 'Stack
 
 deriving instance Show (ProjLoc pt)
