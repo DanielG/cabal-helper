@@ -499,7 +499,7 @@ stackProjSetup ghcVer =
           copyMuliPackageProject progs srcdir destdir copyStackYamls
       , psiQEmod     = \qe ->
           qe { qePrograms = (qePrograms qe)
-               { stackArgsBefore = argsBefore
+               { stackProjArgs = argsBefore
                }
              }
       }

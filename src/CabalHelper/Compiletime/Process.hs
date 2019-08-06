@@ -25,11 +25,14 @@ module CabalHelper.Compiletime.Process
     , module System.Process
     ) where
 
+import Control.Arrow (second)
 import Data.Char
 import Data.List
+import qualified Data.Map.Strict as Map
 import GHC.IO.Exception (IOErrorType(OtherError))
 import System.IO
 import System.IO.Error
+import System.Environment
 import System.Exit
 import System.Process
 
@@ -47,22 +50,41 @@ readProcess' exe args inp = do
 -- | Essentially 'System.Process.callProcess' but returns exit code, has
 -- additional options and logging to stderr when verbosity is enabled.
 callProcessStderr'
-    :: Verbose => Maybe FilePath -> [(String, String)]
+    :: Verbose => Maybe FilePath -> [(String, EnvOverride)]
     -> FilePath -> [String] -> IO ExitCode
 callProcessStderr' mwd env exe args = do
   let cd = case mwd of
              Nothing -> []; Just wd -> [ "cd", formatProcessArg wd++";" ]
-  vLog $ intercalate " " $ cd ++ map formatProcessArg (exe:args)
+  vLog $ intercalate " " $
+    cd ++ map formatProcessArg (map (\(k,v) -> k ++ "=" ++ show v) env ++ exe:args)
+
+  env' <- execEnvOverrides env
   (_, _, _, h) <- createProcess (proc exe args)
     { std_out = UseHandle stderr
-    , env = if env == [] then Nothing else Just env
+    , env = if env == [] then Nothing else Just env'
     , cwd = mwd
     }
   waitForProcess h
 
+execEnvOverride :: EnvOverride -> String -> String
+execEnvOverride (EnvPrepend x) y = x ++ y
+execEnvOverride (EnvAppend  y) x = x ++ y
+execEnvOverride (EnvReplace x) _ = x
+
+execEnvOverrides :: [(String, EnvOverride)] -> IO [(String, String)]
+execEnvOverrides overrides = do
+  envs <- getEnvironment
+  return $ do
+    (k,v) <- envs
+    case Map.lookup k overrides_map of
+      Just os -> return (k, foldr execEnvOverride v os)
+      Nothing -> return (k, v)
+  where
+    overrides_map = Map.fromListWith (++) $ map (second (:[])) overrides
+
 -- | Essentially 'System.Process.callProcess' but with additional options
 -- and logging to stderr when verbosity is enabled.
-callProcessStderr :: Verbose => Maybe FilePath -> [(String, String)]
+callProcessStderr :: Verbose => Maybe FilePath -> [(String, EnvOverride)]
                   -> FilePath -> [String] -> IO ()
 callProcessStderr mwd env exe args = do
   rv <- callProcessStderr' mwd env exe args

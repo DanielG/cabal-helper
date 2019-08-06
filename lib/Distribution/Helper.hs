@@ -83,6 +83,7 @@ module Distribution.Helper (
   -- * Programs
   , Programs(..)
   , defaultPrograms
+  , EnvOverride(..)
 
   -- * Query result types
   , ChComponentInfo(..)
@@ -98,9 +99,11 @@ module Distribution.Helper (
   -- * Legacy v1-build helpers
   , Distribution.Helper.getSandboxPkgDb
 
-  -- * Stateful helper actions
+  -- * Build actions
   , prepare
   , writeAutogenFiles
+  , buildProject
+  , buildUnit
   ) where
 
 import Cabal.Plan hiding (Unit, UnitId, uDistDir)
@@ -205,12 +208,13 @@ mkQueryEnv
 mkQueryEnv projloc distdir = do
   cr <- newIORef $ QueryCache Nothing Map.empty
   return $ QueryEnv
-    { qeReadProcess = \stdin mcwd env exe args ->
+    { qeReadProcess = \stdin mcwd env exe args -> do
+        env' <- execEnvOverrides env
         let cp = (proc exe args)
                    { cwd = mcwd
-                   , env = if env == [] then Nothing else Just env
+                   , env = if env == [] then Nothing else Just env'
                    }
-        in readCreateProcess cp stdin
+        readCreateProcess cp stdin
     , qeCallProcess  = \mcwd env exe args -> do
         let ?verbose = \_ -> False -- TODO: we should get this from env or
                                    -- something
@@ -385,60 +389,82 @@ discardInactiveUnitInfos active_units uis0 =
     restrictKeysMap m s = Map.filterWithKey (\k _ -> Set.member k s) m
 
 
--- | Regenerate project level information by calling the appropriate build
+-- | Regenerate project-level information by calling the appropriate build
 -- system (@cabal@ or @stack@).
 shallowReconfigureProject :: QueryEnvI c pt -> IO ()
 shallowReconfigureProject QueryEnv
-  { qeProjLoc = _
-  , qeDistDir = DistDirCabal SCV1 _distdirv1 } =
-    return ()
-shallowReconfigureProject QueryEnv
-  { qeProjLoc = ProjLocV2File projfile projdir
-  , qeDistDir = DistDirCabal SCV2 _distdirv2, .. } = do
-    _ <- qeCallProcess (Just projdir) [] (cabalProgram qePrograms)
-           ["new-build", "--dry-run", "--project-file="++projfile, "all"]
-    return ()
-shallowReconfigureProject QueryEnv
-  { qeProjLoc = ProjLocV2Dir projdir
-  , qeDistDir = DistDirCabal SCV2 _distdirv2, .. } = do
-    _ <- qeCallProcess (Just projdir) [] (cabalProgram qePrograms)
-           ["new-build", "--dry-run", "all"]
-    return ()
-shallowReconfigureProject QueryEnv
   { qeProjLoc = ProjLocStackYaml _stack_yaml, .. } = do
-    -- In case we ever need to read the cabal files before the Unit stage, this
-    -- command regenerates them from package.yaml
-    --
-    -- _ <- liftIO $ qeCallProcess (Just projdir) (stackProgram qePrograms)
-    --        ["build", "--dry-run"] ""
+    -- Stack's dry-run only generates the cabal file from package.yaml (or
+    -- well that's the only thing we care about that it
+    -- does). reconfigureUnit will take care of this though and we don't
+    -- need the cabal files before the Unit stage anyways.
     return ()
+shallowReconfigureProject qe = buildProjectTarget qe Nothing DryRun
 
 reconfigureUnit :: QueryEnvI c pt -> Unit pt -> IO ()
-reconfigureUnit QueryEnv{qeDistDir=(DistDirCabal SCV1 _), ..} Unit{} = do
-  return ()
-reconfigureUnit
-  QueryEnv{qeProjLoc=ProjLocV2File projfile _projdir, ..}
-  Unit{uPackage=Package{pSourceDir=pkgdir}, uImpl}
-  = do
-  _ <- qeCallProcess (Just pkgdir) [] (cabalProgram qePrograms)
-        (["new-build", "--project-file="++projfile]
-         ++ uiV2Components uImpl)
-  return ()
-reconfigureUnit
-  QueryEnv{qeProjLoc=ProjLocV2Dir{}, ..}
-  Unit{uPackage=Package{pSourceDir=pkgdir}, uImpl}
-  = do
-  _ <- qeCallProcess (Just pkgdir) [] (cabalProgram qePrograms)
-        (["new-build"] ++ uiV2Components uImpl)
-        -- TODO: version check for --only-configure
-  return ()
-reconfigureUnit
-  qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml, ..}
-  Unit{uPackage=Package{pSourceDir=pkgdir}}
-  = do
-  _ <- Stack.callStackCmd qe (Just pkgdir)
-         ["--stack-yaml="++stack_yaml, "build", "--only-configure", "."]
-  return ()
+reconfigureUnit qe u = buildProjectTarget qe (Just u) OnlyCfg
+
+buildUnit :: QueryEnvI c pt -> Unit pt -> IO ()
+buildUnit qe u = buildProjectTarget qe (Just u) DoBuild
+
+buildProject :: QueryEnvI c pt -> IO ()
+buildProject qe = buildProjectTarget qe Nothing DoBuild
+
+data BuildStage = DryRun | OnlyCfg | DoBuild
+
+buildProjectTarget
+    :: QueryEnvI c pt -> Maybe (Unit pt) -> BuildStage -> IO ()
+buildProjectTarget qe mu stage = do
+  -- Stack and cabal just happen to have the same stage options, totally by
+  -- accident :)
+  stage_opts :: [String] <- return $ case stage of
+    DryRun  -> ["--dry-run"]
+    OnlyCfg -> ["--only-configure"]
+    DoBuild -> []
+  -- TODO: version check for cabal's --only-configure
+  case qe of
+    QueryEnv { qeDistDir = DistDirCabal cpt distdir, qeProjLoc } -> do
+      let projdir = plCabalProjectDir qeProjLoc
+      cmd <- return $ case stage of
+        DryRun | SCV1 <- cpt ->
+          CabalInstall.CIConfigure
+        OnlyCfg ->
+          CabalInstall.CIConfigure
+        _ ->
+          CabalInstall.CIBuild
+      CabalInstall.callCabalInstallCmd qe (Just projdir) cmd $
+        case cpt of
+          SCV1 ->
+            [ "--builddir="++distdir ]
+          SCV2 -> do
+            targets <- return $ case mu of
+              Nothing -> ["all"]
+              Just Unit{uImpl} -> uiV2Components uImpl
+            case qeProjLoc of
+              ProjLocV2File {plCabalProjectFile} ->
+                [ "--project-file="++plCabalProjectFile
+                , "--builddir="++distdir
+                ] ++ stage_opts ++ targets
+              ProjLocV2Dir {} ->
+                [ "--builddir="++distdir
+                ] ++ stage_opts ++ targets
+
+    QueryEnv { qeDistDir = DistDirStack mworkdir
+             , qeProjLoc = qeProjLoc@ProjLocStackYaml {plStackYaml}
+             } -> do
+      let projdir = plStackProjectDir qeProjLoc
+      let workdir_opts = Stack.workdirArg qe
+      case mu of
+        Just Unit{uPackage=Package{pSourceDir}} ->
+          Stack.callStackCmd qe (Just pSourceDir) $
+            workdir_opts ++
+            [ "--stack-yaml="++plStackYaml, "build", "."
+            ] ++ stage_opts
+        Nothing ->
+          Stack.callStackCmd qe (Just projdir) $
+            workdir_opts ++
+            [ "--stack-yaml="++plStackYaml, "build"
+            ] ++ stage_opts
 
 getFileModTime :: FilePath -> IO (FilePath, EpochTime)
 getFileModTime f = do
@@ -636,7 +662,8 @@ withVerbosity act = do
           _ -> False
   act
 
--- | Bring 'Programs' and 'CompPrograms' into scope as implicit parameters
+-- | Fixup program paths as appropriate for current project-type and bring
+-- 'Programs' into scope as an implicit parameter.
 withProgs
     :: Verbose => ProjInfoImpl pt -> QueryEnvI c pt -> (Env => IO a) -> IO a
 withProgs impl QueryEnv{..} f = do
@@ -651,10 +678,7 @@ withProgs impl QueryEnv{..} f = do
     guessCompProgramPaths progs
       | same ghcProgram progs dprogs = return progs
     guessCompProgramPaths progs = do
-        let v | ?verbose 2 = normal
-              | ?verbose 3 = verbose
-              | ?verbose 4 = deafening
-              | otherwise = silent
+        let v = getCabalVerbosity
             mGhcPath0    | same ghcProgram progs dprogs = Nothing
                          | otherwise = Just $ ghcProgram progs
             mGhcPkgPath0 | same ghcPkgProgram progs dprogs = Nothing
@@ -668,9 +692,19 @@ withProgs impl QueryEnv{..} f = do
         let getProg p = ProgDb.programPath <$> ProgDb.lookupProgram p progdb
             mghcPath1    = getProg ProgDb.ghcProgram
             mghcPkgPath1 = getProg ProgDb.ghcPkgProgram
+            ghc = fromMaybe (ghcProgram progs) mghcPath1
+            ghc_pkg = fromMaybe (ghcPkgProgram progs) mghcPkgPath1
         return progs
-          { ghcProgram    = fromMaybe (ghcProgram progs) mghcPath1
-          , ghcPkgProgram = fromMaybe (ghcProgram progs) mghcPkgPath1
+          { ghcProgram    = ghc
+          , ghcPkgProgram = ghc_pkg
+          , stackEnv      = stackEnv progs ++
+            -- TODO: this is a cludge, need to make a symlink farm for
+            -- stack instead. Note: Haddock also has to be in the compiler
+            -- dir.
+            [("PATH", EnvPrepend $ takeDirectory ghc ++ [searchPathSeparator])]
+          , cabalUnitArgs = cabalUnitArgs progs ++
+              maybeToList (("--with-ghc="++) <$> mghcPath1) ++
+              maybeToList (("--with-ghc-pkg="++) <$> mghcPkgPath1)
           }
 
     same f o o'  = f o == f o'

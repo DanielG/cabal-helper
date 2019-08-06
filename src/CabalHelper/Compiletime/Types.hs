@@ -269,7 +269,7 @@ type ReadProcessWithCwdAndEnv   =
   String -> CallProcessWithCwdAndEnv String
 
 type CallProcessWithCwdAndEnv a =
-  Maybe FilePath -> [(String, String)] -> FilePath -> [String] -> IO a
+  Maybe FilePath -> [(String, EnvOverride)] -> FilePath -> [String] -> IO a
 
 data QueryCache pt = QueryCache
     { qcProjInfo  :: !(Maybe (ProjInfo pt))
@@ -484,14 +484,14 @@ type Progs   = (?progs :: Programs)
 data Programs = Programs
     { cabalProgram    :: !FilePath
       -- ^ The path to the @cabal@ program.
-    , cabalArgsBefore :: ![String]
-    , cabalArgsAfter  :: ![String]
+    , cabalProjArgs   :: ![String]
+    , cabalUnitArgs   :: ![String]
 
     , stackProgram    :: !FilePath
       -- ^ The path to the @stack@ program.
-    , stackArgsBefore :: ![String]
-    , stackArgsAfter  :: ![String]
-    , stackEnv        :: ![(String, String)]
+    , stackProjArgs   :: ![String]
+    , stackUnitArgs   :: ![String]
+    , stackEnv        :: ![(String, EnvOverride)]
       --  ^ TODO: Stack doesn't support passing the compiler as a
       --  commandline option so we meddle with PATH instead. We should
       --  patch that upstream.
@@ -508,6 +508,12 @@ data Programs = Programs
 -- searched for on @PATH@.
 defaultPrograms :: Programs
 defaultPrograms = Programs "cabal" [] []  "stack" [] [] [] "ghc" "ghc-pkg"
+
+data EnvOverride
+    = EnvPrepend String
+    | EnvAppend String
+    | EnvReplace String
+      deriving (Eq, Ord, Show, Read, Generic, Typeable)
 
 data CompileOptions = CompileOptions
     { oVerbose       :: Bool
