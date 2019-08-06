@@ -324,8 +324,9 @@ test modProgs (psdImpl -> ProjSetupImpl{..}) topdir tmpdir projdir cabal_file
 
     cs <- concat <$> runQuery (allUnits (Map.elems . uiComponents)) qe
 
-    when (any ((==ProduceBuildOutput) . ciNeedsBuildOutput) cs) $
-      psiBuild progs projdir
+
+    -- TODO: Cludge until we can just build the unit dependencies
+    psiBuild progs projdir
 
     let pkgdir = takeDirectory cabal_file
     homedir <- getHomeDirectory
@@ -343,7 +344,7 @@ test modProgs (psdImpl -> ProjSetupImpl{..}) topdir tmpdir projdir cabal_file
         putStrLn sopts
 
         hFlush stdout
-        tr <- compileModule pkgdir ciNeedsBuildOutput ciEntrypoints ciSourceDirs opts'
+        tr <- compileModule pkgdir ciEntrypoints ciSourceDirs opts'
         return $ tr ciComponentName
   where
     formatArg x
@@ -355,14 +356,14 @@ addCabalProject dir = do
   writeFile (dir </> "cabal.project") "packages: .\n"
 
 compileModule
-    :: FilePath -> NeedsBuildOutput -> ChEntrypoint -> [FilePath] -> [String]
+    :: FilePath -> ChEntrypoint -> [FilePath] -> [String]
     -> IO (ChComponentName -> FilePath -> String -> String -> TestResult)
-compileModule pkgdir nb ep srcdirs opts = do
+compileModule pkgdir ep srcdirs opts = do
     cwd_before <- getCurrentDirectory
     setCurrentDirectory pkgdir
     flip E.finally (setCurrentDirectory cwd_before) $ do
 
-    putStrLn $ "compiling: " ++ show ep ++ " (" ++ show nb ++ ")"
+    putStrLn $ "compiling: " ++ show ep
 
     E.handle (\(ec :: ExitCode) -> print ec >> return (TestResult False)) $ do
 
@@ -371,9 +372,7 @@ compileModule pkgdir nb ep srcdirs opts = do
     let printGhcEx e = GHC.printException e >> return (TestResult False)
     handleSourceError printGhcEx $ do
 
-    let target = case nb of
-          ProduceBuildOutput -> HscNothing -- AZ: what should this be?
-          NoBuildOutput      -> HscInterpreted
+    let target = HscInterpreted -- TODO
 
     dflags0 <- getSessionDynFlags
     let dflags1 = dflags0 {
@@ -403,16 +402,17 @@ compileModule pkgdir nb ep srcdirs opts = do
              -- TODO: this doesn't support Setup.lhs
              ["Setup.hs"]
 
-    let ts' = case nb of
-                NoBuildOutput -> map (\t -> t { targetAllowObjCode = False }) ts
-                ProduceBuildOutput -> ts
+    -- Always compile targets as GHCi bytecode so the setContext call below
+    -- can always succeed
+    let ts' = map (\t -> t { targetAllowObjCode = False }) ts
 
     liftIO $ putStrLn $ "targets: " ++ showPpr dflags2 ts'
 
     setTargets ts'
     _ <- load LoadAllTargets
 
-    when (nb == NoBuildOutput) $ do
+--    when (nb == NoBuildOutput) $ do
+    do
       setContext $ case ep of
         ChLibEntrypoint ms ms' ss ->
             map (IIModule . mkModuleName . unChModuleName) $ ms ++ ms' ++ ss

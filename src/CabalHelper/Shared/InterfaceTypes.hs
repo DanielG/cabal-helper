@@ -39,10 +39,8 @@ import Data.Map.Strict (Map)
 data ChResponse
     = ChResponseComponentsInfo (Map ChComponentName ChComponentInfo)
     | ChResponseList           [String]
-    | ChResponsePkgDbs         [ChPkgDb]
     | ChResponseLbi            String
     | ChResponseVersion        (String, Version)
-    | ChResponseLicenses       [(String, [(String, Version)])]
     | ChResponseFlags          [(String, Bool)]
   deriving (Eq, Ord, Read, Show, Generic)
 
@@ -68,16 +66,6 @@ data ChComponentInfo = ChComponentInfo
     , ciGhcOptions            :: [String]
     -- ^ Full set of GHC options, ready for loading this component into GHCi.
 
-    , ciGhcSrcOptions         :: [String]
-    -- ^ Only search path related GHC options.
-
-    , ciGhcPkgOptions         :: [String]
-    -- ^ Only package related GHC options, sufficient for things don't need to
-    -- access any home modules.
-
-    , ciGhcLangOptions        :: [String]
-    -- ^ Only Haskell language extension related options, i.e. @-XSomeExtension@
-
     , ciSourceDirs            :: [String]
     -- ^ A component's @hs-source-dirs@ field, note that this only contains the
     -- directories specified by the cabal file, however cabal also adds the
@@ -87,32 +75,21 @@ data ChComponentInfo = ChComponentInfo
     , ciEntrypoints           :: ChEntrypoint
     -- ^ Modules or files Cabal would have the compiler build directly. Can be
     -- used to compute the home module closure for a component.
-
-    , ciNeedsBuildOutput      :: NeedsBuildOutput
-    -- ^ If a component has a non-default module renaming (backpack) it cannot
-    -- be built in memory and instead needs proper build output.
-    -- TODO: This is a ghc-mod legacy thing and has to be removed
     } deriving (Eq, Ord, Read, Show)
 
--- TODO: we know the source-dir now so we can resolve ChSetupEntrypoint
--- internally
-data ChEntrypoint = ChSetupEntrypoint -- ^ Almost like 'ChExeEntrypoint' but
-                                      -- @main-is@ could either be @"Setup.hs"@
-                                      -- or @"Setup.lhs"@. Since we don't know
-                                      -- where the source directory is you have
-                                      -- to find these files.
-                  | ChLibEntrypoint { chExposedModules :: [ChModuleName]
-                                    , chOtherModules   :: [ChModuleName]
-                                    , chSignatures     :: [ChModuleName] -- backpack only
-                                    }
-                  | ChExeEntrypoint { chMainIs         :: FilePath
-                                    , chOtherModules   :: [ChModuleName]
-                                    } deriving (Eq, Ord, Read, Show, Generic)
+data ChEntrypoint
+    = ChSetupEntrypoint
+    | ChLibEntrypoint
+      { chExposedModules :: [ChModuleName]
+      , chOtherModules   :: [ChModuleName]
+      , chSignatures     :: [ChModuleName] -- backpack only
+      }
+    | ChExeEntrypoint
+      { chMainIs         :: FilePath
+      , chOtherModules   :: [ChModuleName]
+      } deriving (Eq, Ord, Read, Show, Generic)
 
 data ChPkgDb = ChPkgGlobal
              | ChPkgUser
              | ChPkgSpecific FilePath
-               deriving (Eq, Ord, Read, Show, Generic)
-
-data NeedsBuildOutput = ProduceBuildOutput | NoBuildOutput
                deriving (Eq, Ord, Read, Show, Generic)

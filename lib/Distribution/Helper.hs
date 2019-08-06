@@ -86,7 +86,6 @@ module Distribution.Helper (
   , ChModuleName(..)
   , ChPkgDb(..)
   , ChEntrypoint(..)
-  , NeedsBuildOutput(..)
 
   -- * General information
   , Distribution.Helper.buildPlatform
@@ -499,17 +498,15 @@ readUnitInfo :: Helper pt -> Unit pt -> IO UnitInfo
 readUnitInfo helper unit@Unit {uUnitId=uiUnitId} = do
     res <- runHelper helper unit
            [ "package-id"
-           , "package-db-stack"
-           , "flags"
            , "compiler-id"
+           , "flags"
            , "config-flags"
            , "non-default-config-flags"
            , "component-info"
            ]
     let [ Just (ChResponseVersion        uiPackageId),
-          Just (ChResponsePkgDbs         uiPackageDbStack),
-          Just (ChResponseFlags          uiPackageFlags),
           Just (ChResponseVersion        uiCompilerId),
+          Just (ChResponseFlags          uiPackageFlags),
           Just (ChResponseFlags          uiConfigFlags),
           Just (ChResponseFlags          uiNonDefaultConfigFlags),
           Just (ChResponseComponentsInfo uiComponents)
@@ -653,12 +650,13 @@ newtype Helper pt
   = Helper { runHelper :: Unit pt -> [String] -> IO [Maybe ChResponse] }
 
 getHelper :: ProjInfo pt -> QueryEnvI c pt -> IO (Helper pt)
-getHelper ProjInfo{piCabalVersion} QueryEnv{..}
+getHelper ProjInfo{piCabalVersion} qe@QueryEnv{..}
   | piCabalVersion == bultinCabalVersion = return $ Helper $
       \Unit{ uCabalFile=CabalFile cabal_file
            , uDistDir=DistDirLib distdir
            } args ->
-        helper_main $ cabal_file : distdir : args
+        let pt = dispHelperProjectType (projTypeOfQueryEnv qe) in
+        helper_main $ cabal_file : distdir : pt : args
 getHelper proj_info qe@QueryEnv{..} = do
   withVerbosity $ withProgs (piImpl proj_info) qe $ do
     t0 <- Clock.getTime Monotonic
@@ -671,8 +669,17 @@ getHelper proj_info qe@QueryEnv{..} = do
       Left rv ->
         panicIO $ "compileHelper': compiling helper failed! exit code "++ show rv
       Right exe ->
+        let pt = dispHelperProjectType (projTypeOfQueryEnv qe) in
         return $ Helper $ \Unit{uCabalFile, uDistDir} args ->
-          readHelper qe exe uCabalFile uDistDir args
+          readHelper qe exe uCabalFile uDistDir (pt : args)
+
+dispHelperProjectType :: SProjType pt -> String
+dispHelperProjectType (SCabal SCV1) = "v1"
+--  ^ v1-build needs a last minute addition of the inplace package-db
+-- beyond what lbi has
+dispHelperProjectType (SCabal SCV2) = "v2"
+dispHelperProjectType SStack        = "v2"
+--  ^ stack also embeds all necessary options into lbi like v2
 
 mkCompHelperEnv
     :: Verbose
