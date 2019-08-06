@@ -372,9 +372,6 @@ data UnitInfo = UnitInfo
     , uiCompilerId            :: !(String, Version)
     -- ^ The version of GHC the unit is configured to use
 
-    , uiPackageDbStack        :: !([ChPkgDb])
-    -- ^ List of package databases to use.
-
     , uiPackageFlags          :: !([(String, Bool)])
     -- ^ Flag definitions from cabal file
 

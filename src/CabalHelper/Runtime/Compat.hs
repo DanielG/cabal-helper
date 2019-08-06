@@ -29,6 +29,7 @@ module CabalHelper.Runtime.Compat
     , unUnqualComponentName'
     , componentNameFromComponent
     , componentOutDir
+    , internalPackageDBPath
     ) where
 
 import System.FilePath
@@ -224,3 +225,9 @@ componentOutDir' lbi compName' =
   let targetDir = (buildDir lbi) </> compName'
       compDir    = targetDir </> (compName' ++ "-tmp")
   in compDir
+
+#if !CH_MIN_VERSION_Cabal(2,0,0)
+internalPackageDBPath :: LocalBuildInfo -> FilePath -> FilePath
+internalPackageDBPath lbi distPref =
+  distPref </> "package.conf.inplace"
+#endif
