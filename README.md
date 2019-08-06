@@ -25,6 +25,8 @@ additional complexity.
 
 ## Technical Background
 
+### Haskell Packages and `Setup.hs`
+
 Essentially all Haskell packages implement
 ["The Haskell Cabal" (pdf)](https://www.haskell.org/cabal/proposal/pkg-spec.pdf)
 packaging specification. The `Cabal` library and `cabal-install` *build tool*
@@ -60,6 +62,49 @@ file to avoid probing the system again.
 
 It is this file that `cabal-helper` is primarily concerned with reading and
 presenting in a usable format.
+
+### Multi-package projects
+
+So far so good. That's pretty much the end of the story for the traditional
+`cabal build` commands but what about `cabal new-build` and Stack I hear
+you asking?
+
+Well, essentially both new-build and Stack simply build on top of the
+traditional `Setup.hs` interface. So the `setup-config` file is still there
+in all it's glory, we just have to deal with more than one of it since both
+build-tools support multiple packages and `Setup.hs` only knows how to deal
+with a single package at a time.
+
+To support this cabal-helper has grown a representation of what a project
+is in it's API starting with the 1.0 series. We currently support both
+new-build and Stack. The API is designed to allow extending support to
+custom build systems such as GHC's but we have not done this yet.
+
+### The "Helper" in cabal-helper
+
+In the API docs you will find frequent mentions of "the helper executable"
+so I'll explain what that is here because it is quite fundamental to how
+things work in the codebase.
+
+The fundamental problem cabal-helper solves is the fact that to access the
+internal data Cabal stores in the `setup-config` file we have to link
+against `lib:Cabal`. However the binary format of this file is unstable and
+there is no backwards compatibility mechanism in the library. So to read a
+`setup-config` file produced by a certain version of Cabal we have to link
+against exactly that version.
+
+Not only that but usally the `cabal` commandline tool controls which Cabal
+library version is used, so we really just have to deal with whatever we
+get.
+
+To solve this problem the cabal-helper library builds a small executable at
+runtime who's only purpose is to link against `lib:Cabal`, read the
+contents of `setup-config` and present the data there in a Cabal version
+independent format for consumption by the library.
+
+Recently some work was merged into cabal to have `Setup.hs` to do this
+natively (https://github.com/haskell/cabal/pull/5954), we're planning to
+use this eventually to replace our "helper".
 
 ## IRC
 
