@@ -312,7 +312,7 @@ unitInfo u = Query $ \qe -> getUnitInfo qe u
 
 -- | Get information on all units in a project.
 allUnits :: (UnitInfo -> a) -> Query pt (NonEmpty a)
-allUnits f = do
+allUnits f =
   fmap f <$> (T.mapM unitInfo =<< join . fmap pUnits <$> projectPackages)
 
 

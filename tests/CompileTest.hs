@@ -72,7 +72,7 @@ main = do
 
   case args of
     "list-versions":[] -> do
-        mapM_ print =<< relevantCabalVersions =<< ghcVersion
+        mapM_ print =<< relevantCabalVersions =<< (GhcVersion <$> getGhcVersion)
     "list-versions":ghc_ver_str:[] ->
         mapM_ print =<< relevantCabalVersions (GhcVersion (parseVer ghc_ver_str))
     _ ->
@@ -125,7 +125,7 @@ allCabalVersions (GhcVersion ghc_ver) = do
 
 testRelevantCabalVersions :: Env => IO ()
 testRelevantCabalVersions = do
-  ghc_ver <- ghcVersion
+  ghc_ver <- GhcVersion <$> getGhcVersion
   relevant_cabal_versions <- relevantCabalVersions ghc_ver
   testCabalVersions $ map CabalVersion relevant_cabal_versions ++ [CabalHEAD ()]
 

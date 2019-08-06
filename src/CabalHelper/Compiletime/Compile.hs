@@ -112,7 +112,7 @@ compileHelper'
     => CompHelperEnv' UnpackedCabalVersion
     -> IO (Either ExitCode FilePath)
 compileHelper' CompHelperEnv {..} = do
-  ghcVer <- ghcVersion
+  ghcVer <- GhcVersion <$> getGhcVersion
   Just (prepare, comp) <- case cheCabalVer of
     cabalVer@CabalHEAD {} -> runMaybeT $ msum  $ map (\f -> f ghcVer cabalVer)
       [ compileWithCabalV2GhcEnv'
@@ -217,7 +217,7 @@ compileHelper' CompHelperEnv {..} = do
    compileWithCabalV2GhcEnv' :: Env => GhcVersion -> UnpackedCabalVersion -> MaybeT IO (IO (), Compile)
    compileWithCabalV2GhcEnv' ghcVer cabalVer = do
        _ <- maybe mzero pure cheDistV2 -- bail if this isn't a v2-build project
-       CabalInstallVersion instVer <- liftIO cabalInstallVersion
+       instVer <- liftIO getCabalInstallVersion
        guard $ instVer >= (Version [2,4,1,0] [])
        --  ^ didn't test with older versions
        guard $ ghcVer  >= (GhcVersion (Version [8,0] []))

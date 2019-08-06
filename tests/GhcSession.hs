@@ -34,12 +34,13 @@ import Text.Show.Pretty (pPrint)
 import Distribution.Helper
 
 import CabalHelper.Shared.Common
-import CabalHelper.Compiletime.Types (Env)
+import CabalHelper.Compiletime.Types (Env, Verbose, Progs)
 import CabalHelper.Compiletime.Process (readProcess, callProcessStderr)
 import CabalHelper.Compiletime.Program.GHC
-  (GhcVersion(..), ghcVersion, ghcLibdir)
+  (GhcVersion(..), getGhcVersion, ghcLibdir)
 import CabalHelper.Compiletime.Program.CabalInstall
-  (CabalInstallVersion(..), cabalInstallVersion)
+  (getCabalInstallVersion, getCabalInstallBuiltinCabalVersion)
+import CabalHelper.Compiletime.Program.Stack (getStackVersion)
 
 import TestOptions
 
@@ -71,16 +72,16 @@ main = do
             ?progs = modProgs defaultPrograms
         in action
 
-  GhcVersion g_ver <- withEnv ghcVersion
-  CabalInstallVersion ci_ver <- withEnv cabalInstallVersion
-  s_ver <- withEnv stackVersion
+  g_ver <- withEnv getGhcVersion
+  ci_ver <- withEnv getCabalInstallVersion
+  s_ver <- withEnv getStackVersion
     `E.catch` \(_ :: IOError) -> return (makeVersion [0])
 
   -- Cabal lib version
   f_c_ver :: ProjType -> Either SkipReason Version <- do
-    ci_c_ver <- Right <$> withEnv cabalInstallBuiltinCabalVersion
+    ci_c_ver <- Right <$> withEnv getCabalInstallBuiltinCabalVersion
     s_c_ver :: Either SkipReason Version
-      <- sequence $ withEnv stackBuiltinCabalVersion s_ver g_ver
+      <- sequence $ withEnv getStackBuiltinCabalVersion s_ver g_ver
     return $ \pt -> case pt of
       Cabal CV1 -> ci_c_ver
       Cabal CV2 -> ci_c_ver
@@ -518,14 +519,10 @@ copyMuliPackageProject progs srcdir destdir copyPkgExtra = do
       , "--output-directory="++destdir </> pkgdir ]
     copyPkgExtra (srcdir </> pkgdir) (destdir </> pkgdir)
 
-stackVersion :: (?progs :: Programs) => IO Version
-stackVersion =
-  parseVer . trim <$> readProcess (stackProgram ?progs) [ "--numeric-version" ] ""
-
-stackBuiltinCabalVersion
-    :: (?progs :: Programs)
+getStackBuiltinCabalVersion
+    :: (Verbose, Progs)
     => Version -> Version -> Either SkipReason (IO Version)
-stackBuiltinCabalVersion s_ver g_ver = do
+getStackBuiltinCabalVersion s_ver g_ver = do
     _ <- stackCheckCompat s_ver
     res <- lookupStackResolver g_ver
     return $ parseVer . trim <$> readProcess (stackProgram ?progs)
@@ -539,11 +536,6 @@ stackCheckCompat s_ver =
         Left $ SkipReason $ "stack-" ++ showVersion s_ver ++ " is too old"
     | otherwise ->
         Right ()
-
-cabalInstallBuiltinCabalVersion :: (?progs :: Programs) => IO Version
-cabalInstallBuiltinCabalVersion =
-    parseVer . trim <$> readProcess (cabalProgram ?progs)
-        ["act-as-setup", "--", "--numeric-version"] ""
 
 normalizeOutputWithVars = replaceStrings
 replaceStrings :: [(String, String)] -> String -> String

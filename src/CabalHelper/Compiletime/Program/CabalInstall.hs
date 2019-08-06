@@ -57,10 +57,15 @@ newtype CabalInstallVersion = CabalInstallVersion { cabalInstallVer :: Version }
 
 data HEAD = HEAD deriving (Eq, Show)
 
-cabalInstallVersion :: (Verbose, Progs) => IO CabalInstallVersion
-cabalInstallVersion = do
-  CabalInstallVersion . parseVer . trim
+getCabalInstallVersion :: (Verbose, Progs) => IO Version
+getCabalInstallVersion = do
+  parseVer . trim
     <$> readProcess' (cabalProgram ?progs) ["--numeric-version"] ""
+
+getCabalInstallBuiltinCabalVersion :: (Verbose, Progs) => IO Version
+getCabalInstallBuiltinCabalVersion =
+    parseVer . trim <$> readProcess' (cabalProgram ?progs)
+        ["act-as-setup", "--", "--numeric-version"] ""
 
 installCabalLibV1 :: Env => GhcVersion -> UnpackedCabalVersion -> IO PackageDbDir
 installCabalLibV1 ghcVer cabalVer = do
@@ -117,7 +122,7 @@ callCabalInstallV1
   ghcVer
   unpackedCabalVer
   = do
-  civ@CabalInstallVersion {..} <- cabalInstallVersion
+  cabalInstallVer <- getCabalInstallVersion
   cabal_opts <- return $ concat
       [
         [ "--package-db=clear"
@@ -140,7 +145,7 @@ callCabalInstallV1
 
   callProcessStderr (Just "/") [] (cabalProgram ?progs) cabal_opts
 
-  runSetupHs ghcVer db srcdir unpackedCabalVer civ
+  runSetupHs ghcVer db srcdir unpackedCabalVer $ CabalInstallVersion cabalInstallVer
 
   hPutStrLn stderr "done"
 
@@ -221,7 +226,7 @@ installCabalLibV2 _ghcVer cv (PackageEnvFile env_file) = do
         return $ ("Cabal-"++showVersion cabalVer, "/")
       CabalHEAD (_commitid, CabalSourceDir srcdir) -> do
         return (".", srcdir)
-    CabalInstallVersion {..} <- cabalInstallVersion
+    cabalInstallVer <- getCabalInstallVersion
     cabal_opts <- return $ concat
         [ if cabalInstallVer >= Version [1,20] []
              then ["--no-require-sandbox"]

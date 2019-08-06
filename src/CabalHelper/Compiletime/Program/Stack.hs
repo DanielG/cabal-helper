@@ -38,7 +38,12 @@ import Prelude
 
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Types.RelativePath
+import CabalHelper.Compiletime.Process
 import CabalHelper.Shared.Common
+
+getStackVersion :: (Verbose, Progs) => IO Version
+getStackVersion =
+  parseVer . trim <$> readProcess' (stackProgram ?progs) [ "--numeric-version" ] ""
 
 getPackage :: QueryEnvI c 'Stack -> CabalFile -> IO (Package 'Stack)
 getPackage qe cabal_file@(CabalFile cabal_file_path) = do

@@ -60,16 +60,16 @@ newtype GhcVersion = GhcVersion { unGhcVersion :: Version }
 showGhcVersion :: GhcVersion -> String
 showGhcVersion (GhcVersion v) = showVersion v
 
-ghcVersion :: (Verbose, Progs) => IO GhcVersion
-ghcVersion = GhcVersion .
+getGhcVersion :: (Verbose, Progs) => IO Version
+getGhcVersion =
   parseVer . trim <$> readProcess' (ghcProgram ?progs) ["--numeric-version"] ""
 
 ghcLibdir :: (Verbose, Progs) => IO FilePath
 ghcLibdir = do
   trim <$> readProcess' (ghcProgram ?progs) ["--print-libdir"] ""
 
-ghcPkgVersion :: (Verbose, Progs) => IO Version
-ghcPkgVersion =
+getGhcPkgVersion :: (Verbose, Progs) => IO Version
+getGhcPkgVersion =
   parseVer . trim . dropWhile (not . isDigit)
     <$> readProcess' (ghcPkgProgram ?progs) ["--version"] ""
 
@@ -85,9 +85,9 @@ createPkgDb cabalVer = do
 getPrivateCabalPkgDb :: (Verbose, Progs) => ResolvedCabalVersion -> IO PackageDbDir
 getPrivateCabalPkgDb cabalVer = do
   appdir <- appCacheDir
-  ghcVer <- ghcVersion
+  ghcVer <- getGhcVersion
   let db_path =
-        appdir </> "ghc-" ++ showGhcVersion ghcVer ++ ".package-dbs"
+        appdir </> "ghc-" ++ showVersion ghcVer ++ ".package-dbs"
                </> "Cabal-" ++ showResolvedCabalVersion cabalVer
   return $ PackageDbDir db_path
 
