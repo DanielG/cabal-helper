@@ -79,6 +79,8 @@ data ChComponentInfo = ChComponentInfo
 
 data ChEntrypoint
     = ChSetupEntrypoint
+      { chMainIs :: FilePath
+      }
     | ChLibEntrypoint
       { chExposedModules :: [ChModuleName]
       , chOtherModules   :: [ChModuleName]

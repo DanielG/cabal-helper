@@ -398,9 +398,7 @@ compileModule pkgdir ep srcdirs opts = do
                Nothing -> error $ printf
                  "Couldn't find source file for Main module (%s), search path:\n\
                  \%s\n" m (show srcdirs)
-           ChSetupEntrypoint         -> return $
-             -- TODO: this doesn't support Setup.lhs
-             ["Setup.hs"]
+           ChSetupEntrypoint m -> return [m]
 
     -- Always compile targets as GHCi bytecode so the setContext call below
     -- can always succeed
@@ -418,7 +416,7 @@ compileModule pkgdir ep srcdirs opts = do
             map (IIModule . mkModuleName . unChModuleName) $ ms ++ ms' ++ ss
         ChExeEntrypoint _  ms  ->
             map (IIModule . mkModuleName . unChModuleName) $ ChModuleName "Main" : ms
-        ChSetupEntrypoint      ->
+        ChSetupEntrypoint _    ->
             map (IIModule . mkModuleName) ["Main"]
 
     return $ TestResult True
