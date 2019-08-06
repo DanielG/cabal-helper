@@ -106,18 +106,7 @@ demoteSProjType SStack = Stack
 --
 -- Hence it isn't actually possible to find the whole project's toplevel
 -- source directory given just a 'ProjLoc'. However the packages within a
--- project have a well defined source directory.
---
--- Unfortunately we do not expose the concept of a "package" in the API to
--- abstract the differences between the project types. Instead each 'Unit'
--- (which is conceptually part of a "package") carries the corresponding
--- package source directory in 'uPackageDir'. Together with a 'Unit' query
--- such as 'projectUnits' you can thus get the source directory for each
--- unit.
---
--- If you need to present this in a per-package view rather than a per-unit
--- view you should be able to use the source directory as a key to
--- determine which units to group into a package.
+-- project have a well defined source directory, see 'Package.pSourceDir'
 data ProjLoc (pt :: ProjType) where
     -- | A fully specified @cabal v1-build@ project context. Here you can
     -- specify both the path to the @.cabal@ file and the source directory
@@ -287,6 +276,16 @@ data QueryCache pt = QueryCache
 newtype DistDirLib = DistDirLib FilePath
     deriving (Eq, Ord, Read, Show)
 
+-- | A 'Package' is a named collection of many 'Unit's.
+data Package pt = Package
+    { pPackageName :: !String
+    , pSourceDir   :: !FilePath
+    , pCabalFile   :: !CabalFile
+    , pFlags       :: ![(String, Bool)]
+    -- | Cabal flags to set when configuring and building this package.
+    , pUnits       :: !(NonEmpty (Unit pt))
+    } deriving (Show)
+
 -- | A 'Unit' is essentially a "build target". It is used to refer to a set
 -- of components (exes, libs, tests etc.) which are managed by a certain
 -- instance of the Cabal build-system[1]. We may get information on the
@@ -301,8 +300,7 @@ newtype DistDirLib = DistDirLib FilePath
 -- was created in. However this is not enforced by the API.
 data Unit pt = Unit
     { uUnitId      :: !UnitId
-    , uPackageDir  :: !FilePath
-    , uCabalFile   :: !CabalFile
+    , uPackage     :: !(Package pt)
     , uDistDir     :: !DistDirLib
     , uImpl        :: !(UnitImpl pt)
     } deriving (Show)
@@ -414,7 +412,7 @@ newtype ProjConfModTimes = ProjConfModTimes [(FilePath, EpochTime)]
 -- | Project-scope information cache.
 data ProjInfo pt = ProjInfo
   { piCabalVersion     :: !Version
-  , piUnits            :: !(NonEmpty (Unit pt))
+  , piPackages         :: !(NonEmpty (Package pt))
   , piImpl             :: !(ProjInfoImpl pt)
   , piProjConfModTimes :: !ProjConfModTimes
   -- ^ Key for cache invalidation. When this is not equal to the return

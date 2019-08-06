@@ -1,5 +1,5 @@
 -- cabal-helper: Simple interface to Cabal's configuration state
--- Copyright (C) 2015-2018  Daniel Gröber <cabal-helper@dxld.at>
+-- Copyright (C) 2015-2019  Daniel Gröber <cabal-helper@dxld.at>
 --
 -- This program is free software: you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License as published by
@@ -41,12 +41,17 @@ module Distribution.Helper (
 
   -- ** Project queries
   , compilerVersion
-  , projectUnits
+  , projectPackages
 
-  -- ** Unit queries
+  -- ** 'Package' queries
+  , Package -- abstract
+  , pPackageName
+  , pSourceDir
+  , pUnits
+
+  -- ** 'Unit' queries
   , Unit -- abstract
   , uComponentName
-  , uPackageDir
   , UnitId -- abstract
   , UnitInfo(..)
   , unitInfo
@@ -105,6 +110,7 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.IO.Class
 import Control.Exception as E
 import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.UTF8 as BSU
 import Data.IORef
 import Data.List hiding (filter)
 import Data.String
@@ -115,11 +121,13 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
+import qualified Data.Traversable as T
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Version
 import Data.Function
 import System.Clock as Clock
+import System.IO
 import System.Environment
 import System.FilePath
 import System.Directory
@@ -147,10 +155,11 @@ import CabalHelper.Runtime.HelperMain (helper_main)
 import CabalHelper.Compiletime.Compat.Version
 import qualified CabalHelper.Compiletime.Compat.ProgramDb as ProgDb
     ( defaultProgramDb, programPath, lookupProgram, ghcProgram, ghcPkgProgram )
-
+import Distribution.Package
+    ( packageName )
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
-import Distribution.Verbosity (silent, normal, verbose, deafening)
+import Distribution.Verbosity (Verbosity, silent, normal, verbose, deafening)
 import Distribution.Simple.GHC as GHC (configure)
 
 -- $type-conventions
@@ -256,8 +265,10 @@ getUnitModTimes :: Unit pt -> IO UnitModTimes
 getUnitModTimes
   Unit
     { uDistDir=DistDirLib distdirv1
-    , uCabalFile=CabalFile cabal_file_path
-    , uPackageDir
+    , uPackage=Package
+      { pCabalFile=CabalFile cabal_file_path
+      , pSourceDir
+      }
     , uImpl
     }
   = do
@@ -270,7 +281,7 @@ getUnitModTimes
     umtSetupConfig <- (traverse getFileModTime <=< mightExist) setup_config_path
     return UnitModTimes {..}
   where
-    package_yaml_path = uPackageDir  </> "package.yaml"
+    package_yaml_path = pSourceDir  </> "package.yaml"
     setup_config_path = distdirv1 </> "setup-config"
 
 
@@ -278,7 +289,8 @@ getUnitModTimes
 compilerVersion :: Query pt (String, Version)
 compilerVersion = Query $ \qe ->
   getProjInfo qe >>= \proj_info ->
-    let someUnit = NonEmpty.head $ piUnits proj_info in
+    let someUnit = NonEmpty.head $ pUnits $
+                   NonEmpty.head $ piPackages proj_info in
     --  ^ ASSUMPTION: Here we assume the compiler version is uniform across all
     --  units so we just pick any one.
     case piImpl proj_info of
@@ -286,9 +298,9 @@ compilerVersion = Query $ \qe ->
       ProjInfoV2 { piV2CompilerId } -> return piV2CompilerId
       ProjInfoStack {} -> uiCompilerId <$> getUnitInfo qe someUnit
 
--- | All local units currently active in a project\'s build plan.
-projectUnits          :: Query pt (NonEmpty (Unit pt))
-projectUnits = Query $ \qe -> piUnits <$> getProjInfo qe
+-- | All local packages currently active in a project\'s build plan.
+projectPackages          :: Query pt (NonEmpty (Package pt))
+projectPackages = Query $ \qe -> piPackages <$> getProjInfo qe
 
 -- | Get the 'UnitInfo' for a given 'Unit'. To get a 'Unit' see 'projectUnits'.
 unitInfo              :: Unit pt -> Query pt UnitInfo
@@ -296,13 +308,15 @@ unitInfo u = Query $ \qe -> getUnitInfo qe u
 
 -- | Get information on all units in a project.
 allUnits :: (UnitInfo -> a) -> Query pt (NonEmpty a)
-allUnits f = fmap f <$> (mapM unitInfo =<< projectUnits)
+allUnits f = do
+  fmap f <$> (T.mapM unitInfo =<< join . fmap pUnits <$> projectPackages)
 
 getProjInfo :: QueryEnv pt -> IO (ProjInfo pt)
 getProjInfo qe@QueryEnv{..} = do
   cache@QueryCache{qcProjInfo, qcUnitInfos} <- readIORef qeCacheRef
   proj_info <- checkUpdateProjInfo qe qcProjInfo
-  let active_units = NonEmpty.toList $ piUnits proj_info
+  let active_units = NonEmpty.toList $ join $
+                       fmap pUnits $ piPackages proj_info
   writeIORef qeCacheRef $ cache
     { qcProjInfo  = Just proj_info
     , qcUnitInfos = discardInactiveUnitInfos active_units qcUnitInfos
@@ -400,29 +414,29 @@ shallowReconfigureProject QueryEnv
     return ()
 
 reconfigureUnit :: QueryEnvI c pt -> Unit pt -> IO ()
-reconfigureUnit QueryEnv{qeDistDir=(DistDirCabal SCV1 _), ..} Unit{uPackageDir=_} = do
+reconfigureUnit QueryEnv{qeDistDir=(DistDirCabal SCV1 _), ..} Unit{} = do
   return ()
 reconfigureUnit
   QueryEnv{qeProjLoc=ProjLocV2File projfile _projdir, ..}
-  Unit{uPackageDir, uImpl}
+  Unit{uPackage=Package{pSourceDir=pkgdir}, uImpl}
   = do
-  _ <- qeCallProcess (Just uPackageDir) [] (cabalProgram qePrograms)
+  _ <- qeCallProcess (Just pkgdir) [] (cabalProgram qePrograms)
         (["new-build", "--project-file="++projfile]
          ++ uiV2Components uImpl)
   return ()
 reconfigureUnit
   QueryEnv{qeProjLoc=ProjLocV2Dir{}, ..}
-  Unit{uPackageDir, uImpl}
+  Unit{uPackage=Package{pSourceDir=pkgdir}, uImpl}
   = do
-  _ <- qeCallProcess (Just uPackageDir) [] (cabalProgram qePrograms)
+  _ <- qeCallProcess (Just pkgdir) [] (cabalProgram qePrograms)
         (["new-build"] ++ uiV2Components uImpl)
         -- TODO: version check for --only-configure
   return ()
 reconfigureUnit
   qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml, ..}
-  Unit{uPackageDir}
+  Unit{uPackage=Package{pSourceDir=pkgdir}}
   = do
-  _ <- Stack.callStackCmd qe (Just uPackageDir)
+  _ <- Stack.callStackCmd qe (Just pkgdir)
          ["--stack-yaml="++stack_yaml, "build", "--only-configure", "."]
   return ()
 
@@ -440,20 +454,30 @@ readProjInfo qe pc pcm = withVerbosity $ do
       setup_config_path <- canonicalizePath (distdir </> "setup-config")
       mhdr <- readSetupConfigHeader setup_config_path
       case mhdr of
-        Just hdr@(UnitHeader _pkgId ("Cabal", hdrCabalVersion) _compId) ->
+        Just hdr@(UnitHeader (pkg_name_bs, _pkg_ver) ("Cabal", hdrCabalVersion) _compId) -> do
+          let
+            v3_0_0_0 = makeVersion [3,0,0,0]
+            pkg_name
+              | hdrCabalVersion >= v3_0_0_0 = BSU.toString pkg_name_bs
+              | otherwise = BS8.unpack pkg_name_bs
+            pkg = Package
+              { pPackageName = pkg_name
+              , pSourceDir = plCabalProjectDir projloc
+              , pCabalFile = CabalFile pcV1CabalFile
+              , pFlags = []
+              , pUnits = (:|[]) Unit
+                { uUnitId = UnitId pkg_name
+                , uPackage = pkg
+                , uDistDir = DistDirLib distdir
+                , uImpl = UnitImplV1
+                }
+              }
+            piImpl = ProjInfoV1 { piV1SetupHeader = hdr }
           return ProjInfo
             { piCabalVersion = hdrCabalVersion
             , piProjConfModTimes = pcm
-            , piUnits = (:|[]) $ Unit
-              { uUnitId = UnitId ""
-              , uPackageDir = plV1Dir projloc
-              , uCabalFile = CabalFile pcV1CabalFile
-              , uDistDir = DistDirLib distdir
-              , uImpl = UnitImplV1
-              }
-            , piImpl = ProjInfoV1
-              { piV1SetupHeader = hdr
-              }
+            , piPackages = pkg :| []
+            , piImpl
             }
         Just UnitHeader {uhSetupId=(setup_name, _)} ->
           panicIO $ printf "Unknown Setup package-id in setup-config header '%s': '%s'"
@@ -465,14 +489,20 @@ readProjInfo qe pc pcm = withVerbosity $ do
       let plan_path = distdirv2 </> "cache" </> "plan.json"
       plan_mtime <- modificationTime <$> getFileStatus plan_path
       plan@PlanJson { pjCabalLibVersion=Ver pjCabalLibVersion
+                    , pjCabalVersion
                     , pjCompilerId=PkgId (PkgName compName) (Ver compVer)
                     }
           <- decodePlanJson plan_path
-      Just units <- NonEmpty.nonEmpty <$> CabalInstall.planUnits plan
+      when (pjCabalVersion < Ver [2,4,1,0]) $
+        panicIO $ "plan.json was produced by too-old a version of\
+                  \cabal-install. The 'dist-dir' keys will be missing. \
+                  \Please upgrade to at least cabal-instal-2.4.1.0"
+
+      Just pkgs <- NonEmpty.nonEmpty <$> CabalInstall.planPackages plan
       return ProjInfo
         { piCabalVersion = makeDataVersion pjCabalLibVersion
         , piProjConfModTimes = pcm
-        , piUnits = units
+        , piPackages = pkgs
         , piImpl = ProjInfoV2
           { piV2Plan = plan
           , piV2PlanModTime = plan_mtime
@@ -481,7 +511,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
         }
     (DistDirStack{}, _) -> do
       Just cabal_files <- NonEmpty.nonEmpty <$> Stack.listPackageCabalFiles qe
-      units <- mapM (Stack.getUnit qe) cabal_files
+      pkgs <- mapM (Stack.getPackage qe) cabal_files
       proj_paths <- Stack.projPaths qe
       let piImpl = ProjInfoStack { piStackProjPaths = proj_paths }
       Just (cabalVer:_) <- withProgs piImpl qe $ runMaybeT $
@@ -490,7 +520,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
       return ProjInfo
         { piCabalVersion = cabalVer
         , piProjConfModTimes = pcm
-        , piUnits = units
+        , piPackages = pkgs
         , ..
         }
 
@@ -646,14 +676,21 @@ withProgs impl QueryEnv{..} f = do
     same f o o'  = f o == f o'
     dprogs = defaultPrograms
 
+getCabalVerbosity :: Verbose => Verbosity
+getCabalVerbosity
+  | ?verbose 2 = normal
+  | ?verbose 3 = verbose
+  | ?verbose 4 = deafening
+  | otherwise = silent
+
 newtype Helper pt
   = Helper { runHelper :: Unit pt -> [String] -> IO [Maybe ChResponse] }
 
 getHelper :: ProjInfo pt -> QueryEnvI c pt -> IO (Helper pt)
 getHelper ProjInfo{piCabalVersion} qe@QueryEnv{..}
   | piCabalVersion == bultinCabalVersion = return $ Helper $
-      \Unit{ uCabalFile=CabalFile cabal_file
-           , uDistDir=DistDirLib distdir
+      \Unit{ uDistDir=DistDirLib distdir
+           , uPackage=Package{pCabalFile=CabalFile cabal_file}
            } args ->
         let pt = dispHelperProjectType (projTypeOfQueryEnv qe) in
         helper_main $ cabal_file : distdir : pt : args
@@ -670,8 +707,8 @@ getHelper proj_info qe@QueryEnv{..} = do
         panicIO $ "compileHelper': compiling helper failed! exit code "++ show rv
       Right exe ->
         let pt = dispHelperProjectType (projTypeOfQueryEnv qe) in
-        return $ Helper $ \Unit{uCabalFile, uDistDir} args ->
-          readHelper qe exe uCabalFile uDistDir (pt : args)
+        return $ Helper $ \Unit{uDistDir, uPackage=Package{pCabalFile}} args ->
+          readHelper qe exe pCabalFile uDistDir (pt : args)
 
 dispHelperProjectType :: SProjType pt -> String
 dispHelperProjectType (SCabal SCV1) = "v1"
