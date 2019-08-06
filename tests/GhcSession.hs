@@ -468,7 +468,7 @@ newBuildProjSetup = ProjSetupDescr "cabal-v2" $ Right $ Ex $ ProjSetupImpl
                      -- V2File then, also remove addCabalProject below so we
                      -- cover both cases.
     , psiConfigure = \progs dir ->
-        runWithCwd dir (cabalProgram progs) [ "new-configure" ]
+        runWithCwd dir (cabalProgram progs) [ "new-build", "--only-configure" ]
     , psiBuild     = \progs dir ->
         runWithCwd dir (cabalProgram progs) [ "new-build" ]
     , psiSdist     = \progs srcdir destdir -> do
@@ -492,7 +492,7 @@ stackProjSetup ghcVer =
       , psiProjLoc   = \_cabal_file projdir ->
           ProjLocStackYaml $ projdir </> "stack.yaml"
       , psiConfigure = \progs dir ->
-          runWithCwd dir (stackProgram progs) $ argsBefore ++ [ "build", "--dry-run" ]
+          runWithCwd dir (stackProgram progs) $ argsBefore ++ [ "build", "--only-configure" ]
       , psiBuild     = \progs dir ->
           runWithCwd dir (stackProgram progs) $ argsBefore ++ [ "build" ]
       , psiSdist     = \progs srcdir destdir -> do

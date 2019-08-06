@@ -30,6 +30,7 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.IO.Class
 import Data.Char
 import Data.List hiding (filter)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.String
 import Data.Maybe
 import Data.Function
@@ -45,19 +46,25 @@ import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Types.RelativePath
 import CabalHelper.Shared.Common
 
-getUnit :: QueryEnvI c 'Stack -> CabalFile -> IO (Unit 'Stack)
-getUnit qe cabal_file@(CabalFile cabal_file_path) = do
+getPackage :: QueryEnvI c 'Stack -> CabalFile -> IO (Package 'Stack)
+getPackage qe cabal_file@(CabalFile cabal_file_path) = do
   let pkgdir = takeDirectory cabal_file_path
   let pkg_name = dropExtension $ takeFileName cabal_file_path
   look <- paths qe pkgdir
   let distdirv1_rel = look "dist-dir:"
-  return $ Unit
-    { uUnitId     = UnitId pkg_name
-    , uPackageDir = pkgdir
-    , uCabalFile  = cabal_file
-    , uDistDir    = DistDirLib $ pkgdir </> distdirv1_rel
-    , uImpl       = UnitImplStack
-    }
+  let pkg = Package
+        { pPackageName = pkg_name
+        , pSourceDir = pkgdir
+        , pCabalFile = cabal_file
+        , pFlags = []
+        , pUnits = (:|[]) $ Unit
+          { uUnitId     = UnitId pkg_name
+          , uDistDir    = DistDirLib $ pkgdir </> distdirv1_rel
+          , uPackage    = pkg
+          , uImpl       = UnitImplStack
+          }
+        }
+  return pkg
 
 projPaths :: QueryEnvI c 'Stack -> IO StackProjPaths
 projPaths qe@QueryEnv {qeProjLoc=ProjLocStackYaml stack_yaml} = do

@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, MultiWayIf #-}
+{-# LANGUAGE DataKinds, MultiWayIf, TupleSections #-}
 
 -- cabal-helper: Simple interface to Cabal's configuration state
 -- Copyright (C) 2018  Daniel Gröber <cabal-helper@dxld.at>
@@ -24,10 +24,12 @@ License     : GPL-3
 
 module CabalHelper.Compiletime.Program.CabalInstall where
 
+import Control.Arrow ((&&&))
 import qualified Cabal.Plan as CP
 import Control.Monad
 import Data.Coerce
-import Data.Either
+import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.Semigroup ((<>))
 import Data.Maybe
 import Data.Version
 import System.IO
@@ -37,7 +39,6 @@ import System.Environment
 import System.FilePath
 import Text.Printf
 import Text.Read
-import Text.Show.Pretty
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
@@ -86,15 +87,22 @@ installingMessage = message
       -- a way to let API clients override this!
       hPutStr stderr $ printf "\
 \cabal-helper: Installing a private copy of Cabal because we couldn't\n\
-\find the right version in your global/user package-db. This might take a\n\
-\while but will only happen once per Cabal version you're using.\n\
+\find the right version anywhere on your system. You can set the environment\n\
+\variable CABAL_HELPER_DEBUG=1 to see where we searched.\n\
 \\n\
-\If anything goes horribly wrong just delete this directory and try again:\n\
-\    %s\n\
+\Note that this installation might take a little while but it will only\n\
+\happen once per Cabal library version used in your build-plans.\n\
 \\n\
 \If you want to avoid this automatic installation altogether install\n\
-\version %s of Cabal manually (into your user or global package-db):\n\
+\version %s of the Cabal library manually, either using cabal or your\n\
+\system package manager. With cabal you can use the following command:\n\
 \    $ cabal install Cabal --constraint \"Cabal == %s\"\n\
+\\n\
+\FYI the build products and cabal-helper executable cache are all in the\n\
+\following directory, you can simply delete it if you think something\n\
+\is broken :\n\
+\    %s\n\
+\Please do report any problems you encounter.\n\
 \\n\
 \Installing Cabal %s ...\n" appdir sver sver sver
 
@@ -244,39 +252,55 @@ cabalV2WithGHCProgOpts = concat
       else []
   ]
 
-planUnits :: CP.PlanJson -> IO [Unit ('Cabal 'CV2)]
-planUnits plan = do
-    units <- fmap catMaybes $ mapM takeunit $ Map.elems $ CP.pjUnits plan
-    case lefts units of
-      [] -> return $ rights units
-      us@(_:_) -> panicIO $
-        msg ++ (concat $ map (unlines . map ("  "++) . lines . ppShow) us)
+planPackages :: CP.PlanJson -> IO [Package ('Cabal 'CV2)]
+planPackages plan = do
+    fmap Map.elems $
+      mapM mkPackage $
+      groupByMap $ Map.elems $
+      Map.filter ((==CP.UnitTypeLocal) . CP.uType) $
+      CP.pjUnits plan
   where
-    msg = "\
-\plan.json doesn't contain 'dist-dir' key for the following local units:\n"
-    takeunit u@CP.Unit
-      { uType=CP.UnitTypeLocal
-      , uDistDir=Just distdirv1
-      , uPkgSrc=Just (CP.LocalUnpackedPackage pkgdir)
+    groupByMap = Map.fromListWith (<>) . map (CP.uPId &&& (:|[]))
+
+    mkPackage units@(unit :| _) =
+      case unit of
+       CP.Unit
+        { uPkgSrc=Just (CP.LocalUnpackedPackage pkgdir)
+        } -> do
+          cabal_file <- Cabal.complainIfNoCabalFile pkgdir =<< Cabal.findCabalFile pkgdir
+          let pkg = Package
+                { pPackageName =
+                    let CP.PkgId (CP.PkgName pkg_name) _ = CP.uPId unit
+                    in Text.unpack pkg_name
+                , pSourceDir = pkgdir
+                , pCabalFile = CabalFile cabal_file
+                , pFlags = []
+                , pUnits = fmap (mkUnit pkg) units
+                }
+          return pkg
+       _ -> panicIO "planPackages.mkPackage: Got non-unpacked package src!"
+
+    mkUnit pkg CP.Unit
+      { uDistDir=Just distdirv1
       , uComps=comps
-      , uPId=CP.PkgId pkg_name _
-      } = do
-        cabal_file <- Cabal.complainIfNoCabalFile pkgdir =<< Cabal.findCabalFile pkgdir
-        let comp_names = Map.keys comps
-        let uiV2Components =
-              map (Text.unpack . CP.dispCompNameTarget pkg_name) $ Map.keys comps
-        let uiV2ComponentNames = map cpCompNameToChComponentName comp_names
-        return $ Just $ Right $ Unit
-          { uUnitId     = UnitId $ Text.unpack (coerce (CP.uId u))
-          , uPackageDir = pkgdir
-          , uCabalFile  = CabalFile cabal_file
+      , uPId = CP.PkgId pkg_name _
+      , uId
+      } =
+        let comp_names = Map.keys comps in
+        Unit
+          { uUnitId     = UnitId $ Text.unpack (coerce uId)
+          , uPackage    = pkg
           , uDistDir    = DistDirLib distdirv1
-          , uImpl       = UnitImplV2 {..}
+          , uImpl       =
+            let
+              uiV2ComponentNames = map cpCompNameToChComponentName comp_names
+              uiV2Components =
+                map (Text.unpack . CP.dispCompNameTarget pkg_name) $
+                Map.keys comps
+            in UnitImplV2 {..}
           }
-    takeunit u@CP.Unit {uType=CP.UnitTypeLocal} =
-      return $ Just $ Left u
-    takeunit _ =
-      return $ Nothing
+    mkUnit _ _ =
+      error "planPackages.mkUnit: Got package without distdir!"
 
 cpCompNameToChComponentName :: CP.CompName -> ChComponentName
 cpCompNameToChComponentName cn =
