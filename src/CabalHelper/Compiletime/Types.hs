@@ -279,14 +279,16 @@ data QueryCache pt = QueryCache
 newtype DistDirLib = DistDirLib FilePath
     deriving (Eq, Ord, Read, Show)
 
+type Package pt = Package' (NonEmpty (Unit pt))
+
 -- | A 'Package' is a named collection of many 'Unit's.
-data Package pt = Package
+data Package' units = Package
     { pPackageName :: !String
     , pSourceDir   :: !FilePath
     , pCabalFile   :: !CabalFile
     , pFlags       :: ![(String, Bool)]
     -- | Cabal flags to set when configuring and building this package.
-    , pUnits       :: !(NonEmpty (Unit pt))
+    , pUnits       :: !units
     } deriving (Show)
 
 -- | A 'Unit' is essentially a "build target". It is used to refer to a set
@@ -303,7 +305,7 @@ data Package pt = Package
 -- was created in. However this is not enforced by the API.
 data Unit pt = Unit
     { uUnitId      :: !UnitId
-    , uPackage     :: !(Package pt)
+    , uPackage     :: !(Package' ())
     , uDistDir     :: !DistDirLib
     , uImpl        :: !(UnitImpl pt)
     } deriving (Show)
