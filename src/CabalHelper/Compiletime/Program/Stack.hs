@@ -60,7 +60,7 @@ getPackage qe cabal_file@(CabalFile cabal_file_path) = do
         , pUnits = (:|[]) $ Unit
           { uUnitId     = UnitId pkg_name
           , uDistDir    = DistDirLib $ pkgdir </> distdirv1_rel
-          , uPackage    = pkg
+          , uPackage    = pkg { pUnits = () }
           , uImpl       = UnitImplStack
           }
         }

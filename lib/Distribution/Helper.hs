@@ -493,7 +493,7 @@ readProjInfo qe pc pcm = withVerbosity $ do
               , pFlags = []
               , pUnits = (:|[]) Unit
                 { uUnitId = UnitId pkg_name
-                , uPackage = pkg
+                , uPackage = pkg { pUnits = () }
                 , uDistDir = DistDirLib distdir
                 , uImpl = UnitImplV1
                 }

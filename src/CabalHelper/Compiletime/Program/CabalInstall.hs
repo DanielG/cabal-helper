@@ -262,6 +262,7 @@ planPackages plan = do
   where
     groupByMap = Map.fromListWith (<>) . map (CP.uPId &&& (:|[]))
 
+    mkPackage :: NonEmpty CP.Unit -> IO (Package ('Cabal 'CV2))
     mkPackage units@(unit :| _) =
       case unit of
        CP.Unit
@@ -275,11 +276,12 @@ planPackages plan = do
                 , pSourceDir = pkgdir
                 , pCabalFile = CabalFile cabal_file
                 , pFlags = []
-                , pUnits = fmap (mkUnit pkg) units
+                , pUnits = fmap (mkUnit pkg { pUnits = () }) units
                 }
           return pkg
        _ -> panicIO "planPackages.mkPackage: Got non-unpacked package src!"
 
+    mkUnit :: Package' () -> CP.Unit -> Unit ('Cabal 'CV2)
     mkUnit pkg CP.Unit
       { uDistDir=Just distdirv1
       , uComps=comps
