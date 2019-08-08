@@ -27,7 +27,6 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.IO.Class
 import Data.Char
 import Data.List
-import Data.String
 import Data.Maybe
 import Data.Version
 import System.Exit
