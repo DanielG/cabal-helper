@@ -26,7 +26,6 @@ import Control.Applicative
 import Data.Char
 import Data.Maybe
 import Data.List
-import Data.Version
 import System.FilePath
 import Prelude
 
