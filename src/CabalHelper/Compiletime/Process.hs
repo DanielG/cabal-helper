@@ -40,31 +40,44 @@ import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Log
 
 readProcess' :: Verbose => FilePath -> [String] -> String -> IO String
-readProcess' exe args inp = do
-  vLog $ intercalate " " $ map formatProcessArg (exe:args)
-  outp <- readProcess exe args inp
+readProcess' exe args inp =
+  readProcessStderr Nothing [] exe args inp
+
+readProcessStderr :: Verbose => Maybe FilePath -> [(String, EnvOverride)]
+                  -> FilePath -> [String] -> String -> IO String
+readProcessStderr mcwd env exe args inp = do
+  logProcessCall mcwd env exe args
+  env' <- execEnvOverrides env
+  outp <- readCreateProcess (proc exe args)
+    { cwd = mcwd
+    , env = if env == [] then Nothing else Just env'
+    } inp
   vLog $ unlines $ map ("=> "++) $ lines outp
   return outp
-
 
 -- | Essentially 'System.Process.callProcess' but returns exit code, has
 -- additional options and logging to stderr when verbosity is enabled.
 callProcessStderr'
     :: Verbose => Maybe FilePath -> [(String, EnvOverride)]
     -> FilePath -> [String] -> IO ExitCode
-callProcessStderr' mwd env exe args = do
-  let cd = case mwd of
-             Nothing -> []; Just wd -> [ "cd", formatProcessArg wd++";" ]
-  vLog $ intercalate " " $
-    cd ++ map formatProcessArg (map (\(k,v) -> k ++ "=" ++ show v) env ++ exe:args)
-
+callProcessStderr' mcwd env exe args = do
+  logProcessCall mcwd env exe args
   env' <- execEnvOverrides env
   (_, _, _, h) <- createProcess (proc exe args)
     { std_out = UseHandle stderr
     , env = if env == [] then Nothing else Just env'
-    , cwd = mwd
+    , cwd = mcwd
     }
   waitForProcess h
+
+logProcessCall :: Verbose => Maybe FilePath -> [(String, EnvOverride)]
+               -> FilePath -> [String] -> IO ()
+logProcessCall mcwd env exe args = do
+  vLog $ intercalate " " $ cd ++ env_args ++ map formatProcessArg (exe:args)
+  where
+    env_args = map (\(k,v) -> k ++ "=" ++ show v) env
+    cd = case mcwd of
+      Nothing -> []; Just cwd -> [ "cd", formatProcessArg cwd++";" ]
 
 execEnvOverride :: EnvOverride -> String -> String
 execEnvOverride (EnvPrepend x) y = x ++ y
