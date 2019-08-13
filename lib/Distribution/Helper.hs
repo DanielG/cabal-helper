@@ -64,6 +64,7 @@ module Distribution.Helper (
   , QueryEnvI -- abstract
   , mkQueryEnv
   , qeReadProcess
+  , qeCallProcess
   , qePrograms
   , qeProjLoc
   , qeDistDir
