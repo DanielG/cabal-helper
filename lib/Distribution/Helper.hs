@@ -209,16 +209,9 @@ mkQueryEnv projloc distdir = do
   cr <- newIORef $ QueryCache Nothing Map.empty
   return $ QueryEnv
     { qeReadProcess = \stdin mcwd env exe args -> do
-        env' <- execEnvOverrides env
-        let cp = (proc exe args)
-                   { cwd = mcwd
-                   , env = if env == [] then Nothing else Just env'
-                   }
-        readCreateProcess cp stdin
-    , qeCallProcess  = \mcwd env exe args -> do
-        let ?verbose = \_ -> False -- TODO: we should get this from env or
-                                   -- something
-        callProcessStderr mcwd env exe args
+        withVerbosity $ readProcessStderr mcwd env exe args ""
+    , qeCallProcess  = \mcwd env exe args ->
+        withVerbosity $ callProcessStderr mcwd env exe args
     , qePrograms     = defaultPrograms
     , qeProjLoc      = projloc
     , qeDistDir      = distdir
