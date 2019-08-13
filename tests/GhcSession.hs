@@ -320,13 +320,12 @@ test modProgs (psdImpl -> ProjSetupImpl{..}) topdir tmpdir projdir cabal_file
         qe = qe' { qePrograms = progs }
 
     psiSdist progs topdir tmpdir
-    psiConfigure progs projdir
-
-    cs <- concat <$> runQuery (allUnits (Map.elems . uiComponents)) qe
-
 
     -- TODO: Cludge until we can just build the unit dependencies
-    psiBuild progs projdir
+    -- TODO: Move back under runQuery when we fixed backpack
+    buildProject qe
+
+    cs <- concat <$> runQuery (allUnits (Map.elems . uiComponents)) qe
 
     let pkgdir = takeDirectory cabal_file
     homedir <- getHomeDirectory
@@ -439,8 +438,6 @@ data ProjSetupImpl pt =
     { psiProjType  :: !(SProjType pt)
     , psiDistDir   :: !(FilePath -> DistDir pt)
     , psiProjLoc   :: !(CabalFile -> FilePath -> ProjLoc pt)
-    , psiConfigure :: !(Programs -> FilePath -> IO ())
-    , psiBuild     :: !(Programs -> FilePath -> IO ())
     , psiSdist     :: !(Programs -> FilePath -> FilePath -> IO ())
     , psiQEmod     :: !(QueryEnv pt -> QueryEnv pt)
     }
@@ -450,10 +447,6 @@ oldBuildProjSetup = ProjSetupDescr "cabal-v1" $ Right $ Ex $ ProjSetupImpl
     { psiProjType  = SCabal SCV1
     , psiDistDir   = \dir -> DistDirCabal SCV1 (dir </> "dist")
     , psiProjLoc   = \(CabalFile cf) projdir -> ProjLocV1CabalFile cf projdir
-    , psiConfigure = \progs dir ->
-        runWithCwd dir (cabalProgram progs) [ "configure" ]
-    , psiBuild     = \progs dir ->
-        runWithCwd dir (cabalProgram progs) [ "build" ]
     , psiSdist     = \progs srcdir destdir ->
         copyMuliPackageProject progs srcdir destdir (\_ _ -> return ())
     , psiQEmod     = id
@@ -467,10 +460,6 @@ newBuildProjSetup = ProjSetupDescr "cabal-v2" $ Right $ Ex $ ProjSetupImpl
                      -- TODO: check if cabal.project is there and only use
                      -- V2File then, also remove addCabalProject below so we
                      -- cover both cases.
-    , psiConfigure = \progs dir ->
-        runWithCwd dir (cabalProgram progs) [ "new-build", "--only-configure" ]
-    , psiBuild     = \progs dir ->
-        runWithCwd dir (cabalProgram progs) [ "new-build" ]
     , psiSdist     = \progs srcdir destdir -> do
         copyMuliPackageProject progs srcdir destdir $ \pkgsrc pkgdest -> do
           exists <- doesFileExist (pkgsrc </> "cabal.project")
@@ -491,10 +480,6 @@ stackProjSetup ghcVer =
       , psiDistDir   = \_dir  -> DistDirStack Nothing
       , psiProjLoc   = \_cabal_file projdir ->
           ProjLocStackYaml $ projdir </> "stack.yaml"
-      , psiConfigure = \progs dir ->
-          runWithCwd dir (stackProgram progs) $ argsBefore ++ [ "build", "--only-configure" ]
-      , psiBuild     = \progs dir ->
-          runWithCwd dir (stackProgram progs) $ argsBefore ++ [ "build" ]
       , psiSdist     = \progs srcdir destdir -> do
           copyMuliPackageProject progs srcdir destdir copyStackYamls
       , psiQEmod     = \qe ->
