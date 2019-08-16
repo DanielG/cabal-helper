@@ -235,7 +235,7 @@ data Ex a = forall x. Ex (a x)
 --
 -- If you do not wish to use the built-in caching feel free to discard the
 -- 'QueryEnv' value though.
-type QueryEnv = QueryEnvI QueryCache
+type QueryEnv pt = QueryEnvI QueryCache pt
 
 data QueryEnvI c (pt :: ProjType) = QueryEnv
     { qeReadProcess :: !ReadProcessWithCwdAndEnv
@@ -260,6 +260,8 @@ data QueryEnvI c (pt :: ProjType) = QueryEnv
     -- ^ Cache for query results, only accessible when type parameter @c@ is
     -- instantiated with 'QueryCache'. This is the case wherever the type alias
     -- 'QueryEnv' is used.
+
+    , qeCacheKeys    :: IORef (CacheKeyCache pt)
     }
 
 projTypeOfQueryEnv :: QueryEnvI c pt -> SProjType pt
@@ -271,9 +273,42 @@ type ReadProcessWithCwdAndEnv   =
 type CallProcessWithCwdAndEnv a =
   Maybe FilePath -> [(String, EnvOverride)] -> FilePath -> [String] -> IO a
 
-data QueryCache pt = QueryCache
-    { qcProjInfo  :: !(Maybe (ProjInfo pt))
-    , qcUnitInfos :: !(Map DistDirLib UnitInfo)
+-- | Full instansiation of 'QueryCacheI', with all cache fields visible
+type QueryCache
+  = QueryCacheI
+      PreInfo
+      Programs
+      ProjInfo
+      UnitInfo
+
+-- | 'QueryCacheI', only instantiated with 'PreInfo' cache.
+type QCPreInfo progs proj_info unit_info
+  = QueryCacheI
+      PreInfo
+      progs
+      proj_info
+      unit_info
+
+-- | 'QueryCacheI', only instantiated with 'PreInfo' and configured
+-- 'Programs' cache.
+type QCProgs proj_info unit_info
+  = QueryCacheI
+      PreInfo
+      Programs
+      proj_info
+      unit_info
+
+data QueryCacheI pre_info progs proj_info unit_info pt = QueryCache
+    { qcPreInfo
+        :: !(Maybe ((ProjConf pt, ProjConfModTimes), pre_info pt))
+    , qcConfProgs :: !(Maybe (Programs, progs))
+    , qcProjInfo
+        :: !(Maybe ((ProjConf pt, ProjConfModTimes), proj_info pt))
+    , qcUnitInfos :: !(Map DistDirLib unit_info)
+    }
+
+data CacheKeyCache pt = CacheKeyCache
+    { ckcProjConf :: !(Maybe (ProjConf pt, ProjConfModTimes))
     }
 
 newtype DistDirLib = DistDirLib FilePath
@@ -409,6 +444,12 @@ data ProjConf pt where
     { pcStackYaml :: !FilePath
     } -> ProjConf 'Stack
 
+projTypeOfProjConf :: ProjConf pt -> SProjType pt
+projTypeOfProjConf ProjConfV1{}    = SCabal SCV1
+projTypeOfProjConf ProjConfV2{}    = SCabal SCV2
+projTypeOfProjConf ProjConfStack{} = SStack
+
+
 -- This is supposed to be opaque, as it's only meant to be used only for cache
 -- invalidation.
 newtype ProjConfModTimes = ProjConfModTimes [(FilePath, EpochTime)]
@@ -435,9 +476,7 @@ data ProjInfoImpl pt where
     , piV2CompilerId  :: !(String, Version)
     } -> ProjInfoImpl ('Cabal 'CV2)
 
-  ProjInfoStack ::
-    { piStackProjPaths :: !StackProjPaths
-    } -> ProjInfoImpl 'Stack
+  ProjInfoStack :: ProjInfoImpl 'Stack
 
 instance Show (ProjInfoImpl pt) where
     show ProjInfoV1 {..} = concat
@@ -452,9 +491,8 @@ instance Show (ProjInfoImpl pt) where
       , "piV2CompilerId = ", show piV2CompilerId
       , "}"
       ]
-    show ProjInfoStack {..} = concat
+    show ProjInfoStack{} = concat
       [ "ProjInfoStack {"
-      , "piStackProjPaths = ", show piStackProjPaths
       , "}"
       ]
 
@@ -463,6 +501,22 @@ data UnitModTimes = UnitModTimes
     , umtCabalFile   :: !(FilePath, EpochTime)
     , umtSetupConfig :: !(Maybe (FilePath, EpochTime))
     } deriving (Eq, Ord, Read, Show)
+data PreInfo pt where
+  PreInfoCabal :: PreInfo ('Cabal cpt)
+  PreInfoStack ::
+    { piStackProjPaths :: !StackProjPaths
+    } -> PreInfo 'Stack
+
+instance Show (PreInfo pt) where
+    show PreInfoCabal{} = concat
+      [ "PreInfoCabal {"
+      , "}"
+      ]
+    show PreInfoStack {..} = concat
+      [ "PreInfoStack {"
+      , "piStackProjPaths = ", show piStackProjPaths
+      , "}"
+      ]
 
 newtype CabalFile = CabalFile FilePath
     deriving (Show)
