@@ -18,7 +18,7 @@
   GeneralizedNewtypeDeriving, DeriveDataTypeable, DeriveGeneric, DeriveFunctor,
   StandaloneDeriving, NamedFieldPuns, OverloadedStrings, ViewPatterns,
   TupleSections, TypeFamilies, DataKinds, GADTs, ScopedTypeVariables,
-  ImplicitParams, RankNTypes #-}
+  ImplicitParams, RankNTypes, MultiWayIf #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
@@ -104,7 +104,7 @@ module Distribution.Helper (
   , prepare
   , writeAutogenFiles
   , buildProject
-  , buildUnit
+  , buildUnits
   ) where
 
 import Cabal.Plan hiding (Unit, UnitId, uDistDir)
@@ -181,7 +181,7 @@ import Distribution.Simple.GHC as GHC (configure)
 -- | A query against a package's Cabal configuration. Use 'runQuery' to
 -- execute it.
 newtype Query pt a = Query
-    { runQuery :: QueryEnv pt -> IO a
+    { unQuery :: QueryEnv pt -> IO a
     -- ^ @runQuery env query@. Run a 'Query' under a given 'QueryEnv.
     }
 
@@ -193,8 +193,15 @@ instance Applicative (Query pt) where
     pure = return
 
 instance Monad (Query pt) where
-    (Query ma) >>= amb = Query $ \qe -> ma qe >>= \a -> runQuery (amb a) qe
+    (Query ma) >>= amb = Query $ \qe -> ma qe >>= \a -> unQuery (amb a) qe
     return a = Query $ const $ return a
+
+runQuery :: Query pt a -> QueryEnv pt -> IO a
+runQuery (Query action) qe = do
+  ckr <- newIORef $ CacheKeyCache Nothing
+  let qe' = qe { qeCacheKeys = ckr }
+  conf_progs <- getConfProgs qe'
+  action qe' { qePrograms = conf_progs }
 
 -- | @mkQueryEnv projdir distdir@. Smart constructor for 'QueryEnv'.
 -- Sets fields 'qeProjLoc' and 'qeDistDir' to @projdir@ and @distdir@
@@ -207,7 +214,7 @@ mkQueryEnv
     -- /builddir/ in Cabal terminology.
     -> IO (QueryEnv pt)
 mkQueryEnv projloc distdir = do
-  cr <- newIORef $ QueryCache Nothing Map.empty
+  cr <- newIORef $ QueryCache Nothing Nothing Nothing Map.empty
   return $ QueryEnv
     { qeReadProcess = \stdin mcwd env exe args -> do
         withVerbosity $ readProcessStderr mcwd env exe args ""
@@ -217,6 +224,7 @@ mkQueryEnv projloc distdir = do
     , qeProjLoc      = projloc
     , qeDistDir      = distdir
     , qeCacheRef     = cr
+    , qeCacheKeys    = error "mkQuery: qeCacheKeys is uninitialized!"
     }
 
 -- | Construct paths to project configuration files given where the project is.
@@ -297,11 +305,11 @@ compilerVersion = Query $ \qe ->
       ProjInfoStack {} -> uiCompilerId <$> getUnitInfo qe someUnit
 
 -- | All local packages currently active in a project\'s build plan.
-projectPackages          :: Query pt (NonEmpty (Package pt))
+projectPackages :: Query pt (NonEmpty (Package pt))
 projectPackages = Query $ \qe -> piPackages <$> getProjInfo qe
 
 -- | Get the 'UnitInfo' for a given 'Unit'. To get a 'Unit' see 'projectUnits'.
-unitInfo              :: Unit pt -> Query pt UnitInfo
+unitInfo :: Unit pt -> Query pt UnitInfo
 unitInfo u = Query $ \qe -> getUnitInfo qe u
 
 -- | Get information on all units in a project.
@@ -309,67 +317,128 @@ allUnits :: (UnitInfo -> a) -> Query pt (NonEmpty a)
 allUnits f = do
   fmap f <$> (T.mapM unitInfo =<< join . fmap pUnits <$> projectPackages)
 
-getProjInfo :: QueryEnv pt -> IO (ProjInfo pt)
-getProjInfo qe@QueryEnv{..} = do
-  cache@QueryCache{qcProjInfo, qcUnitInfos} <- readIORef qeCacheRef
-  proj_info <- checkUpdateProjInfo qe qcProjInfo
-  let active_units = NonEmpty.toList $ join $
-                       fmap pUnits $ piPackages proj_info
-  writeIORef qeCacheRef $ cache
-    { qcProjInfo  = Just proj_info
-    , qcUnitInfos = discardInactiveUnitInfos active_units qcUnitInfos
-    }
-  return proj_info
 
-checkUpdateProjInfo
-    :: QueryEnvI c pt
-    -> Maybe (ProjInfo pt)
-    -> IO (ProjInfo pt)
-checkUpdateProjInfo qe mproj_info = do
+data Cached c ckc k v = Cached
+  { cGet      :: !(c -> Maybe (k, v))
+  , cSet      :: !(c -> (k, v) -> c)
+
+  , cGetKey   :: !(ckc -> Maybe k)
+  , cSetKey   :: !(ckc -> k -> ckc)
+
+  , cCheckKey :: !(IO k)
+  , cKeyValid :: !(k -> k -> Bool)
+  -- ^ @cKeyValid old new@ should return 'True' if 'old' is still valid
+  -- relative to the value of 'new'.
+
+  , cRegen    :: !(k -> IO v)
+  }
+
+-- | Simple caching scheme. Invalidation is based on equality of a "cache
+-- key" the current value of which can be got with the IO action 'cGetKey'.
+--
+-- Note that we only check the actual value of the cache key once per
+-- 'runQuery' call by saving the cache key in an ephemeral map.
+cached :: QueryEnvI (QueryCacheI a b c d) pt
+       -> Cached (QueryCacheI a b c d pt) (CacheKeyCache pt) k v
+       -> IO v
+cached qe Cached{..} = do
+  c <- readIORef (qeCacheRef qe)
+  (c', v) <- checkUpdate c (cGet c)
+  writeIORef (qeCacheRef qe) c'
+  return v
+ where
+  checkUpdate c m = do
+    ckc <- readIORef (qeCacheKeys qe)
+    let regen ck = (ck,) <$> cRegen ck
+    n <- case m of
+      Nothing -> do
+        ck <- cCheckKey
+        writeIORef (qeCacheKeys qe) (cSetKey ckc ck)
+        regen ck
+      Just old@(old_ck, old_v) -> do
+        ck <- case cGetKey ckc of
+          Just cck ->
+            return cck -- TODO: skip valid check below in this case
+          Nothing -> do
+            ck <- cCheckKey
+            writeIORef (qeCacheKeys qe) (cSetKey ckc ck)
+            return ck
+        if
+          | cKeyValid old_ck ck -> return old
+          | otherwise -> regen ck
+    return (cSet c n, snd n)
+
+getProjConfAndModTime :: QueryEnvI c pt -> IO (ProjConf pt, ProjConfModTimes)
+getProjConfAndModTime qe = do
   proj_conf <- projConf (qeProjLoc qe)
   mtime <- getProjConfModTime proj_conf
-  case mproj_info of
-    Nothing -> reconf proj_conf mtime
-    Just proj_info
-        | piProjConfModTimes proj_info /= mtime
-            -> reconf proj_conf mtime
-        | otherwise
-            -> return proj_info
-  where
-    reconf proj_conf mtime = do
-      shallowReconfigureProject qe
-      readProjInfo qe proj_conf mtime
+  return (proj_conf, mtime)
+
+getPreInfo :: QueryEnvI (QCPreInfo a b c) pt -> IO (PreInfo pt)
+getPreInfo qe =
+  cached qe $ Cached
+    { cGet = qcPreInfo
+    , cSet = \a b -> a { qcPreInfo = Just b }
+    , cGetKey = ckcProjConf
+    , cSetKey = \a b -> a { ckcProjConf = Just b }
+    , cCheckKey = getProjConfAndModTime qe
+    , cKeyValid = (==) `on` snd
+    , cRegen = \_k -> readPreInfo qe
+    }
+
+readPreInfo :: QueryEnvI c pt -> IO (PreInfo pt)
+readPreInfo qe = do
+  case projTypeOfQueryEnv qe of
+    SStack -> do
+      piStackProjPaths <- Stack.projPaths qe
+      return PreInfoStack
+        { piStackProjPaths
+        }
+    (SCabal _) ->
+      return PreInfoCabal
+
+getProjInfo :: QueryEnv pt -> IO (ProjInfo pt)
+getProjInfo qe = do
+  pre_info <- getPreInfo qe
+  cached qe $ Cached
+    { cGet = qcProjInfo
+    , cSet = \c n@(_, proj_info) ->
+        let active_units = NonEmpty.toList $ join $
+              fmap pUnits $ piPackages proj_info in
+        c { qcProjInfo = Just n
+          , qcUnitInfos =
+               discardInactiveUnitInfos active_units (qcUnitInfos c)
+          }
+    , cGetKey = ckcProjConf
+    , cSetKey = \a b -> a { ckcProjConf = Just b }
+    , cCheckKey = getProjConfAndModTime qe
+    , cKeyValid = (==) `on` snd
+    , cRegen = \(proj_conf, mtime) -> do
+        shallowReconfigureProject qe
+        readProjInfo qe proj_conf mtime pre_info
+    }
 
 getUnitInfo :: QueryEnv pt -> Unit pt -> IO UnitInfo
 getUnitInfo qe@QueryEnv{..} unit@Unit{uDistDir} = do
+  pre_info <- getPreInfo qe
   proj_info <- getProjInfo qe
-  cache@QueryCache{qcUnitInfos} <- readIORef qeCacheRef
-  let munit_info = Map.lookup uDistDir qcUnitInfos
-  unit_info <- checkUpdateUnitInfo qe proj_info unit munit_info
-  writeIORef qeCacheRef $ cache
-    { qcUnitInfos = Map.insert uDistDir unit_info qcUnitInfos }
-  return unit_info
+  cached qe $ Cached
+    { cGet = \c -> do
+        ui <- Map.lookup uDistDir (qcUnitInfos c)
+        return (uiModTimes ui, ui)
+    , cSet = \c (_mtimes, unit_info) -> c { qcUnitInfos =
+        Map.insert uDistDir unit_info (qcUnitInfos c) }
 
-checkUpdateUnitInfo
-    :: QueryEnvI c pt
-    -> ProjInfo pt
-    -> Unit pt
-    -> Maybe UnitInfo
-    -> IO UnitInfo
-checkUpdateUnitInfo qe proj_info unit munit_info = do
-  unit_mtimes <- getUnitModTimes unit
-  case munit_info of
-    Nothing -> reconf
-    Just unit_info
-      | uiModTimes unit_info /= unit_mtimes
-        -> reconf
-      | otherwise
-        -> return unit_info
-  where
-    reconf = do
-      reconfigureUnit qe unit
-      helper <- getHelper proj_info qe
-      readUnitInfo helper unit
+    , cGetKey = const Nothing
+    , cSetKey = const
+    , cCheckKey = getUnitModTimes unit
+    , cKeyValid = (==)
+
+    , cRegen = \mtimes -> do
+        reconfigureUnit qe unit
+        helper <- getHelper pre_info proj_info qe
+        readUnitInfo helper unit mtimes
+    }
 
 -- | Restrict 'UnitInfo' cache to units that are still active
 discardInactiveUnitInfos
@@ -384,25 +453,31 @@ discardInactiveUnitInfos active_units uis0 =
 
 
 -- | Regenerate project-level information by calling the appropriate build
--- system (@cabal@ or @stack@).
-shallowReconfigureProject :: QueryEnvI c pt -> IO ()
+-- system.
+shallowReconfigureProject :: QueryEnvI (QCProgs a b) pt -> IO ()
 shallowReconfigureProject QueryEnv
   { qeProjLoc = ProjLocStackYaml _stack_yaml, .. } = do
     -- Stack's dry-run only generates the cabal file from package.yaml (or
-    -- well that's the only thing we care about that it
-    -- does). reconfigureUnit will take care of this though and we don't
-    -- need the cabal files before the Unit stage anyways.
+    -- well that's the only thing we would care about). reconfigureUnit
+    -- will take care of this though and we don't need the cabal files
+    -- before the Unit stage anyways.
     return ()
-shallowReconfigureProject qe = buildProjectTarget qe Nothing DryRun
+shallowReconfigureProject qe = do
+  buildProjectTarget qe Nothing DryRun
 
 reconfigureUnit :: QueryEnvI c pt -> Unit pt -> IO ()
 reconfigureUnit qe u = buildProjectTarget qe (Just u) OnlyCfg
 
-buildUnit :: QueryEnvI c pt -> Unit pt -> IO ()
-buildUnit qe u = buildProjectTarget qe (Just u) DoBuild
+buildUnits :: [Unit pt] -> Query pt ()
+buildUnits units = Query $ \qe -> do
+  conf_progs <- getConfProgs qe
+  forM_ units $ \u ->
+    buildProjectTarget qe { qePrograms = conf_progs } (Just u) DoBuild
 
-buildProject :: QueryEnvI c pt -> IO ()
-buildProject qe = buildProjectTarget qe Nothing DoBuild
+buildProject :: Query pt ()
+buildProject = Query $ \qe -> do
+  conf_progs <- getConfProgs qe
+  buildProjectTarget qe { qePrograms = conf_progs } Nothing DoBuild
 
 data BuildStage = DryRun | OnlyCfg | DoBuild
 
@@ -466,8 +541,8 @@ getFileModTime f = do
   return (f, t)
 
 readProjInfo
-    :: QueryEnvI c pt -> ProjConf pt -> ProjConfModTimes -> IO (ProjInfo pt)
-readProjInfo qe pc pcm = withVerbosity $ do
+    :: QueryEnvI c pt -> ProjConf pt -> ProjConfModTimes -> PreInfo pt -> IO (ProjInfo pt)
+readProjInfo qe pc pcm pi = withVerbosity $ do
   let projloc = qeProjLoc qe
   case (qeDistDir qe, pc) of
     (DistDirCabal SCV1 distdir, ProjConfV1{pcV1CabalFile}) -> do
@@ -532,20 +607,20 @@ readProjInfo qe pc pcm = withVerbosity $ do
     (DistDirStack{}, _) -> do
       Just cabal_files <- NonEmpty.nonEmpty <$> Stack.listPackageCabalFiles qe
       pkgs <- mapM (Stack.getPackage qe) cabal_files
-      proj_paths <- Stack.projPaths qe
-      let piImpl = ProjInfoStack { piStackProjPaths = proj_paths }
-      Just (cabalVer:_) <- withProgs piImpl qe $ runMaybeT $
-        GHC.listCabalVersions (Just (sppGlobalPkgDb proj_paths))
+      Just (cabalVer:_) <- runMaybeT $
+        let ?progs = qePrograms qe in
+        let PreInfoStack {piStackProjPaths} = pi in
+        GHC.listCabalVersions (Just (sppGlobalPkgDb piStackProjPaths))
         --  ^ See [Note Stack Cabal Version]
       return ProjInfo
         { piCabalVersion = cabalVer
         , piProjConfModTimes = pcm
         , piPackages = pkgs
-        , ..
+        , piImpl = ProjInfoStack
         }
 
-readUnitInfo :: Helper pt -> Unit pt -> IO UnitInfo
-readUnitInfo helper unit@Unit {uUnitId=uiUnitId} = do
+readUnitInfo :: Helper pt -> Unit pt -> UnitModTimes -> IO UnitInfo
+readUnitInfo helper unit@Unit {uUnitId=uiUnitId} uiModTimes = do
     res <- runHelper helper unit
            [ "package-id"
            , "compiler-id"
@@ -561,7 +636,6 @@ readUnitInfo helper unit@Unit {uUnitId=uiUnitId} = do
           Just (ChResponseFlags          uiNonDefaultConfigFlags),
           Just (ChResponseComponentsInfo uiComponents)
           ] = res
-    uiModTimes <- getUnitModTimes unit
     return $ UnitInfo {..}
 
 readHelper
@@ -612,10 +686,11 @@ invokeHelper
 -- helper compilation happen during a time-sensitive user
 -- interaction. @caba-helper@ will however do this automatically as needed
 -- if you don't.
-prepare :: QueryEnv pt -> IO ()
-prepare qe = do
+prepare :: Query pt ()
+prepare = Query $ \qe -> do
+  pre_info <- getPreInfo qe
   proj_info <- getProjInfo qe
-  void $ getHelper proj_info qe
+  void $ getHelper pre_info proj_info qe
 
 -- | Create @cabal_macros.h@, @Paths_\<pkg\>.hs@ and other generated files
 -- in the usual place. See 'Distribution.Simple.Build.initialBuildSteps'.
@@ -624,8 +699,9 @@ prepare qe = do
 -- cabal file changes.
 writeAutogenFiles :: Unit pt -> Query pt ()
 writeAutogenFiles unit = Query $ \qe -> do
+  pre_info <- getPreInfo qe
   proj_info <- getProjInfo qe
-  helper <- getHelper proj_info qe
+  helper <- getHelper pre_info proj_info qe
   void $ runHelper helper unit ["write-autogen-files"]
 
 -- | Get the path to the sandbox package-db in a project
@@ -656,16 +732,27 @@ withVerbosity act = do
           _ -> False
   act
 
+getConfProgs :: QueryEnvI (QCProgs a b) pt -> IO Programs
+getConfProgs qe = do
+  pre_info <- getPreInfo qe
+  cached qe $ Cached
+    { cGet = qcConfProgs
+    , cSet = \a b -> a { qcConfProgs = Just b }
+    , cGetKey = const Nothing
+    , cSetKey = const
+    , cCheckKey = return (qePrograms qe)
+    , cKeyValid = (==)
+    , cRegen = \_k -> configurePrograms qe pre_info
+    }
+
 -- | Fixup program paths as appropriate for current project-type and bring
 -- 'Programs' into scope as an implicit parameter.
-withProgs
-    :: Verbose => ProjInfoImpl pt -> QueryEnvI c pt -> (Env => IO a) -> IO a
-withProgs impl QueryEnv{..} f = do
-  progs <- guessCompProgramPaths $ case impl of
-    ProjInfoStack projPaths ->
+configurePrograms :: QueryEnvI c pt -> PreInfo pt -> IO Programs
+configurePrograms QueryEnv{..} pre_info = withVerbosity $ do
+  guessCompProgramPaths $ case pre_info of
+    PreInfoStack projPaths ->
       Stack.patchCompPrograms projPaths qePrograms
     _ -> qePrograms
-  let ?progs = progs in f
   where
     -- | Determine ghc-pkg path from ghc path
     guessCompProgramPaths :: Verbose => Programs -> IO Programs
@@ -714,18 +801,19 @@ getCabalVerbosity
 newtype Helper pt
   = Helper { runHelper :: Unit pt -> [String] -> IO [Maybe ChResponse] }
 
-getHelper :: ProjInfo pt -> QueryEnvI c pt -> IO (Helper pt)
-getHelper ProjInfo{piCabalVersion} qe@QueryEnv{..}
+getHelper :: PreInfo pt -> ProjInfo pt -> QueryEnvI c pt -> IO (Helper pt)
+getHelper _pre_info ProjInfo{piCabalVersion} qe@QueryEnv{..}
   | piCabalVersion == bultinCabalVersion = return $ Helper $
       \Unit{ uDistDir=DistDirLib distdir
            , uPackage=Package{pCabalFile=CabalFile cabal_file}
            } args ->
         let pt = dispHelperProjectType (projTypeOfQueryEnv qe) in
         helper_main $ cabal_file : distdir : pt : args
-getHelper proj_info qe@QueryEnv{..} = do
-  withVerbosity $ withProgs (piImpl proj_info) qe $ do
+getHelper pre_info proj_info qe@QueryEnv{..} = do
+  withVerbosity $ do
+    let ?progs = qePrograms
     t0 <- Clock.getTime Monotonic
-    eexe <- compileHelper $ mkCompHelperEnv qeProjLoc qeDistDir proj_info
+    eexe <- compileHelper $ mkCompHelperEnv qeProjLoc qeDistDir pre_info proj_info
     t1 <- Clock.getTime Monotonic
     let dt = (/10e9) $ fromInteger $ Clock.toNanoSecs $ Clock.diffTimeSpec t0 t1
         dt :: Float
@@ -750,11 +838,13 @@ mkCompHelperEnv
     :: Verbose
     => ProjLoc pt
     -> DistDir pt
+    -> PreInfo pt
     -> ProjInfo pt
     -> CompHelperEnv
 mkCompHelperEnv
   projloc
   (DistDirCabal SCV1 distdir)
+  PreInfoCabal
   ProjInfo{piCabalVersion}
   = CompHelperEnv
     { cheCabalVer = CabalVersion piCabalVersion
@@ -767,6 +857,7 @@ mkCompHelperEnv
 mkCompHelperEnv
   projloc
   (DistDirCabal SCV2 distdir)
+  PreInfoCabal
   ProjInfo{piImpl=ProjInfoV2{piV2Plan=plan}}
   = CompHelperEnv {..}
   where
@@ -780,13 +871,11 @@ mkCompHelperEnv
 mkCompHelperEnv
   (ProjLocStackYaml stack_yaml)
   (DistDirStack mworkdir)
-  ProjInfo
-    { piCabalVersion
-    , piImpl = ProjInfoStack
-      { piStackProjPaths=StackProjPaths
-        { sppGlobalPkgDb }
-      }
+  PreInfoStack
+    { piStackProjPaths=StackProjPaths
+      { sppGlobalPkgDb }
     }
+  ProjInfo { piCabalVersion }
   = let workdir = fromMaybe ".stack-work" $ unRelativePath <$> mworkdir in
     let projdir = takeDirectory stack_yaml in
     CompHelperEnv

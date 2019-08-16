@@ -323,7 +323,7 @@ test modProgs (psdImpl -> ProjSetupImpl{..}) topdir tmpdir projdir cabal_file
 
     -- TODO: Cludge until we can just build the unit dependencies
     -- TODO: Move back under runQuery when we fixed backpack
-    buildProject qe
+    runQuery buildProject qe
 
     cs <- concat <$> runQuery (allUnits (Map.elems . uiComponents)) qe
 
