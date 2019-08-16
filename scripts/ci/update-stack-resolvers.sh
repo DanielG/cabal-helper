@@ -13,10 +13,11 @@ resolvers=$(cat /tmp/stack-resolvers/snapshots.json \
 for res in $resolvers; do
         wget -q --continue \
              -O /tmp/stack-resolvers/$res.yaml \
-             https://raw.githubusercontent.com/fpco/lts-haskell/master/$res.yaml
+             https://raw.githubusercontent.com/commercialhaskell/lts-haskell/master/$res.yaml
 
         ghc=$(cat /tmp/stack-resolvers/$res.yaml \
                       | grep ghc-version | awk '{ print $2 }' | tr -cd '0-9.')
 
+        [ -z "$ghc" ] && continue
         printf '%-10s %s\n' "$ghc" "$res"
 done
