@@ -40,7 +40,9 @@ import System.FilePath
 import Text.Printf
 import Text.Read
 
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Data.Text as Text
 
 import qualified CabalHelper.Compiletime.Cabal as Cabal
@@ -276,29 +278,54 @@ planPackages plan = do
                 , pSourceDir = pkgdir
                 , pCabalFile = CabalFile cabal_file
                 , pFlags = []
-                , pUnits = fmap (mkUnit pkg { pUnits = () }) units
+                , pUnits = fmap (\u -> fixBackpackUnit u $ mkUnit pkg { pUnits = () } u) units
                 }
           return pkg
        _ -> panicIO "planPackages.mkPackage: Got non-unpacked package src!"
 
+    takeBackpackIndefUnitId :: CP.Unit -> Maybe CP.UnitId
+    takeBackpackIndefUnitId CP.Unit {uId=CP.UnitId uid}
+      | Text.any (=='+') uid = Just $ CP.UnitId $ Text.takeWhile (/='+') uid
+      | otherwise = Nothing
+
+    findUnitsDependingOn :: CP.UnitId -> [CP.Unit]
+    findUnitsDependingOn uid = Map.elems $
+      Map.filter (any (Set.member uid . CP.ciLibDeps) . Map.elems . CP.uComps) $
+      CP.pjUnits plan
+
+    -- Horrible workaround for https://github.com/haskell/cabal/issues/6201
+    fixBackpackUnit plan_unit ch_unit
+      | Just indef_uid <- takeBackpackIndefUnitId plan_unit = do
+        let deps = findUnitsDependingOn indef_uid
+        ch_unit { uImpl = (uImpl ch_unit)
+          { uiV2Components = concatMap unitTargets deps
+          , uiV2OnlyDependencies = True
+          } }
+      | otherwise =
+        ch_unit
+
+    unitTargets :: CP.Unit -> [String]
+    unitTargets CP.Unit {uComps, uPId=CP.PkgId pkg_name _} =
+      map (Text.unpack . CP.dispCompNameTarget pkg_name) $
+      Map.keys uComps
+
     mkUnit :: Package' () -> CP.Unit -> Unit ('Cabal 'CV2)
-    mkUnit pkg CP.Unit
+    mkUnit pkg u@CP.Unit
       { uDistDir=Just distdirv1
       , uComps=comps
-      , uPId = CP.PkgId pkg_name _
+      , uPId=CP.PkgId pkg_name _
       , uId
       } =
-        let comp_names = Map.keys comps in
         Unit
           { uUnitId     = UnitId $ Text.unpack (coerce uId)
           , uPackage    = pkg
           , uDistDir    = DistDirLib distdirv1
           , uImpl       =
             let
+              comp_names = Map.keys comps
               uiV2ComponentNames = map cpCompNameToChComponentName comp_names
-              uiV2Components =
-                map (Text.unpack . CP.dispCompNameTarget pkg_name) $
-                Map.keys comps
+              uiV2Components = unitTargets u
+              uiV2OnlyDependencies = False
             in UnitImplV2 {..}
           }
     mkUnit _ _ =
