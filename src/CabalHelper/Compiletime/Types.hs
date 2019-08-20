@@ -351,6 +351,7 @@ data UnitImpl pt where
   UnitImplV2 ::
     { uiV2ComponentNames :: ![ChComponentName]
     , uiV2Components     :: ![String]
+    , uiV2OnlyDependencies :: !Bool
     } -> UnitImpl ('Cabal 'CV2)
 
   UnitImplStack :: UnitImpl 'Stack

@@ -321,11 +321,10 @@ test modProgs (psdImpl -> ProjSetupImpl{..}) topdir tmpdir projdir cabal_file
 
     psiSdist progs topdir tmpdir
 
-    -- TODO: Cludge until we can just build the unit dependencies
-    -- TODO: Move back under runQuery when we fixed backpack
-    runQuery buildProject qe
-
     cs <- concat <$> runQuery (allUnits (Map.elems . uiComponents)) qe
+
+    -- TODO: Cludge until we can just build the unit dependencies
+    runQuery buildProject qe
 
     let pkgdir = takeDirectory cabal_file
     homedir <- getHomeDirectory

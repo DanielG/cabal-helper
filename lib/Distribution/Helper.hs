@@ -508,7 +508,11 @@ buildProjectTarget qe mu stage = do
           SCV2 -> do
             targets <- return $ case mu of
               Nothing -> ["all"]
-              Just Unit{uImpl} -> uiV2Components uImpl
+              Just Unit{uImpl} -> concat
+                [ if uiV2OnlyDependencies uImpl
+                    then ["--only-dependencies"] else []
+                , uiV2Components uImpl
+                ]
             case qeProjLoc of
               ProjLocV2File {plCabalProjectFile} ->
                 [ "--project-file="++plCabalProjectFile
