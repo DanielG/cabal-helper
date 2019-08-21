@@ -159,8 +159,6 @@ import CabalHelper.Runtime.HelperMain (helper_main)
 import CabalHelper.Compiletime.Compat.Version
 import qualified CabalHelper.Compiletime.Compat.ProgramDb as ProgDb
     ( defaultProgramDb, programPath, lookupProgram, ghcProgram, ghcPkgProgram )
-import Distribution.Package
-    ( packageName )
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
 import Distribution.Verbosity (Verbosity, silent, normal, verbose, deafening)
