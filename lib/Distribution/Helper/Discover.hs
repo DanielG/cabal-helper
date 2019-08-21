@@ -74,7 +74,7 @@ getDefaultDistDir (ProjLocV1CabalFile _cabal_file pkgdir) =
   DistDirCabal SCV1 $ pkgdir </> "dist"
 getDefaultDistDir (ProjLocV1Dir pkgdir) =
   DistDirCabal SCV1 $ pkgdir </> "dist"
-getDefaultDistDir (ProjLocV2File cabal_project projdir) =
+getDefaultDistDir (ProjLocV2File _cabal_project projdir) =
   DistDirCabal SCV2 $ projdir </> "dist-newstyle"
 getDefaultDistDir (ProjLocV2Dir projdir) =
   DistDirCabal SCV2 $ projdir </> "dist-newstyle"

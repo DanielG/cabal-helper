@@ -33,7 +33,6 @@ import Data.Time.Clock
 import Data.Time.Clock.POSIX
 import Data.Version
 import System.Directory
-import System.Exit
 import System.FilePath
 import System.IO
 import Text.Printf
