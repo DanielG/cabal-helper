@@ -687,9 +687,8 @@ invokeHelper
 -- installed and ready to run queries.
 --
 -- The idea is you can run this at a convinient time instead of having the
--- helper compilation happen during a time-sensitive user
--- interaction. @caba-helper@ will however do this automatically as needed
--- if you don't.
+-- helper compilation happen during a time-sensitive user interaction. This
+-- will however happen automatically as needed if you don't run it first.
 prepare :: Query pt ()
 prepare = Query $ \qe -> do
   pre_info <- getPreInfo qe
