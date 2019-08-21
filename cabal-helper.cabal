@@ -112,7 +112,6 @@ common build-deps
                      , filepath         < 1.5  && >= 1.4.1.1
                      , mtl              < 2.3  && >= 2.0
                      , process          < 1.7  && >= 1.4.3.0
-                     , pretty-show      < 1.9  && >= 1.8.1
                      , semigroups       < 0.19 && >= 0.18
                      , semigroupoids    < 5.4  && >= 5.2
                      , SHA              < 1.7  && >= 1.6.4.4
@@ -186,6 +185,7 @@ test-suite ghc-session
   ghc-options:         -Wall
   build-depends:       ghc              < 8.7  && >= 8.0.2
                      , ghc-paths        < 0.2  && >= 0.1.0.9
+                     , pretty-show      < 1.9  && >= 1.8.1
                      , cabal-helper
                      , c-h-internal
 
