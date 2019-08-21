@@ -48,6 +48,14 @@ import CabalHelper.Shared.Common
 getPackage :: QueryEnvI c 'Stack -> CabalFile -> IO (Package 'Stack)
 getPackage qe cabal_file@(CabalFile cabal_file_path) = do
   let pkgdir = takeDirectory cabal_file_path
+  -- this is kind of a hack but works even for unicode package names and
+  -- besides stack even enforces this naming convention unlike cabal. This
+  -- is the error you get if the names don't match:
+  --
+  -- cabal file path foo-bla.cabal does not match the package name it defines.
+  -- Please rename the file to: foo.cabal
+  -- For more information, see:
+  --  https://github.com/commercialhaskell/stack/issues/317
   let pkg_name = dropExtension $ takeFileName cabal_file_path
   look <- paths qe pkgdir
   let distdirv1_rel = look "dist-dir:"

@@ -225,28 +225,27 @@ data Ex a = forall x. Ex (a x)
 -- | Environment for running a 'Query'. The constructor is not exposed in the
 -- API to allow extending it with more fields without breaking user code.
 --
--- To create a 'QueryEnv' use the 'mkQueryEnv' smart constructor instead. The
+-- To create a 'QueryEnv' use the 'mkQueryEnv' smart constructor instead. Some
 -- field accessors are exported and may be used to override the defaults filled
 -- in by 'mkQueryEnv'. See below.
 --
 -- Note that this environment contains an 'IORef' used as a cache. If you want
 -- to take advantage of this you should not simply discard the value returned by
 -- the smart constructor after one use.
---
--- If you do not wish to use the built-in caching feel free to discard the
--- 'QueryEnv' value though.
 type QueryEnv pt = QueryEnvI QueryCache pt
 
 data QueryEnvI c (pt :: ProjType) = QueryEnv
     { qeReadProcess :: !ReadProcessWithCwdAndEnv
-    -- ^ Field accessor for 'QueryEnv'. Function used to to start
-    -- processes. Useful if you need to, for example, redirect standard error
-    -- output of programs started by cabal-helper.
+    -- ^ Field accessor for 'QueryEnv'. Function used to to start processes
+    -- and capture output. Useful if you need to, for example, redirect
+    -- standard error output of programs started by cabal-helper.
 
     , qeCallProcess :: !(CallProcessWithCwdAndEnv ())
+    -- ^ Field accessor for 'QueryEnv'. Function used to to start processes
+    -- without capturing output. See also 'qeReadProcess'.
 
     , qePrograms     :: !Programs
-    -- ^ Field accessor for 'QueryEnv'.
+    -- ^ Field accessor for 'QueryEnv'. Paths to various programs we use.
 
     , qeProjLoc      :: !(ProjLoc pt)
     -- ^ Field accessor for 'QueryEnv'. Defines path to the project directory,
@@ -337,7 +336,11 @@ data Package' units = Package
 -- underneath.
 --
 -- Note that a 'Unit' value is only valid within the 'QueryEnv' context it
--- was created in. However this is not enforced by the API.
+-- was created in, this is however this is not enforced by the
+-- API. Furthermore if the user changes the underlying project
+-- configuration while your application is running even a properly scoped
+-- 'Unit' could become invalid because the component it belongs to was
+-- removed from the cabal file.
 data Unit pt = Unit
     { uUnitId      :: !UnitId
     , uPackage     :: !(Package' ())
@@ -380,10 +383,10 @@ uComponentName _ =
 -- names that cause trouble here so it's ok to look at them but user packages
 -- are free to have any unicode name.
 data UnitHeader = UnitHeader
-    { uhBrokenPackageId  :: !(ByteString, Version)
-      -- ^ Name and version of the source package. Don't use this, it's broken
-      -- when the package name contains Unicode characters. See 'uiPackageId'
-      -- instead. Note: This was fixed by hvr in Cabal HEAD actually.
+    { uhPackageId  :: !(ByteString, Version)
+      -- ^ Name and version of the source package. This is only going to be
+      -- usable for unicode package names starting with @Cabal-3.0.0.0@. See
+      -- 'uiPackageId' for an alternative that always works.
     , uhSetupId    :: !(ByteString, Version)
       -- ^ Name and version of the @Setup.hs@ implementation. We expect
       -- @"Cabal"@ here, naturally.
