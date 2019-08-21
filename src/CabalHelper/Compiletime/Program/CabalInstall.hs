@@ -106,7 +106,7 @@ installingMessage = message
 \    %s\n\
 \Please do report any problems you encounter.\n\
 \\n\
-\Installing Cabal %s ...\n" appdir sver sver sver
+\Installing Cabal %s ...\n" sver sver appdir sver
 
 callCabalInstall
     :: Env
