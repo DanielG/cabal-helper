@@ -39,7 +39,6 @@ import System.Directory (findExecutable)
 import System.FilePath hiding ((<.>))
 import System.IO (hPutStrLn, stderr)
 import Text.Printf (printf)
-import Text.Show.Pretty
 import Prelude
 
 import CabalHelper.Compiletime.Types
@@ -101,7 +100,7 @@ listPackageCabalFiles qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml}
       stack_ver <- MaybeT $ return $ parseVerMay stack_ver_str
       guard $ stack_ver < makeVersion [1,9,4]
 
-      let prog_cfg = ppShow $ qePrograms qe
+      let prog_cfg = show $ qePrograms qe
 
       liftIO $ hPutStrLn stderr $ printf
         "\nerror: stack version too old!\
