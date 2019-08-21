@@ -115,7 +115,6 @@ compileHelper'
     => CompHelperEnv' UnpackedCabalVersion
     -> IO (Either ExitCode FilePath)
 compileHelper' CompHelperEnv {..} = do
-  t0 <- Clock.getTime Clock.Monotonic
   ghcVer <- ghcVersion
   Just (prepare, comp) <- case cheCabalVer of
     cabalVer@CabalHEAD {} -> runMaybeT $ msum  $ map (\f -> f ghcVer cabalVer)
@@ -146,11 +145,6 @@ compileHelper' CompHelperEnv {..} = do
     else do
       vLog $ "helper exe does not exist, compiling "++compExePath
       prepare >> compile cp comp
-
-  t1 <- Clock.getTime Clock.Monotonic
-  let dt = (/10e9) $ fromInteger $ Clock.toNanoSecs $ Clock.diffTimeSpec t0 t1
-      dt :: Float
-  vLog $ printf "compileHelper took %.5fs" dt
   return rv
 
 
