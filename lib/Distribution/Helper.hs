@@ -816,7 +816,7 @@ getHelper pre_info proj_info qe@QueryEnv{..} = do
     t0 <- Clock.getTime Monotonic
     eexe <- compileHelper $ mkCompHelperEnv qeProjLoc qeDistDir pre_info proj_info
     t1 <- Clock.getTime Monotonic
-    let dt = (/10e9) $ fromInteger $ Clock.toNanoSecs $ Clock.diffTimeSpec t0 t1
+    let dt = (/10^9) $ fromInteger $ Clock.toNanoSecs $ Clock.diffTimeSpec t0 t1
         dt :: Float
     vLog $ printf "compileHelper took %.5fs" dt
     case eexe of
