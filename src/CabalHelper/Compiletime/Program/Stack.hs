@@ -74,8 +74,8 @@ getPackage qe cabal_file@(CabalFile cabal_file_path) = do
   return pkg
 
 projPaths :: QueryEnvI c 'Stack -> IO StackProjPaths
-projPaths qe@QueryEnv {qeProjLoc=ProjLocStackYaml stack_yaml} = do
-  look <- paths qe $ takeDirectory stack_yaml
+projPaths qe@QueryEnv {qeProjLoc} = do
+  look <- paths qe $ plStackProjectDir qeProjLoc
   return StackProjPaths
     { sppGlobalPkgDb = PackageDbDir $ look "global-pkg-db:"
     , sppSnapPkgDb   = PackageDbDir $ look "snapshot-pkg-db:"
@@ -93,9 +93,9 @@ paths qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml} cwd
     split l = let (key, ' ' : val) = span (not . isSpace) l in (key, val)
 
 listPackageCabalFiles :: QueryEnvI c 'Stack -> IO [CabalFile]
-listPackageCabalFiles qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml}
+listPackageCabalFiles qe@QueryEnv{qeProjLoc}
   = handle ioerror $ do
-  let projdir = takeDirectory stack_yaml
+  let projdir = plStackProjectDir qeProjLoc
   out <- readStackCmd qe (Just projdir)
     [ "ide", "packages", "--cabal-files", "--stdout" ]
   return $ map CabalFile $ lines out
