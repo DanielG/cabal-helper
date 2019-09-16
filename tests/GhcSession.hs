@@ -539,13 +539,7 @@ stackBuiltinCabalVersion s_ver g_ver = do
 stackCheckCompat :: Version -> Version -> Either SkipReason ()
 stackCheckCompat s_ver g_ver =
   if| s_ver < parseVer "1.9.4" ->
-      if| g_ver >= parseVer "8.2.2" ->
-          error $ printf
-            "stack-%s is too old, but GHC %s is recent enough to build it.\n\
-            \The CI scripts should have installed it! See 25-deps.sh\n"
-            (showVersion s_ver) (showVersion g_ver)
-        | otherwise ->
-          Left $ SkipReason $ "stack-" ++ showVersion s_ver ++ " is too old"
+        Left $ SkipReason $ "stack-" ++ showVersion s_ver ++ " is too old"
     | otherwise ->
         Right ()
 
