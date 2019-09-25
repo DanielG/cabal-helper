@@ -147,6 +147,7 @@ import qualified CabalHelper.Compiletime.Program.Stack as Stack
 import qualified CabalHelper.Compiletime.Program.GHC as GHC
 import qualified CabalHelper.Compiletime.Program.CabalInstall as CabalInstall
 import CabalHelper.Compiletime.Cabal
+import CabalHelper.Compiletime.CompPrograms
 import CabalHelper.Compiletime.Log
 import CabalHelper.Compiletime.Process
 import CabalHelper.Compiletime.Sandbox
@@ -160,14 +161,6 @@ import CabalHelper.Compiletime.Compat.Version
 
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
-import Distribution.Verbosity (Verbosity, silent, normal, verbose, deafening)
-import Distribution.Simple.GHC as GHC (configure)
-
-import qualified Distribution.Simple.Program as ProgDb
-  ( lookupProgram, lookupKnownProgram, programPath
-  , configureProgram, userMaybeSpecifyPath
-  , ghcProgram, ghcPkgProgram, haddockProgram )
-import qualified Distribution.Simple.Program.Db as ProgDb
 
 -- $type-conventions
 -- Throughout the API we use the following conventions for type variables:
@@ -754,55 +747,12 @@ getConfProgs qe = do
 -- | Fixup program paths as appropriate for current project-type and bring
 -- 'Programs' into scope as an implicit parameter.
 configurePrograms :: QueryEnvI c pt -> PreInfo pt -> IO Programs
-configurePrograms QueryEnv{..} pre_info = withVerbosity $ do
-  guessCompProgramPaths $ case pre_info of
-    PreInfoStack projPaths ->
-      Stack.patchCompPrograms projPaths qePrograms
-    _ -> qePrograms
-  where
-    -- | Determine ghc-pkg path from ghc path
-    guessCompProgramPaths :: Verbose => Programs -> IO Programs
-    guessCompProgramPaths progs
-      | same ghcProgram progs dprogs = return progs
-    guessCompProgramPaths progs = do
-        let v = getCabalVerbosity
-            mGhcPath0    | same ghcProgram progs dprogs = Nothing
-                         | otherwise = Just $ ghcProgram progs
-            mGhcPkgPath0 | same ghcPkgProgram progs dprogs = Nothing
-                         | otherwise = Just $ ghcPkgProgram progs
-        (_compiler, _mplatform, progdb)
-            <- GHC.configure
-                  v
-                  mGhcPath0
-                  mGhcPkgPath0
-                  ProgDb.defaultProgramDb
-        let getProg p = ProgDb.programPath <$> ProgDb.lookupProgram p progdb
-            mghcPath1    = getProg ProgDb.ghcProgram
-            mghcPkgPath1 = getProg ProgDb.ghcPkgProgram
-            ghc = fromMaybe (ghcProgram progs) mghcPath1
-            ghc_pkg = fromMaybe (ghcPkgProgram progs) mghcPkgPath1
-        return progs
-          { ghcProgram    = ghc
-          , ghcPkgProgram = ghc_pkg
-          , stackEnv      = stackEnv progs ++
-            -- TODO: this is a cludge, need to make a symlink farm for
-            -- stack instead. Note: Haddock also has to be in the compiler
-            -- dir.
-            [("PATH", EnvPrepend $ takeDirectory ghc ++ [searchPathSeparator])]
-          , cabalUnitArgs = cabalUnitArgs progs ++
-              maybeToList (("--with-ghc="++) <$> mghcPath1) ++
-              maybeToList (("--with-ghc-pkg="++) <$> mghcPkgPath1)
-          }
-
-    same f o o'  = f o == f o'
-    dprogs = defaultPrograms
-
-getCabalVerbosity :: Verbose => Verbosity
-getCabalVerbosity
-  | ?verbose 2 = normal
-  | ?verbose 3 = verbose
-  | ?verbose 4 = deafening
-  | otherwise = silent
+configurePrograms qe@QueryEnv{..} pre_info = withVerbosity $ do
+  patchBuildToolProgs (projTypeOfQueryEnv qe) <=< guessCompProgramPaths $
+    case pre_info of
+      PreInfoStack projPaths ->
+        Stack.patchCompPrograms projPaths qePrograms
+      _ -> qePrograms
 
 newtype Helper pt
   = Helper { runHelper :: Unit pt -> [String] -> IO [Maybe ChResponse] }

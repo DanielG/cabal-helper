@@ -37,6 +37,8 @@ import System.FilePath
 import System.IO
 import Text.Printf
 
+import Distribution.Verbosity (Verbosity, silent, normal, verbose, deafening)
+
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
 
@@ -285,3 +287,10 @@ parseSetupHeader header = case BS8.words header of
        <*> parsePkgIdBS setupId
        <*> parsePkgIdBS compId
   _ -> Nothing
+
+getCabalVerbosity :: Verbose => Verbosity
+getCabalVerbosity
+  | ?verbose 2 = normal
+  | ?verbose 3 = verbose
+  | ?verbose 4 = deafening
+  | otherwise = silent

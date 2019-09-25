@@ -562,12 +562,17 @@ data Programs = Programs
     , ghcPkgProgram :: !FilePath
     -- ^ The path to the @ghc-pkg@ program. If not changed it will be derived
     -- from the path to 'ghcProgram'.
+
+    , haddockProgram :: !FilePath
+    -- ^ The path to the @haddock@ program. If not changed it will be
+    -- derived from the path to 'ghcProgram'.
     } deriving (Eq, Ord, Show, Read, Generic, Typeable)
 
 -- | By default all programs use their unqualified names, i.e. they will be
 -- searched for on @PATH@.
 defaultPrograms :: Programs
-defaultPrograms = Programs "cabal" [] []  "stack" [] [] [] "ghc" "ghc-pkg"
+defaultPrograms =
+  Programs "cabal" [] []  "stack" [] [] [] "ghc" "ghc-pkg" "haddock"
 
 data EnvOverride
     = EnvPrepend String
