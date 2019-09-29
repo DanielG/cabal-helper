@@ -133,7 +133,6 @@ library c-h-internal
   exposed-modules:
                        CabalHelper.Compiletime.Cabal
                        CabalHelper.Compiletime.Compat.Environment
-                       CabalHelper.Compiletime.Compat.ProgramDb
                        CabalHelper.Compiletime.Compat.Version
                        CabalHelper.Compiletime.Compat.Parsec
                        CabalHelper.Compiletime.Compile

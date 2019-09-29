@@ -157,12 +157,17 @@ import CabalHelper.Shared.Common
 import CabalHelper.Runtime.HelperMain (helper_main)
 
 import CabalHelper.Compiletime.Compat.Version
-import qualified CabalHelper.Compiletime.Compat.ProgramDb as ProgDb
-    ( defaultProgramDb, programPath, lookupProgram, ghcProgram, ghcPkgProgram )
+
 import Distribution.System (buildPlatform)
 import Distribution.Text (display)
 import Distribution.Verbosity (Verbosity, silent, normal, verbose, deafening)
 import Distribution.Simple.GHC as GHC (configure)
+
+import qualified Distribution.Simple.Program as ProgDb
+  ( lookupProgram, lookupKnownProgram, programPath
+  , configureProgram, userMaybeSpecifyPath
+  , ghcProgram, ghcPkgProgram, haddockProgram )
+import qualified Distribution.Simple.Program.Db as ProgDb
 
 -- $type-conventions
 -- Throughout the API we use the following conventions for type variables:
