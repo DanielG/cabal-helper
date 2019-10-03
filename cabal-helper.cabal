@@ -104,7 +104,7 @@ common build-deps
                      , Cabal            < 3.1  && >= 3.0
                                      || < 2.5  && >= 2.0
                                      || < 1.26 && >= 1.24.2.0
-                     , cabal-plan       < 0.6  && >= 0.5.0.0
+                     , cabal-plan       < 0.7  && >= 0.5.0.0
                      , clock            < 0.8  && >= 0.7.2
                      , containers       < 1    && >= 0.5.7.1
                      , bytestring       < 0.11 && >= 0.10.8.1
@@ -116,9 +116,9 @@ common build-deps
                      , semigroupoids    < 5.4  && >= 5.2
                      , SHA              < 1.7  && >= 1.6.4.4
                      , text             < 1.3  && >= 1.0.0.0
-                     , template-haskell < 2.15 && >= 2.11.1.0
+                     , template-haskell < 2.16 && >= 2.11.1.0
                      , temporary        < 1.3  && >= 1.2.1
-                     , time             < 1.9  && >= 1.6.0.1
+                     , time             < 1.10 && >= 1.6.0.1
                      , transformers     < 0.6  && >= 0.5.2.0
                      , utf8-string      < 1.1  && >= 1.0.1.1
   if os(windows)
@@ -199,7 +199,7 @@ test-suite ghc-session
   main-is:             GhcSession.hs
   hs-source-dirs:      tests
   ghc-options:         -Wall
-  build-depends:       ghc              < 8.7  && >= 8.0.2
+  build-depends:       ghc              < 8.9  && >= 8.0.2
                      , ghc-paths        < 0.2  && >= 0.1.0.9
                      , pretty-show      < 1.9  && >= 1.8.1
                      , cabal-helper
