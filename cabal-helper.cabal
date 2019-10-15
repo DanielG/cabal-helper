@@ -122,7 +122,7 @@ common build-deps
                      , transformers     < 0.6  && >= 0.5.2.0
                      , utf8-string      < 1.1  && >= 1.0.1.1
   if os(windows)
-    build-depends:     Win32            < 2.9  && >= 2.8.3.0
+    build-depends:     Win32            < 2.9  && >= 2.5.4.1
   else
     build-depends:     unix             < 2.8  && >= 2.7.2.1
   build-depends:       unix-compat      < 0.6  && >= 0.4.3.1
