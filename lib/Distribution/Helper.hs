@@ -592,7 +592,7 @@ readProjInfo qe pc pcm pi = withVerbosity $ do
       return ProjInfo
         { piCabalVersion = makeDataVersion pjCabalLibVersion
         , piProjConfModTimes = pcm
-        , piPackages = pkgs
+        , piPackages = NonEmpty.sortWith pPackageName pkgs
         , piImpl = ProjInfoV2
           { piV2Plan = plan
           , piV2PlanModTime = plan_mtime
@@ -610,7 +610,7 @@ readProjInfo qe pc pcm pi = withVerbosity $ do
       return ProjInfo
         { piCabalVersion = cabalVer
         , piProjConfModTimes = pcm
-        , piPackages = pkgs
+        , piPackages = NonEmpty.sortWith pPackageName pkgs
         , piImpl = ProjInfoStack
         }
 
