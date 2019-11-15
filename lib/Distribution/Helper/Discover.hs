@@ -28,11 +28,13 @@ module Distribution.Helper.Discover
   ) where
 
 import Control.Monad.Writer
+import Data.Version
 import System.Directory
 import System.FilePath
 
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Cabal
+import CabalHelper.Compiletime.Program.CabalInstall
 
 -- | @findProjects dir@. Find available project instances in @dir@.
 --
@@ -54,6 +56,14 @@ findProjects dir = execWriterT $ do
   let stackYaml = dir </> "stack.yaml"
   whenM (liftIO $ doesFileExist stackYaml) $
     tell [Ex $ ProjLocStackYaml stackYaml]
+
+  cabalVersion <- liftIO $ let ?verbose = (<=0)
+                               ?progs = defaultPrograms
+                             in cabalInstallVersion
+  when (cabalInstallVer cabalVersion >= makeVersion [3,0,0,0]) $ void $
+    join $ traverse (tell . pure . Ex . ProjLocV2Dir . takeDirectory) <$>
+      liftIO (findCabalFile dir)
+
   join $ traverse (tell . pure . Ex . ProjLocV1Dir . takeDirectory) <$>
     liftIO (findCabalFile dir)
 
