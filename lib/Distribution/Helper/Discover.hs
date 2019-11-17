@@ -28,7 +28,6 @@ module Distribution.Helper.Discover
   ) where
 
 import Control.Monad.Writer
-import Data.Version
 import System.Directory
 import System.FilePath
 
