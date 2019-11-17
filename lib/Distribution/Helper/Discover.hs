@@ -54,8 +54,8 @@ findProjects dir = execWriterT $ do
   let stackYaml = dir </> "stack.yaml"
   whenM (liftIO $ doesFileExist stackYaml) $
     tell [Ex $ ProjLocStackYaml stackYaml]
-  join $ traverse (tell . pure . Ex . ProjLocV1Dir . takeDirectory) <$>
-    liftIO (findCabalFile dir)
+  maybeCabalDir <- liftIO (fmap takeDirectory <$> findCabalFile dir)
+  forM_ [Ex . ProjLocV2Dir, Ex . ProjLocV1Dir] $ \proj -> traverse (tell . pure . proj) maybeCabalDir
 
 
 -- | @getDefaultDistDir pl@. Get the default dist-dir for the given project.
