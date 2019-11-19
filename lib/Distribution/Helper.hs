@@ -499,10 +499,15 @@ buildProjectTarget qe mu stage = do
           SCV2 -> do
             targets <- return $ case mu of
               Nothing -> ["all"]
-              Just Unit{uImpl} -> concat
+              Just Unit{uImpl,uPackage} -> concat
                 [ if uiV2OnlyDependencies uImpl
                     then ["--only-dependencies"] else []
-                , uiV2Components uImpl
+                -- explicitly add the package name to the component
+                -- this prevents ambiguous component errors, e.g: for component test:foo
+                -- cabal: Ambiguous target 'test:foo'. It could be:
+                -- A:test:foo (component)
+                -- B:test:foo (component)
+                , map ((pPackageName uPackage <> ":") <>) (uiV2Components uImpl)
                 ]
             case qeProjLoc of
               ProjLocV2File {plCabalProjectFile} ->
