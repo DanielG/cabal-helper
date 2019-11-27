@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, MultiWayIf, TupleSections, GADTs #-}
+{-# LANGUAGE DataKinds, MultiWayIf, TupleSections, GADTs, OverloadedStrings #-}
 
 -- cabal-helper: Simple interface to Cabal's configuration state
 -- Copyright (C) 2018  Daniel Gröber <cabal-helper@dxld.at>
@@ -301,7 +301,7 @@ planPackages plan = do
 
     unitTargets :: CP.Unit -> [String]
     unitTargets CP.Unit {uComps, uPId=CP.PkgId pkg_name _} =
-      map (Text.unpack . CP.dispCompNameTarget pkg_name) $
+      map (Text.unpack . (((coerce pkg_name) <> ":") <>) . CP.dispCompNameTarget pkg_name) $
       Map.keys uComps
 
     mkUnit :: Package' () -> CP.Unit -> Unit ('Cabal 'CV2)
