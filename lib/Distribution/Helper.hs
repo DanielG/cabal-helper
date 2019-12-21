@@ -614,6 +614,20 @@ readProjInfo qe pc pcm pi = withVerbosity $ do
         , piImpl = ProjInfoStack
         }
 
+-- [Note Stack Cabal Version]
+--
+-- Stack just uses ghc-pkg on the global-pkg-db to determine the
+-- appropriate Cabal version for a resolver when building, see
+-- Stack.Setup.pathsFromCompiler(cabalPkgVer). We do essentially the same
+-- thing here.
+--
+-- The code for building Setup.hs is in Stack.Build.Execute and the version
+-- of cabal is set in withSingleContext.withCabal.getPackageArgs.
+--
+-- Note there is some special casing going on (see 'depsMinusCabal'), they
+-- use the packages from the snapshot pkg-db except Cabal which comes from
+-- the global pkg-db.
+
 readUnitInfo :: Helper pt -> Unit pt -> UnitModTimes -> IO UnitInfo
 readUnitInfo helper unit@Unit {uUnitId=uiUnitId} uiModTimes = do
     res <- runHelper helper unit
