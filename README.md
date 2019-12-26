@@ -65,9 +65,9 @@ Finally Haskell package dependency resolution is also run.
  
 `Cabal` then writes all the gathered information on the concrete
 configuration of the package into a file called `setup-config`. Subsequent
-steps, such as`./Setup.hs build`, will then read this state file instead of
-`<package-name>.cabal` to avoid having to probing the system or run
-dependency resolution again.
+steps, such as`runhaskell Setup.hs build`, will then read this state file
+instead of `<package-name>.cabal` to avoid having to probe the system or
+run dependency resolution again.
 
 It is this file that `cabal-helper` is primarily concerned with reading and
 presenting in a usable manner. Reading this file essentially means that all
