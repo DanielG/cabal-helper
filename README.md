@@ -1,5 +1,5 @@
 # The `cabal-helper` library
-[![build status](https://gitlab.com/dxld/cabal-helper/badges/master/build.svg)](https://gitlab.com/dxld/cabal-helper/commits/master)
+[![build status](https://gitlab.com/dxld/cabal-helper/badges/master/pipeline.svg)](https://gitlab.com/dxld/cabal-helper/commits/master)
 
 The purpose of the `cabal-helper` library is to give Haskell development
 tools access to the same environment which build tools such as
