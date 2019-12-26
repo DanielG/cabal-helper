@@ -1,10 +1,10 @@
 # The `cabal-helper` library
 [![build status](https://gitlab.com/dxld/cabal-helper/badges/master/build.svg)](https://gitlab.com/dxld/cabal-helper/commits/master)
 
-The purpose of the `cabal-helper` library is to give Haskell development tools
-access to the same environment which build tools such as
-[cabal](https://www.haskell.org/cabal) and [stack](https://www.haskellstack.org)
-provide to the compiler.
+The purpose of the `cabal-helper` library is to give Haskell development
+tools access to the same environment which build tools such as
+[cabal](https://www.haskell.org/cabal) and
+[stack](https://www.haskellstack.org) normally provide to the compiler.
 
 ## Introduction
 
@@ -33,35 +33,46 @@ packaging specification. The `Cabal` library and `cabal-install` *build tool*
 are named after this specification. Yes we really love confusing naming in
 Haskell land.
 
-The specification revolves around this `Setup.hs` script file you might have
-seen before. Basically the idea is a Haskell source package consists of, at the
-very least, a `Setup.hs` file, which is a Haskell program that provides a well
-defined command-line interface for configuring, building and installing
-it. Developers can use *build tools*, such as `cabal`, which interface with
-`Setup.hs` and provide functionality on top it.
+The specification revolves around this `Setup.hs` script file you might
+have seen before. Basically the idea is a Haskell source package consists
+of, at the very least, a `Setup.hs` file, which is a Haskell program that
+provides a well defined command-line interface for configuring, building
+and installing it. Haskell developers can use *build tools*, such as
+`cabal`, which interface with `Setup.hs` and provide functionality on top
+it.
 
-Even though packages are in principle free to implement the `Setup.hs` interface
-however they like in practice everybody just imports the `Cabal` library in
-`Setup.hs` which provides a default implementation of this interface. The
-`Cabal` library then in turn uses the `<pkg-name>.cabal` file you've likely seen
-before to determine precisely what to do.
+Note that even though originally packages were meant to be free to
+implement the `Setup.hs` interface however they like, this hasn't been
+supported by build tools for a long time. In practice use of the `Cabal`
+library in `Setup.hs` is mandatory.
 
-Since use of `Cabal` the library is pretty much a given we're just going to be
-talking about this case from here on out.
+Now, the first step of building a package in "The Haskell Cabal" is to call
+`Setup.hs`'s `configure` command:
 
-So the first step of building a package in "The Haskell Cabal" is to call:
+    $ runhaskell Setup.hs configure
 
-    $ ./Setup.hs configure
+When invoking `Setup.hs` the default behaviour of the `Cabal` library is to
+first read the `<pkg-name>.cabal` configuration file to determine how the
+project is structured and what dependencies it has. In the case of
+`configure` it will then probe the system it's running on about:
 
-The `Cabal` library will then go off and probe a bunch of stuff about the system
-it's running on, such as the list of available Haskell packages, compiler type
-and version, paths to build tools among other things. Using this information
-`Cabal` then writes the concrete configuration of the package into a file called
-`setup-config`. Subsequent steps (`./Setup.hs build`...) will then read this
-file to avoid probing the system again.
+ - the list of available Haskell packages,
+ - system package dependencies (using pkg-config) and
+ - Haskell compiler type, version and supported language extensions (among
+   other things).
+
+Finally Haskell package dependency resolution is also run.
+ 
+`Cabal` then writes all the gathered information on the concrete
+configuration of the package into a file called `setup-config`. Subsequent
+steps, such as`./Setup.hs build`, will then read this state file instead of
+`<package-name>.cabal` to avoid having to probing the system or run
+dependency resolution again.
 
 It is this file that `cabal-helper` is primarily concerned with reading and
-presenting in a usable format.
+presenting in a usable manner. Reading this file essentially means that all
+the complicated work has already been done for us and we can get straight
+to running the compiler.
 
 ### Multi-package projects
 
@@ -86,8 +97,8 @@ In the API docs you will find frequent mentions of "the helper executable"
 so I'll explain what that is here because it is quite fundamental to how
 things work in the codebase.
 
-The fundamental problem cabal-helper solves is the fact that to access the
-internal data Cabal stores in the `setup-config` file we have to link
+The fundamental problem cabal-helper solves is the fact that in order to
+access the data Cabal stores in the `setup-config` file we have to link
 against `lib:Cabal`. However the binary format of this file is unstable and
 there is no backwards compatibility mechanism in the library. So to read a
 `setup-config` file produced by a certain version of Cabal we have to link
@@ -100,7 +111,7 @@ get.
 To solve this problem the cabal-helper library builds a small executable at
 runtime who's only purpose is to link against `lib:Cabal`, read the
 contents of `setup-config` and present the data there in a Cabal version
-independent format for consumption by the library.
+independent format for consumption by the cabal-helper library.
 
 Recently some work was merged into cabal to have `Setup.hs` to do this
 natively (https://github.com/haskell/cabal/pull/5954), we're planning to
