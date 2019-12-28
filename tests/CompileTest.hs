@@ -112,6 +112,7 @@ allCabalVersions (GhcVersion ghc_ver) = do
             , ("8.2",   ">= 1.24.2.0      ")
             , ("8.4",   ">= 2.0.0.2       ")
             , ("8.6",   ">= 2.0.0.2       ")
+            , ("8.8",   ">= 3.0.0.0       ")
             ]
   return $ reverse $ map (flip withinRange'CH constraint &&& id) cabal_versions
 
