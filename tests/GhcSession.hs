@@ -229,7 +229,7 @@ checkAndRunTestConfig
   (topdir, projdir_rel, cabal_file) = testLocPath test_loc in do
   c_ver <- f_c_ver pt
   first SkipReason $ do
-  if| Stack <- pt, Left (SkipReason msg) <- stackCheckCompat s_ver g_ver ->
+  if| Stack <- pt, Left (SkipReason msg) <- stackCheckCompat s_ver ->
       Left $ msg
     | ci_ver < parseVer "1.24" ->
       Left $ "cabal-install-" ++ showVersion ci_ver ++ " is too old"
@@ -505,15 +505,15 @@ stackBuiltinCabalVersion
     :: (?progs :: Programs)
     => Version -> Version -> Either SkipReason (IO Version)
 stackBuiltinCabalVersion s_ver g_ver = do
-    _ <- stackCheckCompat s_ver g_ver
+    _ <- stackCheckCompat s_ver
     res <- lookupStackResolver g_ver
     return $ parseVer . trim <$> readProcess (stackProgram ?progs)
         [ "--resolver="++res, "--system-ghc", "exec", "--"
         , "ghc-pkg", "--simple-output", "field", "Cabal", "version"
         ] ""
 
-stackCheckCompat :: Version -> Version -> Either SkipReason ()
-stackCheckCompat s_ver g_ver =
+stackCheckCompat :: Version -> Either SkipReason ()
+stackCheckCompat s_ver =
   if| s_ver < parseVer "1.9.4" ->
         Left $ SkipReason $ "stack-" ++ showVersion s_ver ++ " is too old"
     | otherwise ->
