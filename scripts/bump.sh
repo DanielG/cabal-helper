@@ -19,6 +19,8 @@ cd $(dirname $0)/..
 sed -r -i 's/^(version:[[:space:]]*)[0-9.]+/\1'"$VERSION"'/' cabal-helper.cabal
 
 git add cabal-helper.cabal
-git commit -m "Bump version to $VERSION"
+git commit -m "Release version $VERSION" --allow-empty
 
 git tag "v$VERSION"
+
+cabal v2-sdist
