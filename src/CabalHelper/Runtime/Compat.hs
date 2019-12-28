@@ -25,6 +25,7 @@ module CabalHelper.Runtime.Compat
     , componentNameFromComponent
     , componentOutDir
     , internalPackageDBPath
+    , unFlagAssignment
     ) where
 
 import System.FilePath
@@ -124,10 +125,16 @@ import Distribution.Version
 import qualified Distribution.InstalledPackageInfo as Installed
 #endif
 
-#if CH_MIN_VERSION_Cabal(2,2,0)
+#if CH_MIN_VERSION_Cabal(3,3,0)
+import Distribution.Types.Flag
+  ( unFlagAssignment
+  )
+#elif CH_MIN_VERSION_Cabal(2,2,0)
 import Distribution.Types.GenericPackageDescription
   ( unFlagAssignment
   )
+#else
+#define NOP_UN_FLAG_ASSIGNMENT 1
 #endif
 
 #if CH_MIN_VERSION_Cabal(2,5,0)
@@ -225,4 +232,8 @@ componentOutDir' lbi compName' =
 internalPackageDBPath :: LocalBuildInfo -> FilePath -> FilePath
 internalPackageDBPath lbi distPref =
   distPref </> "package.conf.inplace"
+#endif
+
+#ifdef NOP_UN_FLAG_ASSIGNMENT
+unFlagAssignment = id
 #endif

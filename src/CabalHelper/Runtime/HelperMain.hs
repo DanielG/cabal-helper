@@ -193,12 +193,6 @@ import Distribution.Version
 import qualified Distribution.InstalledPackageInfo as Installed
 #endif
 
-#if CH_MIN_VERSION_Cabal(2,2,0)
-import Distribution.Types.GenericPackageDescription
-  ( unFlagAssignment
-  )
-#endif
-
 import Control.Applicative ((<$>), (<*>), ZipList(..))
 import Control.Arrow (first, second, (&&&))
 import Control.Monad
@@ -301,11 +295,8 @@ helper_main args = do
     "config-flags":[] -> do
       return $ Just $ ChResponseFlags $ sort $
         map (first unFlagName)
-#if CH_MIN_VERSION_Cabal(2,2,0)
-          $ unFlagAssignment $ configConfigurationsFlags
-#else
+          $ unFlagAssignment
           $ configConfigurationsFlags
-#endif
           $ configFlags lbi
 
     "non-default-config-flags":[] -> do
