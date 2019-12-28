@@ -38,6 +38,8 @@ import CabalHelper.Compiletime.Program.GHC
 import CabalHelper.Compiletime.Types
 import CabalHelper.Shared.Common
 
+import TestOptions
+
 withinRange'CH :: Version -> VersionRange -> Bool
 withinRange'CH v r =
     withinRange (fromDataVersion v) r
@@ -61,11 +63,12 @@ createHOME = do
 
 main :: IO ()
 main = do
-  let ?progs = defaultPrograms
+  (modProgs, args) <- testOpts =<< getArgs
+
+  let ?progs = modProgs defaultPrograms
   let ?opts = defaultCompileOptions { oVerbose = True }
   let ?verbose = \level -> case level of 1 -> True; _ -> False
 
-  args <- getArgs
   case args of
     "list-versions":[] -> do
         mapM_ print =<< relevantCabalVersions =<< ghcVersion
