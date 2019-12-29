@@ -10,7 +10,6 @@ module Main where
 
 import GHC
 import Config
-import GHC.Paths (libdir)
 import Outputable
 import DynFlags
 
@@ -38,7 +37,7 @@ import CabalHelper.Shared.Common
 import CabalHelper.Compiletime.Types (Env)
 import CabalHelper.Compiletime.Process (readProcess, callProcessStderr)
 import CabalHelper.Compiletime.Program.GHC
-  (GhcVersion(..), ghcVersion)
+  (GhcVersion(..), ghcVersion, ghcLibdir)
 import CabalHelper.Compiletime.Program.CabalInstall
   (CabalInstallVersion(..), cabalInstallVersion)
 
@@ -295,6 +294,8 @@ test modProgs (psdImpl -> ProjSetupImpl{..}) topdir tmpdir projdir cabal_file
     let progs = modProgs (qePrograms qe')
         qe = qe' { qePrograms = progs }
 
+    ghc_libdir <- let ?progs = progs; ?verbose = const False in ghcLibdir
+
     psiSdist progs topdir tmpdir
 
     cs <- concat <$> runQuery (allUnits (Map.elems . uiComponents)) qe
@@ -318,7 +319,7 @@ test modProgs (psdImpl -> ProjSetupImpl{..}) topdir tmpdir projdir cabal_file
         putStrLn sopts
 
         hFlush stdout
-        tr <- compileModule pkgdir ciEntrypoints ciSourceDirs opts'
+        tr <- compileModule ghc_libdir pkgdir ciEntrypoints ciSourceDirs opts'
         return $ tr ciComponentName
   where
     formatArg x
@@ -330,9 +331,9 @@ addCabalProject dir = do
   writeFile (dir </> "cabal.project") "packages: .\n"
 
 compileModule
-    :: FilePath -> ChEntrypoint -> [FilePath] -> [String]
+    :: FilePath -> FilePath -> ChEntrypoint -> [FilePath] -> [String]
     -> IO (ChComponentName -> FilePath -> String -> String -> TestResult)
-compileModule pkgdir ep srcdirs opts = do
+compileModule ghc_libdir pkgdir ep srcdirs opts = do
     cwd_before <- getCurrentDirectory
     setCurrentDirectory pkgdir
     flip E.finally (setCurrentDirectory cwd_before) $ do
@@ -342,7 +343,7 @@ compileModule pkgdir ep srcdirs opts = do
     E.handle (\(ec :: ExitCode) -> print ec >> return (TestResult False)) $ do
 
     defaultErrorHandler defaultFatalMessager defaultFlushOut $ do
-    runGhc (Just libdir) $ do
+    runGhc (Just ghc_libdir) $ do
     let printGhcEx e = GHC.printException e >> return (TestResult False)
     handleSourceError printGhcEx $ do
 

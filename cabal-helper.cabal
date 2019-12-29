@@ -184,7 +184,6 @@ test-suite ghc-session
   hs-source-dirs:      tests
   ghc-options:         -Wall
   build-depends:       ghc              < 8.9  && >= 8.0.2
-                     , ghc-paths        < 0.2  && >= 0.1.0.9
                      , pretty-show      < 1.9  && >= 1.8.1
                      , cabal-helper
                      , c-h-internal

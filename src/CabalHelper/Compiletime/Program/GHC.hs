@@ -64,6 +64,10 @@ ghcVersion :: (Verbose, Progs) => IO GhcVersion
 ghcVersion = GhcVersion .
   parseVer . trim <$> readProcess' (ghcProgram ?progs) ["--numeric-version"] ""
 
+ghcLibdir :: (Verbose, Progs) => IO FilePath
+ghcLibdir = do
+  trim <$> readProcess' (ghcProgram ?progs) ["--print-libdir"] ""
+
 ghcPkgVersion :: (Verbose, Progs) => IO Version
 ghcPkgVersion =
   parseVer . trim . dropWhile (not . isDigit)
