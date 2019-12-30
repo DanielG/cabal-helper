@@ -213,32 +213,32 @@ installCabalLibV2 _ghcVer cv (PackageEnvFile env_file) = do
     then return ()
     else do
     installingMessage cv
-    (target, cwd) <- case cv of
-      CabalVersion cabalVer -> do
-        tmp <- getTemporaryDirectory
-        return $ ("Cabal-"++showVersion cabalVer, tmp)
-      CabalHEAD (_commitid, CabalSourceDir srcdir) -> do
-        return (".", srcdir)
-    CabalInstallVersion {..} <- cabalInstallVersion
-    cabal_opts <- return $ concat
-        [ if cabalInstallVer >= Version [1,20] []
-             then ["--no-require-sandbox"]
-             else []
-        , [ if cabalInstallVer >= Version [2,4] []
-              then "v2-install"
-              else "new-install"
+    withSystemTempDirectory "cabal-helper.install-cabal-tmp" $ \tmpdir -> do
+      (target, cwd) <- case cv of
+        CabalVersion cabalVer -> do
+          return $ ("Cabal-"++showVersion cabalVer, tmpdir)
+        CabalHEAD (_commitid, CabalSourceDir srcdir) -> do
+          return (".", srcdir)
+      CabalInstallVersion {..} <- cabalInstallVersion
+      cabal_opts <- return $ concat
+          [ if cabalInstallVer >= Version [1,20] []
+               then ["--no-require-sandbox"]
+               else []
+          , [ if cabalInstallVer >= Version [2,4] []
+                then "v2-install"
+                else "new-install"
+            ]
+          , cabalV2WithGHCProgOpts
+          , [ "--package-env=" ++ env_file
+            , "--lib"
+            , target
+            ]
+          , if | ?verbose 3 -> ["-v2"]
+               | ?verbose 4 -> ["-v3"]
+               | otherwise -> []
           ]
-        , cabalV2WithGHCProgOpts
-        , [ "--package-env=" ++ env_file
-          , "--lib"
-          , target
-          ]
-        , if | ?verbose 3 -> ["-v2"]
-             | ?verbose 4 -> ["-v3"]
-             | otherwise -> []
-        ]
-    callProcessStderr (Just cwd) [] (cabalProgram ?progs) cabal_opts
-    hPutStrLn stderr "done"
+      callProcessStderr (Just cwd) [] (cabalProgram ?progs) cabal_opts
+      hPutStrLn stderr "done"
 
 
 cabalV2WithGHCProgOpts :: Progs => [String]
