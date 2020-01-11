@@ -282,19 +282,25 @@ getUnitModTimes
     package_yaml_path = pSourceDir  </> "package.yaml"
     setup_config_path = distdirv1 </> "setup-config"
 
+-- | Get a random unit from the project. Sometimes we need to get info we
+-- can only get after configuring _any_ unit but we do assume that this
+-- info is uniform across units.
+someUnit :: ProjInfo pt -> Unit pt
+someUnit proj_info =
+    NonEmpty.head $ pUnits $
+    NonEmpty.head $ piPackages proj_info
 
 -- | The version of GHC the project is configured to use for compilation.
 compilerVersion :: Query pt (String, Version)
 compilerVersion = Query $ \qe ->
   getProjInfo qe >>= \proj_info ->
-    let someUnit = NonEmpty.head $ pUnits $
-                   NonEmpty.head $ piPackages proj_info in
+    let unit = someUnit proj_info in
     --  ^ ASSUMPTION: Here we assume the compiler version is uniform across all
     --  units so we just pick any one.
     case piImpl proj_info of
-      ProjInfoV1 {} -> uiCompilerId <$> getUnitInfo qe someUnit
+      ProjInfoV1 {} -> uiCompilerId <$> getUnitInfo qe unit
       ProjInfoV2 { piV2CompilerId } -> return piV2CompilerId
-      ProjInfoStack {} -> uiCompilerId <$> getUnitInfo qe someUnit
+      ProjInfoStack {} -> uiCompilerId <$> getUnitInfo qe unit
 
 -- | All local packages currently active in a project\'s build plan.
 projectPackages :: Query pt (NonEmpty (Package pt))
@@ -410,6 +416,25 @@ getProjInfo qe = do
         readProjInfo qe proj_conf mtime pre_info
     }
 
+
+-- | Get the cabal version we need to build for this project.
+getCabalLibVersion :: QueryEnv pt -> Reconfigured pt -> ProjInfo pt -> IO CabalVersion
+getCabalLibVersion _ _ ProjInfo{piImpl=ProjInfoV1 {piV1CabalVersion}} =
+  return piV1CabalVersion
+getCabalLibVersion qe reconf proj_info = do
+  unit <- case reconf of
+    AlreadyReconfigured unit ->
+        return unit
+    Haven'tReconfigured -> do
+        let unit = someUnit proj_info
+        reconfigureUnit qe unit
+        return unit
+  let DistDirLib distdir = uDistDir $ unit
+  hdr <- readSetupConfigHeader $ distdir </> "setup-config"
+  let ("Cabal", cabalVer) = uhSetupId hdr
+  return $ CabalVersion cabalVer
+
+
 getUnitInfo :: QueryEnv pt -> Unit pt -> IO UnitInfo
 getUnitInfo qe@QueryEnv{..} unit@Unit{uDistDir} = do
   pre_info <- getPreInfo qe
@@ -427,8 +452,9 @@ getUnitInfo qe@QueryEnv{..} unit@Unit{uDistDir} = do
     , cKeyValid = (==)
 
     , cRegen = \mtimes -> do
-        reconfigureUnit qe unit
-        helper <- getHelper pre_info proj_info qe
+        reconf <- reconfigureUnit qe unit
+        cabal_ver <- getCabalLibVersion qe reconf proj_info
+        helper <- getHelper qe pre_info proj_info cabal_ver
         readUnitInfo helper unit mtimes
     }
 
@@ -457,8 +483,11 @@ shallowReconfigureProject QueryEnv
 shallowReconfigureProject qe = do
   buildProjectTarget qe Nothing DryRun
 
-reconfigureUnit :: QueryEnvI c pt -> Unit pt -> IO ()
-reconfigureUnit qe u = buildProjectTarget qe (Just u) OnlyCfg
+data Reconfigured pt = AlreadyReconfigured (Unit pt) | Haven'tReconfigured
+reconfigureUnit :: QueryEnvI c pt -> Unit pt -> IO (Reconfigured pt)
+reconfigureUnit qe u = do
+  buildProjectTarget qe (Just u) OnlyCfg
+  return (AlreadyReconfigured u)
 
 buildUnits :: [Unit pt] -> Query pt ()
 buildUnits units = Query $ \qe -> do
@@ -489,6 +518,8 @@ buildProjectTarget qe mu stage = do
       cmd <- return $ case stage of
         DryRun | SCV1 <- cpt ->
           CabalInstall.CIConfigure
+          -- TODO: in v1 we configure twice because we do configure for
+          -- DryRun and OnlyCfg.
         OnlyCfg ->
           CabalInstall.CIConfigure
         _ ->
@@ -538,43 +569,39 @@ getFileModTime f = do
 
 readProjInfo
     :: QueryEnvI c pt -> ProjConf pt -> ProjConfModTimes -> PreInfo pt -> IO (ProjInfo pt)
-readProjInfo qe pc pcm pi = withVerbosity $ do
+readProjInfo qe pc pcm _pi = withVerbosity $ do
   let projloc = qeProjLoc qe
   case (qeDistDir qe, pc) of
     (DistDirCabal SCV1 distdir, ProjConfV1{pcV1CabalFile}) -> do
       setup_config_path <- canonicalizePath (distdir </> "setup-config")
-      mhdr <- readSetupConfigHeader setup_config_path
-      case mhdr of
-        Just hdr@(UnitHeader (pkg_name_bs, _pkg_ver) ("Cabal", hdrCabalVersion) _compId) -> do
-          let
-            v3_0_0_0 = makeVersion [3,0,0,0]
-            pkg_name
-              | hdrCabalVersion >= v3_0_0_0 = BSU.toString pkg_name_bs
-              | otherwise = BS8.unpack pkg_name_bs
-            pkg = Package
-              { pPackageName = pkg_name
-              , pSourceDir = plCabalProjectDir projloc
-              , pCabalFile = CabalFile pcV1CabalFile
-              , pFlags = []
-              , pUnits = (:|[]) Unit
-                { uUnitId = UnitId pkg_name
-                , uPackage = pkg { pUnits = () }
-                , uDistDir = DistDirLib distdir
-                , uImpl = UnitImplV1
-                }
-              }
-            piImpl = ProjInfoV1 { piV1SetupHeader = hdr }
-          return ProjInfo
-            { piCabalVersion = hdrCabalVersion
-            , piProjConfModTimes = pcm
-            , piPackages = pkg :| []
-            , piImpl
+      hdr@(UnitHeader (pkg_name_bs, _pkg_ver) ("Cabal", hdrCabalVersion) _)
+          <- readSetupConfigHeader setup_config_path
+      let
+        v3_0_0_0 = makeVersion [3,0,0,0]
+        pkg_name
+          | hdrCabalVersion >= v3_0_0_0 = BSU.toString pkg_name_bs
+          | otherwise = BS8.unpack pkg_name_bs
+        pkg = Package
+          { pPackageName = pkg_name
+          , pSourceDir = plCabalProjectDir projloc
+          , pCabalFile = CabalFile pcV1CabalFile
+          , pFlags = []
+          , pUnits = (:|[]) Unit
+            { uUnitId = UnitId pkg_name
+            , uPackage = pkg { pUnits = () }
+            , uDistDir = DistDirLib distdir
+            , uImpl = UnitImplV1
             }
-        Just UnitHeader {uhSetupId=(setup_name, _)} ->
-          panicIO $ printf "Unknown Setup package-id in setup-config header '%s': '%s'"
-                      (BS8.unpack setup_name) setup_config_path
-        Nothing ->
-          panicIO $ printf "Could not read '%s' header" setup_config_path
+          }
+        piImpl = ProjInfoV1
+          { piV1SetupHeader = hdr
+          , piV1CabalVersion = CabalVersion hdrCabalVersion
+          }
+      return ProjInfo
+        { piProjConfModTimes = pcm
+        , piPackages = pkg :| []
+        , piImpl
+        }
 
     (DistDirCabal SCV2 distdirv2, _) -> do
       let plan_path = distdirv2 </> "cache" </> "plan.json"
@@ -591,8 +618,7 @@ readProjInfo qe pc pcm pi = withVerbosity $ do
 
       Just pkgs <- NonEmpty.nonEmpty <$> CabalInstall.planPackages plan
       return ProjInfo
-        { piCabalVersion = makeDataVersion pjCabalLibVersion
-        , piProjConfModTimes = pcm
+        { piProjConfModTimes = pcm
         , piPackages = NonEmpty.sortWith pPackageName pkgs
         , piImpl = ProjInfoV2
           { piV2Plan = plan
@@ -603,31 +629,11 @@ readProjInfo qe pc pcm pi = withVerbosity $ do
     (DistDirStack{}, _) -> do
       Just cabal_files <- NonEmpty.nonEmpty <$> Stack.listPackageCabalFiles qe
       pkgs <- mapM (Stack.getPackage qe) cabal_files
-      Just (cabalVer:_) <- runMaybeT $
-        let ?progs = qePrograms qe in
-        let PreInfoStack {piStackProjPaths} = pi in
-        GHC.listCabalVersions (Just (sppGlobalPkgDb piStackProjPaths))
-        --  ^ See [Note Stack Cabal Version]
       return ProjInfo
-        { piCabalVersion = cabalVer
-        , piProjConfModTimes = pcm
+        { piProjConfModTimes = pcm
         , piPackages = NonEmpty.sortWith pPackageName pkgs
         , piImpl = ProjInfoStack
         }
-
--- [Note Stack Cabal Version]
---
--- Stack just uses ghc-pkg on the global-pkg-db to determine the
--- appropriate Cabal version for a resolver when building, see
--- Stack.Setup.pathsFromCompiler(cabalPkgVer). We do essentially the same
--- thing here.
---
--- The code for building Setup.hs is in Stack.Build.Execute and the version
--- of cabal is set in withSingleContext.withCabal.getPackageArgs.
---
--- Note there is some special casing going on (see 'depsMinusCabal'), they
--- use the packages from the snapshot pkg-db except Cabal which comes from
--- the global pkg-db.
 
 readUnitInfo :: Helper pt -> Unit pt -> UnitModTimes -> IO UnitInfo
 readUnitInfo helper u@Unit{uImpl=ui@UnitImplV2{uiV2Components}} umt
@@ -712,7 +718,8 @@ prepare :: Query pt ()
 prepare = Query $ \qe -> do
   pre_info <- getPreInfo qe
   proj_info <- getProjInfo qe
-  void $ getHelper pre_info proj_info qe
+  cabal_ver <- getCabalLibVersion qe Haven'tReconfigured proj_info
+  void $ getHelper qe pre_info proj_info cabal_ver
 
 -- | Create @cabal_macros.h@, @Paths_\<pkg\>.hs@ and other generated files
 -- in the usual place. See 'Distribution.Simple.Build.initialBuildSteps'.
@@ -723,7 +730,8 @@ writeAutogenFiles :: Unit pt -> Query pt ()
 writeAutogenFiles unit = Query $ \qe -> do
   pre_info <- getPreInfo qe
   proj_info <- getProjInfo qe
-  helper <- getHelper pre_info proj_info qe
+  cabal_ver <- getCabalLibVersion qe Haven'tReconfigured proj_info
+  helper <- getHelper qe pre_info proj_info cabal_ver
   void $ runHelper helper unit ["write-autogen-files"]
 
 -- | Get the path to the sandbox package-db in a project
@@ -780,19 +788,19 @@ configurePrograms qe@QueryEnv{..} pre_info = withVerbosity $ do
 newtype Helper pt
   = Helper { runHelper :: Unit pt -> [String] -> IO [Maybe ChResponse] }
 
-getHelper :: PreInfo pt -> ProjInfo pt -> QueryEnvI c pt -> IO (Helper pt)
-getHelper _pre_info ProjInfo{piCabalVersion} qe@QueryEnv{..}
-  | CabalVersion piCabalVersion == bultinCabalVersion = return $ Helper $
+getHelper :: QueryEnvI c pt -> PreInfo pt -> ProjInfo pt -> CabalVersion -> IO (Helper pt)
+getHelper qe@QueryEnv{..} _pre_info _proj_info cabal_ver
+  | cabal_ver == bultinCabalVersion = return $ Helper $
       \Unit{ uDistDir=DistDirLib distdir
            , uPackage=Package{pCabalFile=CabalFile cabal_file}
            } args ->
         let pt = dispHelperProjectType (projTypeOfQueryEnv qe) in
         helper_main $ cabal_file : distdir : pt : args
-getHelper pre_info proj_info qe@QueryEnv{..} = do
+getHelper qe@QueryEnv{..} pre_info proj_info cabal_ver = do
   withVerbosity $ do
     let ?progs = qePrograms
     t0 <- Clock.getTime Monotonic
-    eexe <- compileHelper $ mkCompHelperEnv qeProjLoc qeDistDir pre_info proj_info
+    eexe <- compileHelper $ mkCompHelperEnv qeProjLoc qeDistDir pre_info proj_info cabal_ver
     t1 <- Clock.getTime Monotonic
     let dt = (/10^9) $ fromInteger $ Clock.toNanoSecs $ Clock.diffTimeSpec t0 t1
         dt :: Float
@@ -819,17 +827,19 @@ mkCompHelperEnv
     -> DistDir pt
     -> PreInfo pt
     -> ProjInfo pt
+    -> CabalVersion
     -> CompHelperEnv
 mkCompHelperEnv
   projloc
   (DistDirCabal SCV1 distdir)
   PreInfoCabal
-  ProjInfo{piCabalVersion}
+  ProjInfo {}
+  cabal_ver
   = CompHelperEnv
-    { cheCabalVer = CabalVersion piCabalVersion
+    { cheCabalVer = cabal_ver
     , cheProjDir  = plCabalProjectDir projloc
     , cheProjLocalCacheDir = distdir
-    , chePkgDb    = Nothing
+    , chePkgDb    = []
     , chePlanJson = Nothing
     , cheDistV2 = Nothing
     }
@@ -838,12 +848,13 @@ mkCompHelperEnv
   (DistDirCabal SCV2 distdir)
   PreInfoCabal
   ProjInfo{piImpl=ProjInfoV2{piV2Plan=plan}}
+  cabal_ver
   = CompHelperEnv {..}
   where
     cheProjDir  = plCabalProjectDir projloc
-    cheCabalVer = CabalVersion $ makeDataVersion pjCabalLibVersion
+    cheCabalVer = cabal_ver
     cheProjLocalCacheDir = distdir </> "cache"
-    chePkgDb    = Nothing
+    chePkgDb    = []
     chePlanJson = Just plan
     cheDistV2   = Just distdir
     PlanJson {pjCabalLibVersion=Ver pjCabalLibVersion } = plan
@@ -852,16 +863,17 @@ mkCompHelperEnv
   (DistDirStack mworkdir)
   PreInfoStack
     { piStackProjPaths=StackProjPaths
-      { sppGlobalPkgDb }
+      { sppGlobalPkgDb, sppSnapPkgDb, sppLocalPkgDb }
     }
-  ProjInfo { piCabalVersion }
+  ProjInfo {}
+  cabal_ver
   = let workdir = fromMaybe ".stack-work" $ unRelativePath <$> mworkdir in
     let projdir = takeDirectory stack_yaml in
     CompHelperEnv
-    { cheCabalVer = CabalVersion $ piCabalVersion
+    { cheCabalVer = cabal_ver
     , cheProjDir  = projdir
     , cheProjLocalCacheDir = projdir </> workdir
-    , chePkgDb    = Just sppGlobalPkgDb
+    , chePkgDb    = [sppGlobalPkgDb, sppSnapPkgDb, sppLocalPkgDb]
     , chePlanJson = Nothing
     , cheDistV2 = Nothing
     }

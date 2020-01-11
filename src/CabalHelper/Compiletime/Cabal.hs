@@ -31,6 +31,7 @@ import Data.Version
 import System.Directory
 import System.FilePath
 import System.IO
+import Text.Printf
 
 import Distribution.Verbosity (Verbosity, silent, normal, verbose, deafening)
 
@@ -223,9 +224,18 @@ complainIfNoCabalFile pkgdir Nothing =
 bultinCabalVersion :: CabalVersion
 bultinCabalVersion = CabalVersion $ parseVer VERSION_Cabal
 
-readSetupConfigHeader :: FilePath -> IO (Maybe UnitHeader)
+readSetupConfigHeader :: FilePath -> IO UnitHeader
 readSetupConfigHeader file = bracket (openFile file ReadMode) hClose $ \h -> do
-  parseSetupHeader <$> BS.hGetLine h
+  mhdr <- parseSetupHeader <$> BS.hGetLine h
+  case mhdr of
+    Just hdr@(UnitHeader _PkgId ("Cabal", _hdrCabalVersion) _compId) -> do
+      return hdr
+    Just UnitHeader {uhSetupId=(setup_name, _)} -> panicIO $
+      printf "Unknown Setup package-id in setup-config header '%s': '%s'"
+        (BS8.unpack setup_name) file
+    Nothing -> panicIO $
+      printf "Could not read '%s' header" file
+
 
 parseSetupHeader :: BS.ByteString -> Maybe UnitHeader
 parseSetupHeader header = case BS8.words header of

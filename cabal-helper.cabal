@@ -39,6 +39,11 @@ extra-source-files:  README.md
                      tests/fliblib/stack.yaml
                      tests/fliblib/lib/*.hs
 
+                     tests/custom-setup/*.hs
+                     tests/custom-setup/*.cabal
+                     tests/custom-setup/packages.list
+                     tests/custom-setup/stack.yaml
+
                      tests/bkpregex/*.hs
                      tests/bkpregex/*.cabal
                      tests/bkpregex/packages.list

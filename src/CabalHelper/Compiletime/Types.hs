@@ -456,8 +456,7 @@ newtype ProjConfModTimes = ProjConfModTimes [(FilePath, EpochTime)]
 
 -- | Project-scope information cache.
 data ProjInfo pt = ProjInfo
-  { piCabalVersion     :: !Version
-  , piPackages         :: !(NonEmpty (Package pt))
+  { piPackages         :: !(NonEmpty (Package pt))
   , piImpl             :: !(ProjInfoImpl pt)
   , piProjConfModTimes :: !ProjConfModTimes
   -- ^ Key for cache invalidation. When this is not equal to the return
@@ -466,13 +465,14 @@ data ProjInfo pt = ProjInfo
 
 data ProjInfoImpl pt where
   ProjInfoV1 ::
-    { piV1SetupHeader :: !UnitHeader
+    { piV1SetupHeader  :: !UnitHeader
+    , piV1CabalVersion :: !CabalVersion
     } -> ProjInfoImpl ('Cabal 'CV1)
 
   ProjInfoV2 ::
-    { piV2Plan        :: !PlanJson
-    , piV2PlanModTime :: !EpochTime
-    , piV2CompilerId  :: !(String, Version)
+    { piV2Plan         :: !PlanJson
+    , piV2PlanModTime  :: !EpochTime
+    , piV2CompilerId   :: !(String, Version)
     } -> ProjInfoImpl ('Cabal 'CV2)
 
   ProjInfoStack :: ProjInfoImpl 'Stack

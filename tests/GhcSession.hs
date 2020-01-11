@@ -2,8 +2,8 @@
   DataKinds, ExistentialQuantification, PolyKinds, ViewPatterns,
   DeriveFunctor, MonoLocalBinds, GADTs, MultiWayIf #-}
 
-{-| This test ensures we can get a GHC API session up and running in a variety of
-  project environments.
+{-| This test ensures we can get a GHC API session up and running in a
+  variety of project environments.
 -}
 
 module Main where
@@ -126,13 +126,31 @@ main = do
       -- fucking awesome store cache to keep CI times down.
       --
       -- TODO: Better test coverage for helper compilation with the other two!
-      [ TC (TN "exelib")    (parseVer "1.10") (parseVer "0")   []
-      , TC (TN "exeintlib") (parseVer "2.0")  (parseVer "0")   []
-      , TC (TN "fliblib")   (parseVer "2.0")  (parseVer "0")   []
-      , TC (TN "bkpregex")  (parseVer "2.0")  (parseVer "8.1") [Cabal CV2, Cabal CV1]
-      , TC (TN "src-repo")  (parseVer "2.4")  (parseVer "0")   [Cabal CV2]
+      [ TC (TN "exelib")       (parseVer "1.10") (parseVer "0")   []
+      , TC (TN "exeintlib")    (parseVer "2.0")  (parseVer "0")   []
+      , TC (TN "fliblib")      (parseVer "2.0")  (parseVer "0")   []
+      , TC (TN "custom-setup") (parseVer "1.24") (parseVer "0")   [Cabal CV2, Stack]
+      --  ^ Custom setup has issues in v1. Specifically we can get into the
+      --  situation where v1-configure --with-ghc=... will pick one Cabal
+      --  lib version but then v1-build (without --with-ghc) will pick
+      --  another because the system ghc has different packages available
+      --  than the --with-ghc one.
+      --
+      -- At this point a setup recompile happens and hell breaks loose
+      -- because setup-config is mismatched. The reason we can't just pass
+      -- --with-ghc to v1-build to fix this is that it will actually ignore
+      -- it as far as setup compilation is concerned while v1-configure
+      -- will pick it up.
+      --
+      -- We could fuck around with $PATH in the v1-build case too but I
+      -- really don't think that many people use v1 still and with
+      -- built-type:custom no less.
+      --
+      -- See haskell/cabal#6749
+      , TC (TN "bkpregex")     (parseVer "2.0")  (parseVer "8.1") [Cabal CV2, Cabal CV1]
+      , TC (TN "src-repo")     (parseVer "2.4")  (parseVer "0")   [Cabal CV2]
       , let multipkg_loc = TF "tests/multipkg/" "proj/" "proj/proj.cabal" in
-        TC  multipkg_loc    (parseVer "1.10") (parseVer "0")   [Cabal CV2, Stack]
+        TC  multipkg_loc       (parseVer "1.10") (parseVer "0")   [Cabal CV2, Stack]
       --            min Cabal lib ver -^    min GHC ver -^
       ]
 

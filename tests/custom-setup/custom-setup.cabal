@@ -1,0 +1,13 @@
+name:                custom-setup
+version:             0
+build-type:          Custom
+cabal-version:       >=1.10
+extra-source-files:  stack.yaml
+
+custom-setup
+  setup-depends: base, Cabal
+
+library
+  exposed-modules:     Lib
+  build-depends:       base, filepath, directory
+  default-language:    Haskell2010
