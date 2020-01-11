@@ -134,12 +134,16 @@ cabalVersionExistsInPkgDb cabalVer db@(PackageDbDir db_path) = do
 
 invokeGhc :: Env => GhcInvocation -> IO (Either ExitCode FilePath)
 invokeGhc GhcInvocation {..} = do
+    giOutDirAbs <- makeAbsolute giOutDir
+    giOutputAbs <- makeAbsolute giOutput
+    giIncludeDirsAbs <- mapM makeAbsolute giIncludeDirs
+    giInputsAbs <- mapM makeAbsolute giInputs
     -- We unset some interferring envvars here for stack, see:
     -- https://github.com/DanielG/cabal-helper/issues/78#issuecomment-557860898
     let eos = [("GHC_ENVIRONMENT", EnvUnset), ("GHC_PACKAGE_PATH", EnvUnset)]
     rv <- callProcessStderr' (Just "/") eos (ghcProgram ?progs) $ concat
-      [ [ "-outputdir", giOutDir
-        , "-o", giOutput
+      [ [ "-outputdir", giOutDirAbs
+        , "-o", giOutputAbs
         ]
       , map ("-optP"++) giCPPOptions
       , if giHideAllPackages then ["-hide-all-packages"] else []
@@ -151,10 +155,10 @@ invokeGhc GhcInvocation {..} = do
             , packageFlags
             ]
           GPSPackageEnv env -> [ "-package-env=" ++ unPackageEnvFile env ]
-      , map ("-i"++) $ nub $ "" : giIncludeDirs
+      , map ("-i"++) $ nub $ "" : giIncludeDirsAbs
       , giWarningFlags
       , ["--make"]
-      , giInputs
+      , giInputsAbs
       ]
     return $
       case rv of
