@@ -90,7 +90,7 @@ data CompilationProductScope = CPSGlobal | CPSProject
 type CompHelperEnv = CompHelperEnv' CabalVersion
 data CompHelperEnv' cv = CompHelperEnv
   { cheCabalVer :: !cv
-  , chePkgDb    :: !(Maybe PackageDbDir)
+  , chePkgDb    :: ![PackageDbDir]
   -- ^ A package-db where we are guaranteed to find Cabal-`cheCabalVer`.
   , cheProjDir  :: !FilePath
   , chePlanJson :: !(Maybe PlanJson)
@@ -119,7 +119,7 @@ compileHelper' CompHelperEnv {..} = do
     CabalVersion cabalVerPlain -> do
       runMaybeT $ msum $ map (\f -> f ghcVer cabalVerPlain) $
         case chePkgDb of
-          Nothing ->
+          [] ->
             [ compileWithCabalV2Inplace
             , compileWithCabalV2GhcEnv
             , compileCabalSource
@@ -127,8 +127,8 @@ compileHelper' CompHelperEnv {..} = do
             , compileGlobal
             , compileWithCabalInPrivatePkgDb
             ]
-          Just db ->
-            [ ((.).(.)) liftIO (compilePkgDb db)
+          dbs ->
+            [ ((.).(.)) liftIO (compilePkgDbs dbs)
             ]
   appdir <- appCacheDir
   let cp@CompPaths {compExePath} = compPaths appdir cheProjLocalCacheDir comp
@@ -148,11 +148,11 @@ compileHelper' CompHelperEnv {..} = do
 
 -- for relaxed deps: find (sameMajorVersionAs cheCabalVer) . reverse . sort
 
-   compilePkgDb db _ghcVer cabalVer  = return $
+   compilePkgDbs dbs _ghcVer cabalVer = return $
        (,)
          (pure ())
          CompileWithCabalPackage
-           { compPackageSource = GPSPackageDBs [db]
+           { compPackageSource = GPSPackageDBs dbs
            , compCabalVersion  = CabalVersion cabalVer
            , compProductTarget = CPSProject
            }
