@@ -570,9 +570,10 @@ defaultPrograms =
   Programs "cabal" [] []  "stack" [] [] [] "ghc" "ghc-pkg" "haddock"
 
 data EnvOverride
-    = EnvPrepend String
+    = EnvUnset
+    | EnvSet String
     | EnvAppend String
-    | EnvReplace String
+    | EnvPrepend String
       deriving (Eq, Ord, Show, Read, Generic, Typeable)
 
 data CompileOptions = CompileOptions

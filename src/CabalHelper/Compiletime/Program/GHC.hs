@@ -134,7 +134,10 @@ cabalVersionExistsInPkgDb cabalVer db@(PackageDbDir db_path) = do
 
 invokeGhc :: Env => GhcInvocation -> IO (Either ExitCode FilePath)
 invokeGhc GhcInvocation {..} = do
-    rv <- callProcessStderr' (Just "/") [] (ghcProgram ?progs) $ concat
+    -- We unset some interferring envvars here for stack, see:
+    -- https://github.com/DanielG/cabal-helper/issues/78#issuecomment-557860898
+    let eos = [("GHC_ENVIRONMENT", EnvUnset), ("GHC_PACKAGE_PATH", EnvUnset)]
+    rv <- callProcessStderr' (Just "/") eos (ghcProgram ?progs) $ concat
       [ [ "-outputdir", giOutDir
         , "-o", giOutput
         ]

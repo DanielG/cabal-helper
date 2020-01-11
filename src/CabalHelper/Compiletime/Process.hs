@@ -20,9 +20,9 @@ module CabalHelper.Compiletime.Process
     , module System.Process
     ) where
 
-import Control.Arrow (second)
 import Data.Char
 import Data.List
+import Data.Maybe
 import qualified Data.Map.Strict as Map
 import GHC.IO.Exception (IOErrorType(OtherError))
 import System.IO
@@ -42,7 +42,7 @@ readProcessStderr :: Verbose => Maybe FilePath -> [(String, EnvOverride)]
                   -> FilePath -> [String] -> String -> IO String
 readProcessStderr mcwd env exe args inp = do
   logProcessCall mcwd env exe args
-  env' <- execEnvOverrides env
+  env' <- execEnvOverrides env <$> getEnvironment
   outp <- readCreateProcess (proc exe args)
     { cwd = mcwd
     , env = if env == [] then Nothing else Just env'
@@ -57,7 +57,7 @@ callProcessStderr'
     -> FilePath -> [String] -> IO ExitCode
 callProcessStderr' mcwd env exe args = do
   logProcessCall mcwd env exe args
-  env' <- execEnvOverrides env
+  env' <- execEnvOverrides env <$> getEnvironment
   (_, _, _, h) <- createProcess (proc exe args)
     { std_out = UseHandle stderr
     , env = if env == [] then Nothing else Just env'
@@ -74,21 +74,18 @@ logProcessCall mcwd env exe args = do
     cd = case mcwd of
       Nothing -> []; Just cwd -> [ "cd", formatProcessArg cwd++";" ]
 
-execEnvOverride :: EnvOverride -> String -> String
-execEnvOverride (EnvPrepend x) y = x ++ y
-execEnvOverride (EnvAppend  y) x = x ++ y
-execEnvOverride (EnvReplace x) _ = x
+execEnvOverride :: EnvOverride -> String -> Maybe String
+execEnvOverride (EnvPrepend x) y = Just (x ++ y)
+execEnvOverride (EnvAppend  y) x = Just (x ++ y)
+execEnvOverride (EnvSet x)     _ = Just x
+execEnvOverride  EnvUnset      _ = Nothing
 
-execEnvOverrides :: [(String, EnvOverride)] -> IO [(String, String)]
-execEnvOverrides overrides = do
-  envs <- getEnvironment
-  return $ do
-    (k,v) <- envs
-    case Map.lookup k overrides_map of
-      Just os -> return (k, foldr execEnvOverride v os)
-      Nothing -> return (k, v)
+execEnvOverrides
+    :: [(String, EnvOverride)] -> [(String, String)] -> [(String, String)]
+execEnvOverrides overrides env =
+    Map.toList $ foldl f (Map.fromList env) overrides
   where
-    overrides_map = Map.fromListWith (++) $ map (second (:[])) overrides
+    f em (k, o) = Map.alter (execEnvOverride o . fromMaybe "") k em
 
 -- | Essentially 'System.Process.callProcess' but with additional options
 -- and logging to stderr when verbosity is enabled.
