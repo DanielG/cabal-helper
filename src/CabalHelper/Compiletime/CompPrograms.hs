@@ -92,8 +92,11 @@ patchBuildToolProgs SStack progs = do
 createProgSymlink :: FilePath -> FilePath -> IO ()
 createProgSymlink bindir target
   | [exe] <- splitPath target = do
-    Just exe_path <- findExecutable exe
-    createSymbolicLink exe_path (bindir </> takeFileName target)
-  | otherwise = do
-    cwd <- getCurrentDirectory
-    createSymbolicLink (cwd </> target) (bindir </> takeFileName target)
+    mb_exe_path <- findExecutable exe
+    case mb_exe_path of
+      Just exe_path -> createSymbolicLink exe_path (bindir </> takeFileName target)
+      Nothing -> createSymLinkFromCwd
+  | otherwise = createSymLinkFromCwd
+  where createSymLinkFromCwd = do
+          cwd <- getCurrentDirectory
+          createSymbolicLink (cwd </> target) (bindir </> takeFileName target)
