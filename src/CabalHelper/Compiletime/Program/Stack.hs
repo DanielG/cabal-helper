@@ -85,7 +85,7 @@ paths qe@QueryEnv{qeProjLoc=ProjLocStackYaml stack_yaml} cwd
     workdirArg qe ++ [ "path", "--stack-yaml="++stack_yaml ]
   return $ \k -> let Just x = lookup k $ map split $ lines out in x
   where
-    split l = let (key, ' ' : val) = span (not . isSpace) l in (key, val)
+    split l = let (key, val) = break isSpace l in (key, dropWhile isSpace val)
 
 listPackageCabalFiles :: QueryEnvI c 'Stack -> IO [CabalFile]
 listPackageCabalFiles qe@QueryEnv{qeProjLoc}
