@@ -113,9 +113,9 @@ common build-deps
     ghc-options:       -Wall
 
 
-library c-h-internal
+common c-h-internal
   import:             build-deps, extensions
-  exposed-modules:
+  other-modules:
                        CabalHelper.Compiletime.Cabal
                        CabalHelper.Compiletime.CompPrograms
                        CabalHelper.Compiletime.Compat.Environment
@@ -148,7 +148,7 @@ library c-h-internal
   hs-source-dirs:      src
 
 library
-  import:              build-deps, extensions
+  import:              build-deps, extensions, c-h-internal
   exposed-modules:     Distribution.Helper
                        Distribution.Helper.Discover
   other-modules:
@@ -156,28 +156,25 @@ library
   autogen-modules:
                        Paths_cabal_helper
   hs-source-dirs:      lib
-  build-depends:       c-h-internal
 
 test-suite compile-test
-  import:              build-deps, extensions
+  import:              build-deps, extensions, c-h-internal
   type:                exitcode-stdio-1.0
   main-is:             CompileTest.hs
   other-modules:       TestOptions
   hs-source-dirs:      tests
   ghc-options:         -Wall
-  build-depends:       c-h-internal
 
 test-suite programs-test
-  import:              build-deps, extensions
+  import:              build-deps, extensions, c-h-internal
   type:                exitcode-stdio-1.0
   main-is:             ProgramsTest.hs
   hs-source-dirs:      tests
   ghc-options:         -Wall
-  build-depends:       c-h-internal
-                     , pretty-show
+  build-depends:       pretty-show
 
 test-suite ghc-session
-  import:              build-deps, extensions
+  import:              build-deps, extensions, c-h-internal
   type:                exitcode-stdio-1.0
   main-is:             GhcSession.hs
   other-modules:       TestOptions
@@ -186,7 +183,6 @@ test-suite ghc-session
   build-depends:       ghc              < 8.9  && >= 8.0.2
                      , pretty-show      < 1.9  && >= 1.8.1
                      , cabal-helper
-                     , c-h-internal
 
 test-suite examples
   import:              build-deps, extensions
