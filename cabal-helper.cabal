@@ -148,7 +148,7 @@ common c-h-internal
   hs-source-dirs:      src
 
 library
-  import:              build-deps, extensions, c-h-internal
+  import:              c-h-internal
   exposed-modules:     Distribution.Helper
                        Distribution.Helper.Discover
   other-modules:
@@ -158,7 +158,7 @@ library
   hs-source-dirs:      lib
 
 test-suite compile-test
-  import:              build-deps, extensions, c-h-internal
+  import:              c-h-internal
   type:                exitcode-stdio-1.0
   main-is:             CompileTest.hs
   other-modules:       TestOptions
@@ -166,7 +166,7 @@ test-suite compile-test
   ghc-options:         -Wall
 
 test-suite programs-test
-  import:              build-deps, extensions, c-h-internal
+  import:              c-h-internal
   type:                exitcode-stdio-1.0
   main-is:             ProgramsTest.hs
   hs-source-dirs:      tests
@@ -174,15 +174,16 @@ test-suite programs-test
   build-depends:       pretty-show
 
 test-suite ghc-session
-  import:              build-deps, extensions, c-h-internal
+  import:              c-h-internal
   type:                exitcode-stdio-1.0
   main-is:             GhcSession.hs
   other-modules:       TestOptions
-  hs-source-dirs:      tests
+                       Distribution.Helper
+                       Distribution.Helper.Discover
+  hs-source-dirs:      tests, lib
   ghc-options:         -Wall
   build-depends:       ghc              < 8.9  && >= 8.0.2
                      , pretty-show      < 1.9  && >= 1.8.1
-                     , cabal-helper
 
 test-suite examples
   import:              build-deps, extensions
