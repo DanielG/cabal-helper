@@ -40,3 +40,6 @@ job-check-upd:
   script:
     - apt-get install -yy jq
     - "$CI_PROJECT_DIR/scripts/ci/check-testdata.sh"
+  allow_failure: true
+  #^ this job is just informational, stack resolvers juts change too often
+  # to keep up with
