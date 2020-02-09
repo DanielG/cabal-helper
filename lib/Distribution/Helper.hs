@@ -518,15 +518,16 @@ buildProjectTarget qe mu stage = do
              } -> do
       let projdir = plStackProjectDir qeProjLoc
       let workdir_opts = Stack.workdirArg qe
-      let opts =  workdir_opts ++
-                  [ "--stack-yaml="++plStackYaml, "build", "."
-                  , "--test", "--bench", "--no-run-tests", "--no-run-benchmarks"
-                  ] ++ stage_opts
+      let opts target =
+            workdir_opts ++
+            [ "--stack-yaml="++plStackYaml, "build", target
+            , "--test", "--bench", "--no-run-tests", "--no-run-benchmarks"
+            ] ++ stage_opts
       case mu of
         Just Unit{uPackage=Package{pSourceDir}} ->
-          Stack.callStackCmd qe (Just pSourceDir) opts
+          Stack.callStackCmd qe (Just pSourceDir) (opts ".")
         Nothing ->
-          Stack.callStackCmd qe (Just projdir) opts
+          Stack.callStackCmd qe (Just projdir) (opts "")
 
 getFileModTime :: FilePath -> IO (FilePath, EpochTime)
 getFileModTime f = do
