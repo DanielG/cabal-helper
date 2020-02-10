@@ -2,6 +2,7 @@
 
 module CabalHelper.Compiletime.CompPrograms where
 
+import Control.Monad (when)
 import Data.List
 import Data.Maybe
 import System.Directory
@@ -80,9 +81,12 @@ patchBuildToolProgs SStack progs = do
   -- being able to pass executable paths straight through to stack but
   -- currently there is no option to let us do that.
   withSystemTempDirectory "cabal-helper-symlinks" $ \bindir -> do
-  createProgSymlink bindir $ ghcProgram progs
-  createProgSymlink bindir $ ghcPkgProgram progs
-  createProgSymlink bindir $ haddockProgram progs
+  when (ghcProgram progs /= "ghc") $
+    createProgSymlink bindir $ ghcProgram progs
+  when (ghcPkgProgram progs /= "ghc-pkg") $
+    createProgSymlink bindir $ ghcPkgProgram progs
+  when (haddockProgram progs /= "haddock") $
+    createProgSymlink bindir $ haddockProgram progs
   return $ progs
     { stackEnv =
         [("PATH", EnvPrepend $ bindir ++ [searchPathSeparator])] ++
@@ -95,8 +99,8 @@ createProgSymlink bindir target
     mb_exe_path <- findExecutable exe
     case mb_exe_path of
       Just exe_path -> createSymbolicLink exe_path (bindir </> takeFileName target)
-      Nothing -> createSymLinkFromCwd
-  | otherwise = createSymLinkFromCwd
-  where createSymLinkFromCwd = do
-          cwd <- getCurrentDirectory
-          createSymbolicLink (cwd </> target) (bindir </> takeFileName target)
+      Nothing -> error $ "Error trying to create symlink to " ++ target ++ ": " 
+                       ++ exe ++ " executable not found."
+  | otherwise = do
+    cwd <- getCurrentDirectory
+    createSymbolicLink (cwd </> target) (bindir </> takeFileName target)
