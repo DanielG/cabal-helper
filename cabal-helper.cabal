@@ -110,7 +110,7 @@ common build-deps
   build-depends:       unix-compat      < 0.6  && >= 0.4.3.1
 
   if flag(dev)
-    ghc-options:       -Wall
+    ghc-options:       -Wall -fwarn-incomplete-uni-patterns
 
 
 common c-h-internal
@@ -174,14 +174,14 @@ test-suite compile-test
   main-is:             CompileTest.hs
   other-modules:       TestOptions
   hs-source-dirs:      tests
-  ghc-options:         -Wall
+  ghc-options:         -Wall -fwarn-incomplete-uni-patterns
 
 test-suite programs-test
   import:              build-deps, extensions, c-h-internal
   type:                exitcode-stdio-1.0
   main-is:             ProgramsTest.hs
   hs-source-dirs:      tests
-  ghc-options:         -Wall
+  ghc-options:         -Wall -fwarn-incomplete-uni-patterns
   build-depends:       pretty-show
 
 test-suite ghc-session
@@ -190,7 +190,7 @@ test-suite ghc-session
   main-is:             GhcSession.hs
   other-modules:       TestOptions
   hs-source-dirs:      tests
-  ghc-options:         -Wall
+  ghc-options:         -Wall -fwarn-incomplete-uni-patterns
   build-depends:       ghc              < 8.9  && >= 8.0.2
                      , pretty-show      < 1.9  && >= 1.8.1
 
@@ -199,7 +199,7 @@ test-suite examples
   type:                exitcode-stdio-1.0
   main-is:             Examples.hs
   hs-source-dirs:      tests
-  ghc-options:         -Wall
+  ghc-options:         -Wall -fwarn-incomplete-uni-patterns
 
 executable cabal-helper-main
   default-language:    Haskell2010
@@ -220,7 +220,7 @@ executable cabal-helper-main
   else
     buildable:         False
 
-  ghc-options:         -Wall -fno-warn-unused-imports
+  ghc-options:         -Wall -fno-warn-unused-imports -fwarn-incomplete-uni-patterns
   build-depends:       base             < 5    && >= 4.9.1.0
                      , Cabal
                      , containers

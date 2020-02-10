@@ -2,6 +2,7 @@
 
 module CabalHelper.Compiletime.CompPrograms where
 
+import Control.Monad (when)
 import Data.List
 import Data.Maybe
 import System.Directory
@@ -10,6 +11,7 @@ import System.IO.Temp
 
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Cabal (getCabalVerbosity)
+import CabalHelper.Shared.Common (panicIO)
 import Symlink (createSymbolicLink)
 
 import Distribution.Simple.GHC as GHC (configure)
@@ -80,20 +82,23 @@ patchBuildToolProgs SStack progs = do
   -- being able to pass executable paths straight through to stack but
   -- currently there is no option to let us do that.
   withSystemTempDirectory "cabal-helper-symlinks" $ \bindir -> do
-  createProgSymlink bindir $ ghcProgram progs
-  createProgSymlink bindir $ ghcPkgProgram progs
-  createProgSymlink bindir $ haddockProgram progs
+  createProgSymlink True bindir $ ghcProgram progs
+  createProgSymlink True bindir $ ghcPkgProgram progs
+  createProgSymlink False bindir $ haddockProgram progs
   return $ progs
     { stackEnv =
         [("PATH", EnvPrepend $ bindir ++ [searchPathSeparator])] ++
         stackEnv progs
     }
 
-createProgSymlink :: FilePath -> FilePath -> IO ()
-createProgSymlink bindir target
+createProgSymlink :: Bool -> FilePath -> FilePath -> IO ()
+createProgSymlink required bindir target
   | [exe] <- splitPath target = do
-    Just exe_path <- findExecutable exe
-    createSymbolicLink exe_path (bindir </> takeFileName target)
+    mb_exe_path <- findExecutable exe
+    case mb_exe_path of
+      Just exe_path -> createSymbolicLink exe_path (bindir </> takeFileName target)
+      Nothing -> when required $ panicIO $ "Error trying to create symlink to '" ++ target ++ "': "
+                                        ++ "'" ++ exe ++ "'" ++ " executable not found."
   | otherwise = do
     cwd <- getCurrentDirectory
     createSymbolicLink (cwd </> target) (bindir </> takeFileName target)
