@@ -81,26 +81,23 @@ patchBuildToolProgs SStack progs = do
   -- being able to pass executable paths straight through to stack but
   -- currently there is no option to let us do that.
   withSystemTempDirectory "cabal-helper-symlinks" $ \bindir -> do
-  when (ghcProgram progs /= "ghc") $
-    createProgSymlink bindir $ ghcProgram progs
-  when (ghcPkgProgram progs /= "ghc-pkg") $
-    createProgSymlink bindir $ ghcPkgProgram progs
-  when (haddockProgram progs /= "haddock") $
-    createProgSymlink bindir $ haddockProgram progs
+  createProgSymlink True bindir $ ghcProgram progs
+  createProgSymlink True bindir $ ghcPkgProgram progs
+  createProgSymlink False bindir $ haddockProgram progs
   return $ progs
     { stackEnv =
         [("PATH", EnvPrepend $ bindir ++ [searchPathSeparator])] ++
         stackEnv progs
     }
 
-createProgSymlink :: FilePath -> FilePath -> IO ()
-createProgSymlink bindir target
+createProgSymlink :: Bool -> FilePath -> FilePath -> IO ()
+createProgSymlink required bindir target
   | [exe] <- splitPath target = do
     mb_exe_path <- findExecutable exe
     case mb_exe_path of
       Just exe_path -> createSymbolicLink exe_path (bindir </> takeFileName target)
-      Nothing -> error $ "Error trying to create symlink to " ++ target ++ ": " 
-                       ++ exe ++ " executable not found."
+      Nothing -> when required $ error $ "Error trying to create symlink to " ++ target ++ ": "
+                                       ++ exe ++ " executable not found."
   | otherwise = do
     cwd <- getCurrentDirectory
     createSymbolicLink (cwd </> target) (bindir </> takeFileName target)
