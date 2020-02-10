@@ -11,6 +11,7 @@ import System.IO.Temp
 
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Cabal (getCabalVerbosity)
+import CabalHelper.Shared.Common (panicIO)
 import Symlink (createSymbolicLink)
 
 import Distribution.Simple.GHC as GHC (configure)
@@ -96,8 +97,8 @@ createProgSymlink required bindir target
     mb_exe_path <- findExecutable exe
     case mb_exe_path of
       Just exe_path -> createSymbolicLink exe_path (bindir </> takeFileName target)
-      Nothing -> when required $ error $ "Error trying to create symlink to " ++ target ++ ": "
-                                       ++ exe ++ " executable not found."
+      Nothing -> when required $ panicIO $ "Error trying to create symlink to '" ++ target ++ "': "
+                                        ++ "'" ++ exe ++ "'" ++ " executable not found."
   | otherwise = do
     cwd <- getCurrentDirectory
     createSymbolicLink (cwd </> target) (bindir </> takeFileName target)
