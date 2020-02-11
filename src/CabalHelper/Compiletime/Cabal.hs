@@ -268,18 +268,9 @@ complainIfNoCabalFile pkgdir Nothing =
 bultinCabalVersion :: Version
 bultinCabalVersion = parseVer VERSION_Cabal
 
-readSetupConfigHeader :: FilePath -> IO UnitHeader
+readSetupConfigHeader :: FilePath -> IO (Maybe UnitHeader)
 readSetupConfigHeader file = bracket (openFile file ReadMode) hClose $ \h -> do
-  mhdr <- parseSetupHeader <$> BS.hGetLine h
-  case mhdr of
-    Just hdr@(UnitHeader _PkgId ("Cabal", _hdrCabalVersion) _compId) -> do
-      return hdr
-    Just UnitHeader {uhSetupId=(setup_name, _)} -> panicIO $
-      printf "Unknown Setup package-id in setup-config header '%s': '%s'"
-        (BS8.unpack setup_name) file
-    Nothing -> panicIO $
-      printf "Could not read '%s' header" file
-
+  parseSetupHeader <$> BS.hGetLine h
 
 parseSetupHeader :: BS.ByteString -> Maybe UnitHeader
 parseSetupHeader header = case BS8.words header of

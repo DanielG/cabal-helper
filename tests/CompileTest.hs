@@ -152,11 +152,11 @@ testCabalVersions versions = do
         mcabalVersions <- runMaybeT $ listCabalVersions (Just db)
         case mcabalVersions of
           Just [hdver] ->
-            return $ che0 (CabalVersion hdver) [db]
+            return $ che0 (CabalVersion hdver) (Just db)
           _ ->
-            return $ che0 (CabalHEAD ()) []
+            return $ che0 (CabalHEAD ()) Nothing
       (CabalVersion ver) ->
-        return $ che0 (CabalVersion ver) []
+        return $ che0 (CabalVersion ver) Nothing
 
     compileHelper che
 
