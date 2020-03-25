@@ -35,7 +35,6 @@ import System.FilePath
 import Text.Printf
 import Text.Read
 
-import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Text as Text
@@ -50,7 +49,7 @@ import CabalHelper.Compiletime.Process
 import CabalHelper.Shared.InterfaceTypes
   ( ChComponentName(..), ChLibraryName(..) )
 import CabalHelper.Shared.Common
-  ( parseVer, trim, appCacheDir, panicIO )
+  ( parseVer, trim, appCacheDir )
 
 newtype CabalInstallVersion = CabalInstallVersion { cabalInstallVer :: Version }
 
@@ -251,32 +250,33 @@ cabalV2WithGHCProgOpts = concat
 
 planPackages :: CP.PlanJson -> IO [Package ('Cabal 'CV2)]
 planPackages plan = do
-    fmap Map.elems $
-      mapM mkPackage $
-      groupByMap $ Map.elems $
-      Map.filter ((==CP.UnitTypeLocal) . CP.uType) $
+    sequence $
+      Map.elems $
+      Map.mapWithKey mkPackage $
+      Map.mapMaybe packagesWithSourceDir $
+      groupByMap $
+      Map.elems $
       CP.pjUnits plan
   where
     groupByMap = Map.fromListWith (<>) . map (CP.uPId &&& (:|[]))
 
-    mkPackage :: NonEmpty CP.Unit -> IO (Package ('Cabal 'CV2))
-    mkPackage units@(unit :| _) =
+    packagesWithSourceDir units@(unit :| _) =
       case unit of
-       CP.Unit
-        { uPkgSrc=Just (CP.LocalUnpackedPackage pkgdir)
-        } -> do
-          cabal_file <- Cabal.complainIfNoCabalFile pkgdir =<< Cabal.findCabalFile pkgdir
-          let pkg = Package
-                { pPackageName =
-                    let CP.PkgId (CP.PkgName pkg_name) _ = CP.uPId unit
-                    in Text.unpack pkg_name
-                , pSourceDir = pkgdir
-                , pCabalFile = CabalFile cabal_file
-                , pFlags = []
-                , pUnits = fmap (\u -> fixBackpackUnit u $ mkUnit pkg { pUnits = () } u) units
-                }
-          return pkg
-       _ -> panicIO "planPackages.mkPackage: Got non-unpacked package src!"
+        CP.Unit { uPkgSrc=Just (CP.LocalUnpackedPackage pkgdir) }
+          -> Just (pkgdir, units)
+        _ -> Nothing
+
+    mkPackage :: CP.PkgId -> (FilePath, NonEmpty CP.Unit) -> IO (Package ('Cabal 'CV2))
+    mkPackage (CP.PkgId (CP.PkgName pkg_name) _) (pkgdir, units) = do
+      cabal_file <- Cabal.complainIfNoCabalFile pkgdir =<< Cabal.findCabalFile pkgdir
+      let pkg = Package
+            { pPackageName = Text.unpack pkg_name
+            , pSourceDir = pkgdir
+            , pCabalFile = CabalFile cabal_file
+            , pFlags = []
+            , pUnits = fmap (\u -> fixBackpackUnit u $ mkUnit pkg { pUnits = () } u) units
+            }
+      return pkg
 
     takeBackpackIndefUnitId :: CP.Unit -> Maybe CP.UnitId
     takeBackpackIndefUnitId CP.Unit {uId=CP.UnitId uid}
@@ -308,7 +308,6 @@ planPackages plan = do
     mkUnit pkg u@CP.Unit
       { uDistDir=Just distdirv1
       , uComps=comps
-      , uPId=CP.PkgId pkg_name _
       , uId
       } =
         Unit

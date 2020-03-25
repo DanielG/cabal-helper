@@ -63,7 +63,7 @@ testConfigToTestSpec (TC loc _ _ _) pt =
 main :: IO ()
 main = do
   (modProgs, args) <- testOpts =<< getArgs
---  topdir <- getCurrentDirectory
+  topdir <- getCurrentDirectory
 
   let withEnv :: (Env => a) -> a
       withEnv action =
@@ -107,7 +107,7 @@ main = do
       proj_impls =
         -- V2 is sorted before the others here so helper compilation always
         -- uses v2-build caching!
-        [ (Cabal CV2, newBuildProjSetup)
+        [ (Cabal CV2, newBuildProjSetup topdir)
         , (Cabal CV1, oldBuildProjSetup)
         , (Stack, stackProjSetup g_ver)
         ]
@@ -130,6 +130,7 @@ main = do
       , TC (TN "exeintlib") (parseVer "2.0")  (parseVer "0")   []
       , TC (TN "fliblib")   (parseVer "2.0")  (parseVer "0")   []
       , TC (TN "bkpregex")  (parseVer "2.0")  (parseVer "8.1") [Cabal CV2, Cabal CV1]
+      , TC (TN "src-repo")  (parseVer "2.4")  (parseVer "0")   [Cabal CV2]
       , let multipkg_loc = TF "tests/multipkg/" "proj/" "proj/proj.cabal" in
         TC  multipkg_loc    (parseVer "1.10") (parseVer "0")   [Cabal CV2, Stack]
       --            min Cabal lib ver -^    min GHC ver -^
@@ -428,8 +429,9 @@ oldBuildProjSetup = ProjSetupDescr "cabal-v1" $ Right $ Ex $ ProjSetupImpl
     , psiQEmod     = id
     }
 
-newBuildProjSetup :: ProjSetup0
-newBuildProjSetup = ProjSetupDescr "cabal-v2" $ Right $ Ex $ ProjSetupImpl
+newBuildProjSetup :: FilePath -> ProjSetup0
+newBuildProjSetup topdir
+  = ProjSetupDescr "cabal-v2" $ Right $ Ex $ ProjSetupImpl
     { psiProjType  = SCabal SCV2
     , psiDistDir   = \dir  -> DistDirCabal SCV2 (dir </> "dist-newstyle")
     , psiProjLoc   = \_cabal_file projdir -> ProjLocV2File (projdir </> "cabal.project") projdir
@@ -440,7 +442,7 @@ newBuildProjSetup = ProjSetupDescr "cabal-v2" $ Right $ Ex $ ProjSetupImpl
         copyMuliPackageProject progs srcdir destdir $ \pkgsrc pkgdest -> do
           exists <- doesFileExist (pkgsrc </> "cabal.project")
           if exists then
-            copyFile (pkgsrc </> "cabal.project") (pkgdest </> "cabal.project")
+            writeFile (pkgdest </> "cabal.project") =<< replaceStrings [("${topdir}", topdir)] <$> readFile (pkgsrc </> "cabal.project")
           else
             addCabalProject pkgdest
     , psiQEmod     = id
@@ -525,16 +527,17 @@ cabalInstallBuiltinCabalVersion =
     parseVer . trim <$> readProcess (cabalProgram ?progs)
         ["act-as-setup", "--", "--numeric-version"] ""
 
-normalizeOutputWithVars :: [(String, String)] -> String -> String
-normalizeOutputWithVars ts str =
+normalizeOutputWithVars = replaceStrings
+replaceStrings :: [(String, String)] -> String -> String
+replaceStrings ts str =
   case filter (isJust . fst) $ map (first (flip stripPrefix str)) ts of
-    (Just rest, replacemnet) : _ ->
-        replacemnet ++ normalizeOutputWithVars ts rest
+    (Just rest, replacement) : _ ->
+        replacement ++ replaceStrings ts rest
     _ -> cont
   where
     cont =
       case str of
-        s:ss -> s : normalizeOutputWithVars ts ss
+        s:ss -> s : replaceStrings ts ss
         [] -> []
 -- ---------------------------------------------------------------------
 -- | Create and use a temporary directory in the system standard temporary directory.
