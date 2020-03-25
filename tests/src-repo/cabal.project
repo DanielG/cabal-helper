@@ -1,0 +1,7 @@
+packages: .
+
+source-repository-package
+    type: git
+    location: ${topdir}
+    tag: HEAD
+    subdir: tests/exelib

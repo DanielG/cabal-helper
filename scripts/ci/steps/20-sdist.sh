@@ -12,3 +12,9 @@ if [ -d cabal-plan/ ]; then
 fi
 
 cd "$source_dir"
+
+git init
+git config --local user.email "$USER@$(hostname)"
+git config --local user.name "cabal-helper CI"
+git add --all
+git commit -m .

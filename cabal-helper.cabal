@@ -49,6 +49,11 @@ extra-source-files:  README.md
                      tests/bkpregex/regex-types/Regex/*.hs
                      tests/bkpregex/str-impls/Str/*.hs
 
+                     tests/src-repo/*.hs
+                     tests/src-repo/*.cabal
+                     tests/src-repo/packages.list
+                     tests/src-repo/cabal.project
+
                      tests/multipkg/packages.list
                      tests/multipkg/pkg-oot/*.cabal
                      tests/multipkg/pkg-oot/*.hs
