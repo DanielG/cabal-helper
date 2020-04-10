@@ -30,7 +30,6 @@ import Data.Version
 import System.Directory
 import System.FilePath
 import System.IO
-import Text.Printf
 
 import Distribution.Verbosity (Verbosity, silent, normal, verbose, deafening)
 
@@ -196,24 +195,14 @@ unpackCabalHEAD tmpdir = do
       { cwd = Just dir } ""
   let ut = posixSecondsToUTCTime $ fromInteger (read ts)
       (y,m,d) = toGregorian $ utctDay ut
-      sec = round $ utctDayTime ut
-      datecode =
-        read $ show y ++ printf "%02d" m ++ printf "%02d" d ++ printf "%05d" sec
-      sec :: Int; datecode :: Int
+      sec = round $ utctDayTime ut; sec :: Int
+      datecode = makeVersion [1000, fromInteger y, m, d, sec]
   let cabal_file = tmpdir </> "Cabal/Cabal.cabal"
   cf0 <- readFile cabal_file
-  let Just cf1 = replaceVersionDecl (setVersion datecode) cf0
+  let Just cf1 = replaceVersionDecl (const (Just datecode)) cf0
   writeFile (cabal_file<.>"tmp") cf1
   renameFile (cabal_file<.>"tmp") cabal_file
   return (CommitId commit, CabalSourceDir $ tmpdir </> "Cabal")
-  where
-    -- If the released version of cabal has 4 components but we use only three
-    -- theirs will always be larger than this one here. That's not really
-    -- critical though.
-    setVersion i (versionBranch -> mj:mi:_:_:[]) =
-        Just $ makeVersion $ mj:mi:[i]
-    setVersion _ v =
-        error $ "unpackCabalHEAD.setVersion: Wrong version format" ++ show v
 
 -- | Replace the version declaration in a cabal file
 replaceVersionDecl :: (Version -> Maybe Version) -> String -> Maybe String
