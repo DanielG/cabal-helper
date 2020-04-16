@@ -9,7 +9,7 @@
 --
 --     http://www.apache.org/licenses/LICENSE-2.0
 
-{-# LANGUAGE TemplateHaskell, ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell, ScopedTypeVariables, CPP #-}
 {-# OPTIONS_GHC -fforce-recomp #-}
 
 {-|
@@ -90,11 +90,19 @@ runtimeSources = $(
     let hashes = map (bytestringDigest . sha256) contents
     let top_hash = showDigest $ sha256 $ LBS.concat hashes
 
+    let exprWrapper =
+#if MIN_VERSION_template_haskell(2,16,0)
+          Just
+#else
+          id
+#endif
+
+
     thfiles <- forM (map fst files `zip` contents) $ \(f, xs) -> do
-      return $ TupE [LitE (StringL f), LitE (StringL (LUTF8.toString xs))]
+      return $ TupE [exprWrapper (LitE (StringL f)), exprWrapper (LitE (StringL (LUTF8.toString xs)))]
 
 
-    return $ TupE [LitE (StringL top_hash), ListE thfiles]
+    return $ TupE [exprWrapper (LitE (StringL top_hash)), exprWrapper (ListE thfiles)]
 
   )
 
