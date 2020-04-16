@@ -1,1 +1,5 @@
 packages: .
+
+-- Remove when cabal-plan supports ghc-8.10.1
+-- see https://github.com/haskell-hvr/cabal-plan/issues/54
+allow-newer: cabal-plan:base
