@@ -18,20 +18,28 @@ image=debian:buster
 cabal=3.0.0.0
 stack=2.1.3
 
-ghc_arch=x86_64-deb8-linux
-ghcs='8.8.1 8.6.5 8.4.4 8.2.2 8.0.2'
-
 stack_url="${STACK_BASE}/v${stack}/stack-${stack}-linux-x86_64-static.tar.gz"
 stack_file="$(basename "$stack_url")"
 
 mkdir -p "$dldir"
-printf '%s\n' $ghcs > "$tmpdir"/ghcs
+
+cat >"$tmpdir"/ghc_table <<EOF
+8.10.1  x86_64-deb9-linux
+8.8.3   x86_64-deb8-linux
+8.6.5   x86_64-deb8-linux
+8.4.4   x86_64-deb8-linux
+8.2.2   x86_64-deb8-linux
+8.0.2   x86_64-deb8-linux
+EOF
 
 {
         echo "$stack_url"
-        for ghc in $ghcs; do
+        ghcs=
+        while read -r ghc ghc_arch ; do
                 echo "${GHC_BASE}/${ghc}/ghc-${ghc}-${ghc_arch}.tar.xz"
-        done
+                ghcs="${ghcs:+$ghcs }$ghc"
+        done < "$tmpdir"/ghc_table
+        printf '%s' "$ghcs" >> "$tmpdir"/ghcs
 } | tee "$tmpdir"/ghc-urls | xargs -n1 -P$(nproc) sh -ue -c '
   cd "$1"
   wget -nv -nc -c "$3"
@@ -96,10 +104,10 @@ COPY --from=build /usr/local/ /usr/local/
 
 EOF
 
-tag="${namespace}:ghc-$(printf '%s' "$ghcs" | tr ' ' '-')--cabal-install-${cabal}--stack-${stack}"
+tag="${namespace}:ghc-$(printf '%s' "$(cat "$tmpdir"/ghcs)" | tr ' ' '-')--cabal-install-${cabal}--stack-${stack}"
 docker build -t "$tag" "$tmpdir"
 
-for ghc in $ghcs; do
+for ghc in $(cat "$tmpdir"/ghcs); do
         stag="${namespace}:ghc-${ghc}--cabal-install-${cabal}--stack-${stack}"
         printf '%s\n' \
                "FROM $tag" \
