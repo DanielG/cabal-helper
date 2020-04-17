@@ -9,8 +9,13 @@ before_script:
 
 # CI images are built with scripts/build-ci-images.sh
 
+job-ghc8.10:
+  image: registry.gitlab.com/dxld/cabal-helper/ci:ghc-8.10.1--cabal-install-3.0.0.0--stack-2.1.3
+  stage: build
+  script: "$CI_PROJECT_DIR/scripts/ci/build.sh"
+
 job-ghc8.8:
-  image: registry.gitlab.com/dxld/cabal-helper/ci:ghc-8.8.1--cabal-install-3.0.0.0--stack-2.1.3
+  image: registry.gitlab.com/dxld/cabal-helper/ci:ghc-8.8.3--cabal-install-3.0.0.0--stack-2.1.3
   stage: build
   script: "$CI_PROJECT_DIR/scripts/ci/build.sh"
 
