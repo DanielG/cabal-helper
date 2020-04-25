@@ -100,7 +100,8 @@ allCabalVersions (GhcVersion ghc_ver) = do
       <- map parseVer . lines <$> readFile "tests/cabal-versions"
   let
     constraint :: VersionRange
-    Just constraint =
+    constraint =
+        fromMaybe (error $ "No cabal version constraint found for " ++ show ghc_ver) $
         fmap snd $
         find (and . (zipWith (==) `on` versionBranch) ghc_ver . fst) $
         constraint_table
@@ -116,6 +117,7 @@ allCabalVersions (GhcVersion ghc_ver) = do
             , ("8.4",   ">= 2.0.0.2       ")
             , ("8.6",   ">= 2.0.0.2       ")
             , ("8.8",   ">= 3.0.0.0       ")
+            , ("8.10",  ">= 3.2.0.0       ")
             ]
   return $ reverse $ map (flip withinRange'CH constraint &&& id) cabal_versions
 
