@@ -125,7 +125,7 @@ import Distribution.Version
 import qualified Distribution.InstalledPackageInfo as Installed
 #endif
 
-#if CH_MIN_VERSION_Cabal(3,3,0)
+#if CH_MIN_VERSION_Cabal(3,2,0)
 import Distribution.Types.Flag
   ( unFlagAssignment
   )

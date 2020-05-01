@@ -9,7 +9,7 @@
 --
 --     http://www.apache.org/licenses/LICENSE-2.0
 
-{-# LANGUAGE TemplateHaskell, ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell, ScopedTypeVariables, CPP #-}
 {-# OPTIONS_GHC -fforce-recomp #-}
 
 {-|
@@ -85,17 +85,24 @@ runtimeSources = $(
         , ("Shared/Common.hs")
         , ("Shared/InterfaceTypes.hs")
         ]
+      mkTup :: [Exp] -> Exp
+#if __GLASGOW_HASKELL__ >= 810
+      mkTup = TupE . (fmap Just)
+#else
+      mkTup = TupE
+#endif
   in do
     contents <- mapM (\lf -> runIO (LBS.readFile lf)) $ map snd files
     let hashes = map (bytestringDigest . sha256) contents
     let top_hash = showDigest $ sha256 $ LBS.concat hashes
 
     thfiles <- forM (map fst files `zip` contents) $ \(f, xs) -> do
-      return $ TupE [LitE (StringL f), LitE (StringL (LUTF8.toString xs))]
+      return $ mkTup [LitE (StringL f), LitE (StringL (LUTF8.toString xs))]
 
 
-    return $ TupE [LitE (StringL top_hash), ListE thfiles]
+    return $ mkTup [LitE (StringL top_hash), ListE thfiles]
 
   )
+  where
 
 -- - $(LitE . StringL <$> runIO (UTF8.toString <$> BS.readFile
