@@ -21,7 +21,7 @@ module CabalHelper.Compiletime.Compile where
 
 import qualified Cabal.Plan as CP
 import Cabal.Plan
-  ( PlanJson(..), PkgId(..), PkgName(..), Ver(..), uPId)
+  ( PkgId(..), PkgName(..), Ver(..), uPId)
 import Control.Applicative
 import Control.Arrow
 import Control.Exception as E
@@ -30,6 +30,7 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.IO.Class
 import Data.Char
 import Data.List
+import Data.Map.Strict (Map)
 import Data.Maybe
 import Data.String
 import Data.Version
@@ -94,7 +95,7 @@ data CompHelperEnv' cv = CompHelperEnv
   , chePkgDb    :: ![PackageDbDir]
   -- ^ A package-db where we are guaranteed to find Cabal-`cheCabalVer`.
   , cheProjDir  :: !FilePath
-  , chePlanJson :: !(Maybe PlanJson)
+  , chePjUnits  :: !(Maybe (Map CP.UnitId CP.Unit))
   , cheDistV2   :: !(Maybe FilePath)
   , cheProjLocalCacheDir :: FilePath
   }
@@ -185,8 +186,8 @@ compileHelper' CompHelperEnv {..} = do
    compileWithCabalV2Inplace ghcVer cabalVer = do
        -- TODO: Test coverage! Neither compile-test nor ghc-session test out
        -- this code path
-       PlanJson {pjUnits} <- maybe mzero pure chePlanJson
-       distdir_newstyle   <- maybe mzero pure cheDistV2
+       pjUnits <- maybe mzero pure chePjUnits
+       distdir_newstyle <- maybe mzero pure cheDistV2
        let cabal_pkgid =
              PkgId (PkgName (Text.pack "Cabal")) (Ver $ versionBranch cabalVer)
            mcabal_unit = listToMaybe $

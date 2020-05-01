@@ -142,7 +142,7 @@ testCabalVersions versions = do
           { cheCabalVer = icv
           , chePkgDb = db
           , cheProjDir = tmpdir
-          , chePlanJson = Nothing
+          , chePjUnits = Nothing
           , cheDistV2 = Just $ tmpdir </> "dist-newstyle"
           , cheProjLocalCacheDir =
               tmpdir </> "dist-newstyle" </> "cache"

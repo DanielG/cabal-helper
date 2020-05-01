@@ -840,7 +840,7 @@ mkCompHelperEnv
     , cheProjDir  = plCabalProjectDir projloc
     , cheProjLocalCacheDir = distdir
     , chePkgDb    = []
-    , chePlanJson = Nothing
+    , chePjUnits = Nothing
     , cheDistV2 = Nothing
     }
 mkCompHelperEnv
@@ -855,9 +855,8 @@ mkCompHelperEnv
     cheCabalVer = cabal_ver
     cheProjLocalCacheDir = distdir </> "cache"
     chePkgDb    = []
-    chePlanJson = Just plan
+    chePjUnits  = Just $ pjUnits plan
     cheDistV2   = Just distdir
-    PlanJson {pjCabalLibVersion=Ver pjCabalLibVersion } = plan
 mkCompHelperEnv
   (ProjLocStackYaml stack_yaml)
   (DistDirStack mworkdir)
@@ -874,6 +873,6 @@ mkCompHelperEnv
     , cheProjDir  = projdir
     , cheProjLocalCacheDir = projdir </> workdir
     , chePkgDb    = [sppGlobalPkgDb, sppSnapPkgDb, sppLocalPkgDb]
-    , chePlanJson = Nothing
+    , chePjUnits = Nothing
     , cheDistV2 = Nothing
     }
