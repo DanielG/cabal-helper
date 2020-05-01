@@ -300,10 +300,13 @@ planPackages plan = do
       | otherwise =
         ch_unit
 
-    unitTargets :: CP.Unit -> [String]
+    unitTargets :: CP.Unit -> [(ChComponentName, String)]
     unitTargets CP.Unit {uComps, uPId=CP.PkgId pkg_name _} =
-      map (Text.unpack . (((coerce pkg_name) <> ":") <>) . CP.dispCompNameTarget pkg_name) $
-      Map.keys uComps
+      [ (cpCompNameToChComponentName comp, Text.unpack target)
+      | comp <- Map.keys uComps
+      , let comp_str = CP.dispCompNameTarget pkg_name comp
+      , let target = ((coerce pkg_name) <> ":") <> comp_str
+      ]
 
     mkUnit :: Package' () -> CP.Unit -> Unit ('Cabal 'CV2)
     mkUnit pkg u@CP.Unit

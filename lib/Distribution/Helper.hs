@@ -503,7 +503,7 @@ buildProjectTarget qe mu stage = do
               Just Unit{uImpl} -> concat
                 [ if uiV2OnlyDependencies uImpl
                     then ["--only-dependencies"] else []
-                , uiV2Components uImpl
+                , map snd $ filter ((/= ChSetupHsName) . fst) $ uiV2Components uImpl
                 ]
             case qeProjLoc of
               ProjLocV2File {plCabalProjectFile} ->
@@ -630,6 +630,19 @@ readProjInfo qe pc pcm pi = withVerbosity $ do
 -- the global pkg-db.
 
 readUnitInfo :: Helper pt -> Unit pt -> UnitModTimes -> IO UnitInfo
+readUnitInfo helper u@Unit{uImpl=ui@UnitImplV2{uiV2Components}} umt
+    | ChSetupHsName `elem` map fst uiV2Components = do
+        let unit' = u {
+          uImpl = ui
+            { uiV2Components = filter ((/= ChSetupHsName) . fst) uiV2Components
+            }
+          }
+        -- TODO: Add a synthetic UnitInfo for the setup executable. Cabal
+        -- doesn't allow building it via a target on the cmdline and it
+        -- doesn't really exist as far as setup-config is concerned but
+        -- plan.json has the dependency versions for custom-setup so we
+        -- should be able to represet that as a UnitInfo.
+        readUnitInfo helper unit' umt
 readUnitInfo helper unit@Unit {uUnitId=uiUnitId} uiModTimes = do
     res <- runHelper helper unit
            [ "package-id"

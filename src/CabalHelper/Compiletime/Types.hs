@@ -348,8 +348,7 @@ data UnitImpl pt where
   UnitImplV1 :: UnitImpl ('Cabal 'CV1)
 
   UnitImplV2 ::
-    { uiV2ComponentNames :: ![ChComponentName]
-    , uiV2Components     :: ![String]
+    { uiV2Components       :: ![(ChComponentName, String)]
     , uiV2OnlyDependencies :: !Bool
     } -> UnitImpl ('Cabal 'CV2)
 
@@ -366,7 +365,7 @@ deriving instance Show (UnitImpl pt)
 -- of helper invocations for clients that don't need to know the entire project
 -- structure.
 uComponentName :: Unit pt -> Maybe ChComponentName
-uComponentName Unit { uImpl=UnitImplV2 { uiV2ComponentNames=[comp] } } =
+uComponentName Unit { uImpl=UnitImplV2 { uiV2Components=[(comp, _)] } } =
     Just comp
 uComponentName _ =
     Nothing
