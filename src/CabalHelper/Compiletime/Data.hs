@@ -10,7 +10,6 @@
 --     http://www.apache.org/licenses/LICENSE-2.0
 
 {-# LANGUAGE TemplateHaskell, ScopedTypeVariables, CPP #-}
-{-# OPTIONS_GHC -fforce-recomp #-}
 
 {-|
 Module      : CabalHelper.Compiletime.Data
@@ -30,6 +29,7 @@ import qualified Data.ByteString.UTF8 as UTF8
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Lazy.UTF8 as LUTF8
 import Language.Haskell.TH
+import Language.Haskell.TH.Syntax (addDependentFile)
 import System.Directory
 import System.FilePath
 import System.IO.Temp
@@ -86,7 +86,9 @@ runtimeSources = $(
         , ("Shared/InterfaceTypes.hs")
         ]
   in do
-    contents <- mapM (\lf -> runIO (LBS.readFile lf)) $ map snd files
+    contents <- forM (map snd files) $ \lf -> do
+      addDependentFile lf
+      runIO (LBS.readFile lf)
     let hashes = map (bytestringDigest . sha256) contents
     let top_hash = showDigest $ sha256 $ LBS.concat hashes
 
