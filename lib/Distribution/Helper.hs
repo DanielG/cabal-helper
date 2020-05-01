@@ -147,6 +147,7 @@ import CabalHelper.Compiletime.Log
 import CabalHelper.Compiletime.Process
 import CabalHelper.Compiletime.Sandbox
 import CabalHelper.Compiletime.Types
+import CabalHelper.Compiletime.Types.Cabal
 import CabalHelper.Compiletime.Types.RelativePath
 import CabalHelper.Shared.InterfaceTypes
 import CabalHelper.Shared.Common
@@ -768,7 +769,7 @@ newtype Helper pt
 
 getHelper :: PreInfo pt -> ProjInfo pt -> QueryEnvI c pt -> IO (Helper pt)
 getHelper _pre_info ProjInfo{piCabalVersion} qe@QueryEnv{..}
-  | piCabalVersion == bultinCabalVersion = return $ Helper $
+  | CabalVersion piCabalVersion == bultinCabalVersion = return $ Helper $
       \Unit{ uDistDir=DistDirLib distdir
            , uPackage=Package{pCabalFile=CabalFile cabal_file}
            } args ->

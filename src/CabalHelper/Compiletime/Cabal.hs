@@ -15,7 +15,8 @@ Description : Cabal library source unpacking
 License     : Apache-2.0
 -}
 
-{-# LANGUAGE DeriveFunctor, ViewPatterns, OverloadedStrings, CPP #-}
+{-# LANGUAGE DeriveFunctor, ViewPatterns, OverloadedStrings #-}
+{-# LANGUAGE CPP #-} -- for VERSION_Cabal
 
 module CabalHelper.Compiletime.Cabal where
 
@@ -37,42 +38,9 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BS8
 
 import CabalHelper.Compiletime.Types
+import CabalHelper.Compiletime.Types.Cabal
 import CabalHelper.Compiletime.Process
 import CabalHelper.Shared.Common (replace, parseVer, parseVerMay, parsePkgIdBS, panicIO)
-
-type UnpackedCabalVersion = CabalVersion' (CommitId, CabalSourceDir)
-type ResolvedCabalVersion = CabalVersion' CommitId
-type CabalVersion = CabalVersion' ()
-
-unpackedToResolvedCabalVersion :: UnpackedCabalVersion -> ResolvedCabalVersion
-unpackedToResolvedCabalVersion (CabalHEAD (commit, _)) = CabalHEAD commit
-unpackedToResolvedCabalVersion (CabalVersion ver) = CabalVersion ver
-
--- | Cabal library version we're compiling the helper exe against.
-data CabalVersion' a
-    = CabalHEAD a
-    | CabalVersion { cvVersion :: Version }
-      deriving (Eq, Ord, Functor)
-
-newtype CommitId = CommitId { unCommitId :: String }
-
-showUnpackedCabalVersion :: UnpackedCabalVersion -> String
-showUnpackedCabalVersion (CabalHEAD (commitid, _)) =
-  "HEAD-" ++ unCommitId commitid
-showUnpackedCabalVersion CabalVersion {cvVersion} =
-  showVersion cvVersion
-
-showResolvedCabalVersion :: ResolvedCabalVersion -> String
-showResolvedCabalVersion (CabalHEAD commitid) =
-  "HEAD-" ++ unCommitId commitid
-showResolvedCabalVersion CabalVersion {cvVersion} =
-  showVersion cvVersion
-
-showCabalVersion :: CabalVersion -> String
-showCabalVersion (CabalHEAD ()) =
-  "HEAD"
-showCabalVersion CabalVersion {cvVersion} =
-  showVersion cvVersion
 
 data CabalPatchDescription = CabalPatchDescription
   { cpdVersions      :: [Version]
@@ -164,8 +132,6 @@ unpackCabal (CabalHEAD ()) tmpdir = do
   (commit, csdir) <- unpackCabalHEAD tmpdir
   return $ CabalHEAD (commit, csdir)
 
-data UnpackCabalVariant = Pristine | LatestRevision
-newtype CabalSourceDir = CabalSourceDir { unCabalSourceDir :: FilePath }
 unpackCabalHackage
     :: (Verbose, Progs)
     => Version
@@ -254,8 +220,8 @@ complainIfNoCabalFile _ (Just cabal_file) = return cabal_file
 complainIfNoCabalFile pkgdir Nothing =
   panicIO $ "No cabal file found in package-dir: '"++pkgdir++"'"
 
-bultinCabalVersion :: Version
-bultinCabalVersion = parseVer VERSION_Cabal
+bultinCabalVersion :: CabalVersion
+bultinCabalVersion = CabalVersion $ parseVer VERSION_Cabal
 
 readSetupConfigHeader :: FilePath -> IO (Maybe UnitHeader)
 readSetupConfigHeader file = bracket (openFile file ReadMode) hClose $ \h -> do

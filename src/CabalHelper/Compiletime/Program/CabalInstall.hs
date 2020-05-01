@@ -43,8 +43,10 @@ import qualified CabalHelper.Compiletime.Cabal as Cabal
 import CabalHelper.Compiletime.Types
 import CabalHelper.Compiletime.Program.GHC
   ( GhcVersion(..), createPkgDb )
+import CabalHelper.Compiletime.Types.Cabal
+  ( CabalSourceDir(..), UnpackedCabalVersion, CabalVersion'(..) )
 import CabalHelper.Compiletime.Cabal
-  ( CabalSourceDir(..), UnpackedCabalVersion, CabalVersion'(..), unpackCabalV1 )
+  ( unpackCabalV1 )
 import CabalHelper.Compiletime.Process
 import CabalHelper.Shared.InterfaceTypes
   ( ChComponentName(..), ChLibraryName(..) )

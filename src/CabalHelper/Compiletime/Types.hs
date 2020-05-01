@@ -30,6 +30,7 @@ import GHC.Generics
 import System.FilePath (takeDirectory)
 import System.Posix.Types
 import CabalHelper.Compiletime.Types.RelativePath
+import CabalHelper.Compiletime.Types.Cabal
 import CabalHelper.Shared.InterfaceTypes
 
 import Data.List.NonEmpty (NonEmpty)

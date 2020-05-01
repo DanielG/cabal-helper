@@ -36,6 +36,7 @@ import CabalHelper.Compiletime.Cabal
 import CabalHelper.Compiletime.Compile
 import CabalHelper.Compiletime.Program.GHC
 import CabalHelper.Compiletime.Types
+import CabalHelper.Compiletime.Types.Cabal
 import CabalHelper.Shared.Common
 
 import TestOptions

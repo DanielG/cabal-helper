@@ -137,6 +137,7 @@ common c-h-internal
                        CabalHelper.Compiletime.Program.GHC
                        CabalHelper.Compiletime.Sandbox
                        CabalHelper.Compiletime.Types
+                       CabalHelper.Compiletime.Types.Cabal
                        CabalHelper.Compiletime.Types.RelativePath
                        CabalHelper.Runtime.Compat
                        CabalHelper.Runtime.HelperMain

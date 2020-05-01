@@ -58,6 +58,7 @@ import CabalHelper.Compiletime.Program.CabalInstall
 import CabalHelper.Compiletime.Sandbox
     ( getSandboxPkgDb )
 import CabalHelper.Compiletime.Types
+import CabalHelper.Compiletime.Types.Cabal
 
 import CabalHelper.Shared.Common
 

@@ -31,7 +31,7 @@ import System.Directory
 import CabalHelper.Shared.Common
   (parseVer, trim, appCacheDir, parsePkgId)
 import CabalHelper.Compiletime.Types
-import CabalHelper.Compiletime.Cabal
+import CabalHelper.Compiletime.Types.Cabal
   ( ResolvedCabalVersion, showResolvedCabalVersion, UnpackedCabalVersion
   , unpackedToResolvedCabalVersion, CabalVersion'(..) )
 import CabalHelper.Compiletime.Process
