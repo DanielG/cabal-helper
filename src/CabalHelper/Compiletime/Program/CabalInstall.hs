@@ -215,8 +215,7 @@ installCabalLibV2 _ghcVer cv (PackageEnvFile env_file) = do
     installingMessage cv
     (target, cwd) <- case cv of
       CabalVersion cabalVer -> do
-        tmp <- getTemporaryDirectory
-        return $ ("Cabal-"++showVersion cabalVer, tmp)
+        return $ ("Cabal-"++showVersion cabalVer, "/")
       CabalHEAD (_commitid, CabalSourceDir srcdir) -> do
         return (".", srcdir)
     CabalInstallVersion {..} <- cabalInstallVersion
