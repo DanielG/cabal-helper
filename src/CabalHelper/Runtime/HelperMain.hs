@@ -221,7 +221,7 @@ usage = do
   hPutStr stderr $ "Usage: " ++ prog ++ " " ++ usageMsg
  where
    usageMsg = ""
-     ++"PROJ_DIR DIST_DIR (v1|v2)\n"
+     ++"CABAL_FILE DIST_DIR (v1|v2)\n"
      ++"  ( version\n"
      ++"  | flags\n"
      ++"  | config-flags\n"
