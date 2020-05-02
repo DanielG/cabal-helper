@@ -512,7 +512,7 @@ stackBuiltinCabalVersion s_ver g_ver = do
     res <- lookupStackResolver g_ver
     return $ parseVer . trim <$> readProcess (stackProgram ?progs)
         [ "--resolver="++res, "--system-ghc", "exec", "--"
-        , "ghc-pkg", "--simple-output", "field", "Cabal", "version"
+        , "ghc-pkg", "--simple-output", "--global", "field", "Cabal", "version"
         ] ""
 
 stackCheckCompat :: Version -> Either SkipReason ()
