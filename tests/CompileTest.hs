@@ -17,6 +17,7 @@ import System.FilePath
 import System.Process
 import System.Exit
 import System.IO
+import System.IO.Error
 import System.IO.Temp
 import Data.List
 import Data.Maybe
@@ -45,22 +46,25 @@ withinRange'CH :: Version -> VersionRange -> Bool
 withinRange'CH v r =
     withinRange (fromDataVersion v) r
 
-setupHOME :: IO ()
-setupHOME = do
-  mhome <- lookupEnv "HOME"
-  case mhome of
-    Just home -> do
-      exists <- doesDirectoryExist home
-      when (not exists) createHOME
-    Nothing -> createHOME
-
-createHOME :: IO ()
-createHOME = do
-  tmp <- fromMaybe "/tmp" <$> lookupEnv "TMPDIR"
-  let home = tmp </> "compile-test-home"
-  _ <- rawSystem "rm" ["-r", home]
-  createDirectory home
-  setEnv "HOME" home
+setupTestEnv :: IO ()
+setupTestEnv = do
+  eHome <- tryIOError getHomeDirectory
+  exists <- case eHome of
+              Right dir -> doesDirectoryExist dir
+              Left _ -> return False
+  -- If HOME exists we assume that default CABAL_DIR
+  -- and XDG_HOME will exist too
+  when (not exists) createDirs
+  where
+    createDirs = do
+      tmp <- getTemporaryDirectory
+      let cabalDir = tmp </> "compile-test-cabal-dir"
+      let xdgHome  = tmp </> "compile-test-xdg-home"
+      forM [cabalDir, xdgHome] $ \d -> do
+        removeDirectoryRecursive d
+        createDirectory d
+      setEnv "CABAL_DIR" cabalDir
+      setEnv "XDG_HOME" xdgHome
 
 main :: IO ()
 main = do
@@ -84,7 +88,7 @@ test args = do
        | null args = testRelevantCabalVersions
        | otherwise = testCabalVersions $ map parseVer' args
 
-  setupHOME
+  setupTestEnv
 
   action
 
