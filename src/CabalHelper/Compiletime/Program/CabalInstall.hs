@@ -70,7 +70,7 @@ installCabalLibV1 ghcVer cabalVer = do
 
     db <- createPkgDb cabalVer
 
-    callCabalInstall db srcdir ghcVer cabalVer
+    callCabalInstallV1 db srcdir ghcVer cabalVer
 
     return db
 
@@ -104,14 +104,14 @@ installingMessage = message
 \\n\
 \Installing Cabal %s ...\n" sver sver appdir sver
 
-callCabalInstall
+callCabalInstallV1
     :: Env
     => PackageDbDir
     -> CabalSourceDir
     -> GhcVersion
     -> UnpackedCabalVersion
     -> IO ()
-callCabalInstall
+callCabalInstallV1
   (PackageDbDir db)
   (CabalSourceDir srcdir)
   ghcVer
