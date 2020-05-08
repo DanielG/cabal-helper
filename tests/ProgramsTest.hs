@@ -10,6 +10,7 @@ import System.Environment
 import System.Exit
 import System.FilePath
 import System.IO.Temp
+import System.Info
 import Text.Show.Pretty
 
 import CabalHelper.Compiletime.Types
@@ -18,7 +19,8 @@ import Symlink (createSymbolicLink)
 
 main :: IO ()
 main = do
-  prog_name <- getProgName
+  -- In windows, program name ends with .exe
+  prog_name <- dropExtension <$> getProgName
   args <- getArgs
   case prog_name of
     "programs-test"
@@ -50,16 +52,24 @@ do_test = do
 
   withSystemTempDirectory "c-h-programs-test" $ \tmpdir -> do
 
+  let ext = case System.Info.os of
+              "mingw32" -> "exe"
+              _         -> ""
+
   forM_ ["8.6.5", "8.4.4"] $ \ver -> do
 
-  let ghc = tmpdir </> "ghc-" ++ ver
-  let ghc_pkg = tmpdir </> "ghc-pkg-" ++ ver
-  let haddock = tmpdir </> "haddock-" ++ ver
+  let ghc = tmpdir </> "ghc-" ++ ver <.> ext
+  let ghc_pkg = tmpdir </> "ghc-pkg-" ++ ver <.> ext
+  let haddock = tmpdir </> "haddock-" ++ ver <.> ext
   let progs = defaultPrograms { ghcProgram = ghc }
 
-  createSymbolicLink prog ghc
-  createSymbolicLink prog ghc_pkg
-  createSymbolicLink prog haddock
+  let link = case System.Info.os of
+              "mingw32" -> copyFile
+              _         -> createSymbolicLink
+
+  link prog ghc
+  link prog ghc_pkg
+  link prog haddock
 
   let ?verbose = (==4)
 
