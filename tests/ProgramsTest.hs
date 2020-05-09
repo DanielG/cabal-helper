@@ -5,6 +5,7 @@
 
 import Control.Monad
 import Data.List
+import Distribution.Simple.Utils (dropExeExtension)
 import System.Directory
 import System.Environment
 import System.Exit
@@ -20,7 +21,7 @@ import Symlink (createSymbolicLink)
 main :: IO ()
 main = do
   -- In windows, program name ends with .exe
-  prog_name <- dropExtension <$> getProgName
+  prog_name <- dropExeExtension <$> getProgName
   args <- getArgs
   case prog_name of
     "programs-test"
@@ -52,15 +53,11 @@ do_test = do
 
   withSystemTempDirectory "c-h-programs-test" $ \tmpdir -> do
 
-  let ext = case System.Info.os of
-              "mingw32" -> "exe"
-              _         -> ""
-
   forM_ ["8.6.5", "8.4.4"] $ \ver -> do
 
-  let ghc = tmpdir </> "ghc-" ++ ver <.> ext
-  let ghc_pkg = tmpdir </> "ghc-pkg-" ++ ver <.> ext
-  let haddock = tmpdir </> "haddock-" ++ ver <.> ext
+  let ghc = tmpdir </> "ghc-" ++ ver <.> exeExtension
+  let ghc_pkg = tmpdir </> "ghc-pkg-" ++ ver <.> exeExtension
+  let haddock = tmpdir </> "haddock-" ++ ver <.> exeExtension
   let progs = defaultPrograms { ghcProgram = ghc }
 
   let link = case System.Info.os of
