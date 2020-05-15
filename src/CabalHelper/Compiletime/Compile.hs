@@ -327,7 +327,7 @@ compPaths appdir proj_local_cachedir c =
           compBuildDir =
             appdir </> exeName compCabalVersion ++ "--" ++ sourceHash <.> "build"
           compOutDir  = compBuildDir
-          compExePath = compBuildDir </> "cabal-helper"
+          compExePath = compBuildDir </> "cabal-helper" <.> exeExtension
     CompileWithCabalPackage {compProductTarget=CPSProject} ->
         projLocalCachedirPaths
     CompileWithCabalSource {} ->
@@ -337,7 +337,7 @@ compPaths appdir proj_local_cachedir c =
         where
           compBuildDir = proj_local_cachedir </> "cabal-helper"
           compOutDir  = compBuildDir
-          compExePath = compOutDir </> "cabal-helper"
+          compExePath = compOutDir </> "cabal-helper" <.> exeExtension
 
 exeName :: ResolvedCabalVersion -> String
 exeName (CabalHEAD commitid) = intercalate "--"
