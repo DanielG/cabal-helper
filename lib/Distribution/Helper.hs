@@ -69,6 +69,8 @@ module Distribution.Helper (
   , CabalProjType(..)
   , ProjLoc(..)
   , DistDir(..)
+  , RelativePath
+  , mkRelativePath
   , SProjType(..)
   , demoteSProjType
   , projTypeOfDistDir
