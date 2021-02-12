@@ -2,22 +2,20 @@
 # Example:
 #     $ scripts/ci/update-stack-resolvers.sh | tee tests/stack-resolvers
 
-mkdir -p /tmp/stack-resolvers/
+STACKAGE_SNAPSHOTS_REPO=https://github.com/commercialhaskell/stackage-snapshots
 
-wget -q https://s3.amazonaws.com/haddock.stackage.org/snapshots.json \
-     -O /tmp/stack-resolvers/snapshots.json
+tmp=/tmp/stack-resolvers
+mkdir -p "$tmp"
 
-resolvers=$(cat /tmp/stack-resolvers/snapshots.json \
-                    | jq -r '.[]' | grep ^lts- | sort -V -r | uniq)
+wget -q -O- "$STACKAGE_SNAPSHOTS_REPO"/archive/master.tar.gz \
+        | tar -xvz --strip-components=1 --show-transformed-names \
+        | tee "$tmp"/all-resolvers.list
 
-for res in $resolvers; do
-        wget -q --continue \
-             -O /tmp/stack-resolvers/$res.yaml \
-             https://raw.githubusercontent.com/commercialhaskell/lts-haskell/master/$res.yaml
+< "$tmp"/all-resolvers.list \
+  sed -rn 's_((lts)/([0-9]+)/([0-9]+)\.yaml)_\1 \2-\3.\4 \2-\3_p' \
+        | sort -V -r | uniq -f 2 > "$tmp"/resolvers.list
 
-        ghc=$(cat /tmp/stack-resolvers/$res.yaml \
-                      | grep ghc-version | awk '{ print $2 }' | tr -cd '0-9.')
-
-        [ -z "$ghc" ] && continue
-        printf '%-10s %s\n' "$ghc" "$res"
-done
+while read -r path lts _; do
+        ghc=$(cat $path | sed -rn 's/^ *compiler: +ghc-([0-9.]+)/\1/p')
+        printf '%-10s %s\n' "$ghc" "$lts"
+done < "$tmp"/resolvers.list
