@@ -4,6 +4,8 @@
 #
 # Example: ./docker.sh        #< build all images
 
+NPROC=${NPROC:-$(nproc)}
+
 namespace="registry.gitlab.com/dxld/cabal-helper/ci"
 
 tmpdir=$(mktemp -p "${TMPDIR:-/tmp/}" -d cabal-helper-docker-XXXX) || exit 1
@@ -15,17 +17,17 @@ HACKAGE_BASE=https://hackage.haskell.org/package
 STACK_BASE=https://github.com/commercialhaskell/stack/releases/download
 
 image=debian:buster
-cabal=3.0.0.0
-stack=2.1.3
+cabal=3.2.0.0
+stack=2.5.1
 
-stack_url="${STACK_BASE}/v${stack}/stack-${stack}-linux-x86_64-static.tar.gz"
+stack_url="${STACK_BASE}/v${stack}/stack-${stack}-linux-x86_64.tar.gz"
 stack_file="$(basename "$stack_url")"
 
 mkdir -p "$dldir"
 
 cat >"$tmpdir"/ghc_table <<EOF
-8.10.1  x86_64-deb9-linux
-8.8.3   x86_64-deb8-linux
+8.10.4  x86_64-deb9-linux
+8.8.4   x86_64-deb8-linux
 8.6.5   x86_64-deb8-linux
 8.4.4   x86_64-deb8-linux
 8.2.2   x86_64-deb8-linux
@@ -40,7 +42,7 @@ EOF
                 ghcs="${ghcs:+$ghcs }$ghc"
         done < "$tmpdir"/ghc_table
         printf '%s' "$ghcs" >> "$tmpdir"/ghcs
-} | tee "$tmpdir"/ghc-urls | xargs -n1 -P$(nproc) sh -ue -c '
+} | tee "$tmpdir"/ghc-urls | xargs -n1 -P$NPROC sh -ue -c '
   cd "$1"
   wget -nv -nc -c "$3"
   cp "$(basename "$3")"  "$2"
@@ -93,7 +95,7 @@ RUN cd /usr/local/bin && \
         --strip-components 1 --wildcards '*/stack' && \
     stack --help >/dev/null
 
-RUN cat ghcs | xargs -P$(nproc) -n1 sh install-ghc.sh
+RUN cat ghcs | xargs -P$NPROC -n1 sh install-ghc.sh
 
 RUN cabal update && \
     cabal install cabal-install-${cabal} --ghc-option=-j && \
