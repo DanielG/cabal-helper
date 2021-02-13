@@ -25,6 +25,9 @@ module CabalHelper.Runtime.Compat
     , componentNameFromComponent
     , componentOutDir
     , internalPackageDBPath
+    , PackageFlag
+    , flagDefault
+    , flagName
     , unFlagAssignment
     ) where
 
@@ -33,7 +36,6 @@ import System.FilePath
 import Distribution.PackageDescription
   ( PackageDescription
   , GenericPackageDescription(..)
-  , Flag(..)
   , FlagName
   , FlagAssignment
   , Executable(..)
@@ -51,6 +53,13 @@ import Distribution.Simple.LocalBuildInfo
   , LocalBuildInfo(..)
   )
 
+#if CH_MIN_VERSION_Cabal(3,4,0)
+-- >= 3.4.0
+import Distribution.PackageDescription (PackageFlag(..))
+#else
+-- < 3.4.0
+import Distribution.PackageDescription (Flag(..))
+#endif
 
 #if CH_MIN_VERSION_Cabal(1,24,0)
 import Distribution.Package (UnitId)
@@ -236,4 +245,9 @@ internalPackageDBPath lbi distPref =
 
 #ifdef NOP_UN_FLAG_ASSIGNMENT
 unFlagAssignment = id
+#endif
+
+#if !CH_MIN_VERSION_Cabal(3,4,0)
+-- < 3.4.0
+type PackageFlag = Flag
 #endif

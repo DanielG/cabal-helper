@@ -33,7 +33,6 @@ import Distribution.Package
 import Distribution.PackageDescription
   ( PackageDescription
   , GenericPackageDescription(..)
-  , Flag(..)
   , FlagName
   , FlagAssignment
   , Executable(..)
@@ -310,7 +309,9 @@ helper_main args = do
               $ configFlags lbi
           nonDefaultFlags =
               [ (flag_name, val)
-              | MkFlag {flagName=(unFlagName -> flag_name'), flagDefault=def_val} <- flagDefinitons
+              | flag <- flagDefinitons
+              , let flag_name' = unFlagName $ flagName flag
+              , let def_val = flagDefault flag
               , (unFlagName -> flag_name, val) <- flagAssgnments
               , flag_name == flag_name'
               , val /= def_val
@@ -376,7 +377,7 @@ componentsInfo lvd@(lbi, v, distdir) pt = do
       return uiComponents
 
 
-flagName' :: Distribution.PackageDescription.Flag -> String
+flagName' :: PackageFlag -> String
 flagName' = unFlagName . flagName
 
 componentsMap :: LocalBuildInfo
