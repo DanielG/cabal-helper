@@ -215,7 +215,7 @@ componentNameFromComponent (CBench Benchmark {..}) = CBenchName benchmarkName
 
 
 componentOutDir :: LocalBuildInfo -> Component -> FilePath
-componentOutDir lbi (CLib Library {..})=
+componentOutDir lbi (CLib Library {})=
     buildDir lbi
 #if CH_MIN_VERSION_Cabal(2,0,0)
 componentOutDir lbi (CFLib ForeignLib {..}) =
