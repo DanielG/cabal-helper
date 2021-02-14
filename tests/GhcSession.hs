@@ -8,10 +8,7 @@
 
 module Main where
 
-import GHC
-import Config
-import Outputable
-import DynFlags
+import GhcCompat
 
 import qualified Control.Exception as E
 import Control.Monad
@@ -364,7 +361,7 @@ compileModule ghc_libdir pkgdir ep srcdirs opts = do
 
     defaultErrorHandler defaultFatalMessager defaultFlushOut $ do
     runGhc (Just ghc_libdir) $ do
-    let printGhcEx e = GHC.printException e >> return (TestResult False)
+    let printGhcEx e = GhcCompat.printException e >> return (TestResult False)
     handleSourceError printGhcEx $ do
 
     let target = HscInterpreted -- TODO

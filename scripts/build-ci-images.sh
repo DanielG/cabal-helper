@@ -26,6 +26,7 @@ stack_file="$(basename "$stack_url")"
 mkdir -p "$dldir"
 
 cat >"$tmpdir"/ghc_table <<EOF
+9.0.1   x86_64-deb9-linux
 8.10.4  x86_64-deb9-linux
 8.8.4   x86_64-deb8-linux
 8.6.5   x86_64-deb8-linux
